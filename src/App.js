@@ -96,6 +96,50 @@ const NEWS = [
   {id:4,date:"2026-02-01",title:"令和6年度介護給付費等の請求及び受付・審査の流れ",source:"国保連",tag:"手続き",url:"https://www.e-seikyuu.jp/"},
 ];
 
+function UserMsgScreen({onBack}) {
+  const [code,setCode]=useState("");
+  const [msg,setMsg]=useState("");
+  const [cat,setCat]=useState("体調報告");
+  const [sent,setSent]=useState(false);
+  const [err,setErr]=useState("");
+  const [users,setUsers]=useState([]);
+  useEffect(()=>{
+    supabase.from("users").select("id,name,access_code").then(({data})=>setUsers(data||[]));
+  },[]);
+  const send = async () => {
+    const u=users.find(x=>x.access_code===code);
+    if(!u){setErr("アクセスコードが違います");return;}
+    await supabase.from("user_messages").insert({user_id:u.id,user_name:u.name,access_code:code,message:msg,category:cat,is_read:false});
+    setSent(true);
+  };
+  return (
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#0f172a,#1e3a8a)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{CSS}</style>
+      <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:440,boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
+        {sent?(
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:48,marginBottom:12}}>✅</div>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:6}}>送信完了</div>
+            <div style={{fontSize:13,color:"#64748b",marginBottom:24}}>スタッフに届きました</div>
+            <button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setSent(false);setMsg("");setCode("");}}>もう一度送る</button>
+          </div>
+        ):(
+          <>
+            <div style={{fontWeight:700,fontSize:18,marginBottom:16,textAlign:"center"}}>メッセージ送信</div>
+            <div style={{display:"grid",gap:12}}>
+              <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>アクセスコード</label><input className="input" placeholder="コードを入力" value={code} onChange={e=>setCode(e.target.value)}/>{err&&<div style={{color:"#ef4444",fontSize:12,marginTop:4}}>{err}</div>}</div>
+              <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>種類</label><select className="input" value={cat} onChange={e=>setCat(e.target.value)}>{["体調報告","外出連絡","相談・お願い","緊急連絡","その他"].map(v=><option key={v}>{v}</option>)}</select></div>
+              <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>メッセージ</label><textarea className="textarea" style={{minHeight:120}} value={msg} onChange={e=>setMsg(e.target.value)}/></div>
+              <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px"}} onClick={send}><Icon name="message" size={15}/>送信する</button>
+              <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={onBack}>← 戻る</button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   const [auth, setAuth] = useState("select");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -304,34 +348,7 @@ export default function App() {
   );
 
   if(auth==="user_msg") {
-    const UMsg = () => {
-      const [code,setCode]=useState(""); const [msg,setMsg]=useState(""); const [cat,setCat]=useState("体調報告"); const [sent,setSent]=useState(false); const [err,setErr]=useState("");
-      const send = async () => {
-        const u=users.find(x=>x.access_code===code);
-        if(!u){setErr("アクセスコードが違います");return;}
-        await supabase.from("user_messages").insert({user_id:u.id,user_name:u.name,access_code:code,message:msg,category:cat,is_read:false});
-        setSent(true);
-      };
-      if(!users.length){supabase.from("users").select("*").then(({data})=>setUsers(data||[]));}
-      return sent?(
-        <div style={{textAlign:"center"}}><div style={{fontSize:48,marginBottom:12}}>✅</div><div style={{fontWeight:700,fontSize:18,marginBottom:6}}>送信完了</div><div style={{fontSize:13,color:"#64748b",marginBottom:24}}>スタッフに届きました</div><button className="btn btn-primary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setSent(false);setMsg("");setCode("");}}>もう一度送る</button></div>
-      ):(
-        <><div style={{fontWeight:700,fontSize:18,marginBottom:16,textAlign:"center"}}>メッセージ送信</div>
-        <div style={{display:"grid",gap:12}}>
-          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>アクセスコード</label><input className="input" placeholder="コードを入力" value={code} onChange={e=>setCode(e.target.value)}/>{err&&<div style={{color:"#ef4444",fontSize:12,marginTop:4}}>{err}</div>}</div>
-          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>種類</label><select className="input" value={cat} onChange={e=>setCat(e.target.value)}>{["体調報告","外出連絡","相談・お願い","緊急連絡","その他"].map(v=><option key={v}>{v}</option>)}</select></div>
-          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>メッセージ</label><textarea className="textarea" style={{minHeight:120}} value={msg} onChange={e=>setMsg(e.target.value)}/></div>
-          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px"}} onClick={send}><Icon name="message" size={15}/>送信する</button>
-          <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>setAuth("select")}>← 戻る</button>
-        </div></>
-      );
-    };
-    return (
-      <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#0f172a,#1e3a8a)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-        <style>{CSS}</style>
-        <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:440,boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}><UMsg/></div>
-      </div>
-    );
+    return <UserMsgScreen onBack={()=>setAuth("select")}/>;
   }
 
   if(loading) return <div style={{fontFamily:"'Noto Sans JP',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#94a3b8",fontSize:14}}><style>{CSS}</style>⏳ 読み込み中...</div>;
