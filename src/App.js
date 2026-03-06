@@ -370,6 +370,7 @@ export default function App() {
     {g:"スタッフ",items:[
       {id:"staff",label:"スタッフ管理",icon:"staff"},
       {id:"att_admin",label:"勤怠管理",icon:"clock"},
+      {id:"password",label:"パスワード変更",icon:"shield"},
     ]},
     {g:"送迎・経理",items:[
       {id:"transport",label:"送迎管理",icon:"car"},
@@ -381,6 +382,7 @@ export default function App() {
       {id:"msgs",label:"利用者メッセージ",icon:"message",badge:unread},
     ]},
     {g:"情報管理",items:[
+      {id:"docs",label:"必須保存書類管理",icon:"file"},
       {id:"files",label:"ファイル・会議報告書",icon:"file"},
       {id:"hints",label:"加算ヒント",icon:"hint"},
       {id:"news",label:"最新ニュース",icon:"news"},
@@ -389,6 +391,7 @@ export default function App() {
   const staffTabs = [
     {g:"業務",items:[
       {id:"attendance",label:"勤怠打刻",icon:"clock"},
+      {id:"staff_password",label:"パスワード変更",icon:"shield"},
       {id:"srecs",label:"支援記録入力",icon:"book"},
       {id:"journal",label:"業務日誌確認",icon:"calendar"},
       {id:"transport",label:"送迎記録",icon:"car"},
@@ -951,7 +954,10 @@ export default function App() {
                     <div style={{fontSize:12,color:"#64748b",lineHeight:2,marginBottom:8}}>
                       <div>📞 {s.tel}</div><div className="mono">時給 ¥{fmt(s.hourly_rate)}</div><div>🔑 PIN: {s.pin}</div>
                     </div>
-                    <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>openEdit("スタッフ",s)}><Icon name="edit" size={13}/>編集</button>
+                    <div style={{display:"flex",gap:8}}>
+                      <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>openEdit("スタッフ",s)}><Icon name="edit" size={13}/>編集</button>
+                      <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del("staff_members",s.id)}><Icon name="trash" size={13}/></button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -1346,29 +1352,348 @@ export default function App() {
             </div>
           )}
 
-          {/* ── 加算ヒント ── */}
-          {tab==="hints"&&isAdmin&&(
-            <div className="fade-in">
-              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>加算取得ヒント</div>
-              <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>グループホームで取得可能な加算と要件チェック</div>
-              {["高","中","低"].map(pri=>(
-                <div key={pri} style={{marginBottom:22}}>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                    <span className="tag" style={{background:pri==="高"?"#fee2e2":pri==="中"?"#fef3c7":"#f1f5f9",color:pri==="高"?"#ef4444":pri==="中"?"#d97706":"#94a3b8",fontSize:12,padding:"3px 12px"}}>優先度 {pri}</span>
+          {/* ── パスワード変更（管理者） ── */}
+          {tab==="password"&&isAdmin&&(()=>{
+            const AdminPinForm = () => {
+              const [cur,setCur]=React.useState("");
+              const [nw,setNw]=React.useState("");
+              const [conf,setConf]=React.useState("");
+              const [msg,setMsg]=React.useState("");
+              const [err,setErr]=React.useState("");
+              const change = async()=>{
+                setErr(""); setMsg("");
+                const {data}=await supabase.from("app_settings").select("value").eq("key","admin_pin").single();
+                if(data?.value!==cur){setErr("現在のPINが違います");return;}
+                if(nw.length<4){setErr("新PINは4文字以上");return;}
+                if(nw!==conf){setErr("新PINが一致しません");return;}
+                await supabase.from("app_settings").upsert({key:"admin_pin",value:nw});
+                setMsg("管理者PINを変更しました"); setCur(""); setNw(""); setConf("");
+              };
+              return(
+                <div className="card" style={{maxWidth:480,marginBottom:16}}>
+                  <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>🔑 管理者PINの変更</div>
+                  <div style={{display:"grid",gap:10}}>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>現在のPIN</label><input className="input" type="password" maxLength={8} value={cur} onChange={e=>setCur(e.target.value)}/></div>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>新しいPIN</label><input className="input" type="password" maxLength={8} value={nw} onChange={e=>setNw(e.target.value)}/></div>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>新しいPIN（確認）</label><input className="input" type="password" maxLength={8} value={conf} onChange={e=>setConf(e.target.value)}/></div>
+                    {err&&<div style={{color:"#ef4444",fontSize:13}}>{err}</div>}
+                    {msg&&<div style={{color:"#059669",fontSize:13}}>✅ {msg}</div>}
+                    <button className="btn btn-purple" style={{justifyContent:"center"}} onClick={change}><Icon name="shield" size={14}/>PINを変更する</button>
                   </div>
-                  {HINTS.filter(h=>h.pri===pri).map((h,i)=>(
-                    <div key={i} className="hint-card">
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-                        <div style={{fontWeight:700,fontSize:13}}>{h.title}</div>
-                        <span className="tag" style={{background:"#f1f5f9",color:"#475569"}}>{h.cat}</span>
+                </div>
+              );
+            };
+            const StaffPinForm = () => {
+              const [sel,setSel]=React.useState("");
+              const [nw,setNw]=React.useState("");
+              const [conf,setConf]=React.useState("");
+              const [msg,setMsg]=React.useState("");
+              const [err,setErr]=React.useState("");
+              const change = async()=>{
+                setErr(""); setMsg("");
+                if(!sel){setErr("スタッフを選択してください");return;}
+                if(nw.length<4){setErr("新PINは4文字以上");return;}
+                if(nw!==conf){setErr("新PINが一致しません");return;}
+                await supabase.from("staff_members").update({pin:nw}).eq("id",parseInt(sel));
+                setMsg("PINを変更しました"); setNw(""); setConf(""); loadAll();
+              };
+              return(
+                <div className="card" style={{maxWidth:480}}>
+                  <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>👤 スタッフPINの変更</div>
+                  <div style={{display:"grid",gap:10}}>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>スタッフ</label>
+                      <select className="input" value={sel} onChange={e=>setSel(e.target.value)}>
+                        <option value="">選択...</option>{staffList.map(s=><option key={s.id} value={s.id}>{s.name}（{s.role}）</option>)}
+                      </select>
+                    </div>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>新しいPIN</label><input className="input" type="password" maxLength={8} value={nw} onChange={e=>setNw(e.target.value)}/></div>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>新しいPIN（確認）</label><input className="input" type="password" maxLength={8} value={conf} onChange={e=>setConf(e.target.value)}/></div>
+                    {err&&<div style={{color:"#ef4444",fontSize:13}}>{err}</div>}
+                    {msg&&<div style={{color:"#059669",fontSize:13}}>✅ {msg}</div>}
+                    <button className="btn btn-primary" style={{justifyContent:"center"}} onClick={change}><Icon name="shield" size={14}/>PINを変更する</button>
+                  </div>
+                </div>
+              );
+            };
+            return(
+              <div className="fade-in">
+                <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>パスワード変更</div>
+                <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>管理者PINおよびスタッフPINの変更</div>
+                <AdminPinForm/><StaffPinForm/>
+              </div>
+            );
+          })()}
+
+          {/* ── パスワード変更（スタッフ） ── */}
+          {tab==="staff_password"&&!isAdmin&&(()=>{
+            const SelfPinForm = () => {
+              const [cur,setCur]=React.useState("");
+              const [nw,setNw]=React.useState("");
+              const [conf,setConf]=React.useState("");
+              const [msg,setMsg]=React.useState("");
+              const [err,setErr]=React.useState("");
+              const change = async()=>{
+                setErr(""); setMsg("");
+                if(me?.pin!==cur){setErr("現在のPINが違います");return;}
+                if(nw.length<4){setErr("新PINは4文字以上");return;}
+                if(nw!==conf){setErr("新PINが一致しません");return;}
+                await supabase.from("staff_members").update({pin:nw}).eq("id",me.id);
+                setMsg("PINを変更しました"); setCur(""); setNw(""); setConf(""); loadAll();
+              };
+              return(
+                <div className="card" style={{maxWidth:440}}>
+                  <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>🔑 自分のPINを変更</div>
+                  <div style={{display:"grid",gap:10}}>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>現在のPIN</label><input className="input" type="password" maxLength={8} value={cur} onChange={e=>setCur(e.target.value)}/></div>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>新しいPIN</label><input className="input" type="password" maxLength={8} value={nw} onChange={e=>setNw(e.target.value)}/></div>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>新しいPIN（確認）</label><input className="input" type="password" maxLength={8} value={conf} onChange={e=>setConf(e.target.value)}/></div>
+                    {err&&<div style={{color:"#ef4444",fontSize:13}}>{err}</div>}
+                    {msg&&<div style={{color:"#059669",fontSize:13}}>✅ {msg}</div>}
+                    <button className="btn btn-primary" style={{justifyContent:"center"}} onClick={change}><Icon name="shield" size={14}/>PINを変更する</button>
+                  </div>
+                </div>
+              );
+            };
+            return(
+              <div className="fade-in">
+                <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>パスワード変更</div>
+                <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>{me?.name} さんのPINコード変更</div>
+                <SelfPinForm/>
+              </div>
+            );
+          })()}
+
+          {/* ── 必須保存書類管理 ── */}
+          {tab==="docs"&&isAdmin&&(()=>{
+            const REQUIRED_DOCS = [
+              {cat:"指定申請・運営",items:[
+                {id:"d01",name:"指定申請書・添付書類",keep:"永久",freq:"変更時更新"},
+                {id:"d02",name:"運営規程",keep:"永久",freq:"変更時更新"},
+                {id:"d03",name:"重要事項説明書",keep:"永久",freq:"変更時更新"},
+                {id:"d04",name:"利用契約書（利用者全員分）",keep:"契約終了後5年",freq:"入居時"},
+              ]},
+              {cat:"個別支援関係",items:[
+                {id:"d05",name:"個別支援計画（全利用者）",keep:"5年",freq:"6ヶ月ごと"},
+                {id:"d06",name:"アセスメント記録",keep:"5年",freq:"計画作成時"},
+                {id:"d07",name:"モニタリング記録",keep:"5年",freq:"6ヶ月ごと"},
+                {id:"d08",name:"サービス提供記録（日別）",keep:"5年",freq:"毎日"},
+              ]},
+              {cat:"請求・経理",items:[
+                {id:"d09",name:"給付費請求書・明細書",keep:"5年",freq:"月次"},
+                {id:"d10",name:"領収書・支払記録",keep:"5年",freq:"随時"},
+                {id:"d11",name:"収支計算書",keep:"10年",freq:"年次"},
+              ]},
+              {cat:"人員・組織",items:[
+                {id:"d12",name:"従業者の勤務体制記録",keep:"5年",freq:"月次"},
+                {id:"d13",name:"資格証・研修修了証（全スタッフ）",keep:"在職中",freq:"取得時"},
+                {id:"d14",name:"雇用契約書",keep:"退職後3年",freq:"採用時"},
+              ]},
+              {cat:"安全・緊急対応",items:[
+                {id:"d15",name:"事故報告書・ヒヤリハット",keep:"5年",freq:"発生時"},
+                {id:"d16",name:"業務継続計画（BCP）",keep:"永久",freq:"年次見直し"},
+                {id:"d17",name:"虐待防止・身体拘束廃止計画",keep:"永久",freq:"年次見直し"},
+                {id:"d18",name:"感染症・食中毒対応マニュアル",keep:"永久",freq:"年次見直し"},
+              ]},
+              {cat:"会議・委員会",items:[
+                {id:"d19",name:"職員会議議事録",keep:"5年",freq:"月次"},
+                {id:"d20",name:"虐待防止委員会議事録",keep:"5年",freq:"年2回以上"},
+                {id:"d21",name:"身体拘束廃止委員会議事録",keep:"5年",freq:"年2回以上"},
+                {id:"d22",name:"リスクマネジメント委員会議事録",keep:"5年",freq:"年2回以上"},
+              ]},
+            ];
+            const DocsTab = () => {
+              const [docStatus,setDocStatus]=React.useState({});
+              const [loaded,setLoaded]=React.useState(false);
+              React.useEffect(()=>{
+                supabase.from("app_settings").select("value").eq("key","doc_status").single().then(({data})=>{
+                  if(data?.value){try{setDocStatus(JSON.parse(data.value));}catch(e){}}
+                  setLoaded(true);
+                });
+              },[]);
+              const update = async(id,field,val)=>{
+                const newS={...docStatus,[id]:{...docStatus[id],[field]:val}};
+                setDocStatus(newS);
+                await supabase.from("app_settings").upsert({key:"doc_status",value:JSON.stringify(newS)});
+              };
+              const allDocs=REQUIRED_DOCS.flatMap(c=>c.items);
+              const done=allDocs.filter(d=>docStatus[d.id]?.status==="整備済").length;
+              const pct=Math.round(done/allDocs.length*100);
+              return(
+                <div>
+                  <div className="card" style={{marginBottom:16}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                      <div style={{fontWeight:700,fontSize:15}}>整備状況 {done}/{allDocs.length}件</div>
+                      <div className="mono" style={{fontSize:22,fontWeight:800,color:pct>=80?"#059669":pct>=50?"#d97706":"#ef4444"}}>{pct}%</div>
+                    </div>
+                    <div style={{height:10,background:"#e2e8f0",borderRadius:5,overflow:"hidden"}}>
+                      <div style={{height:"100%",width:pct+"%",background:pct>=80?"#059669":pct>=50?"#f59e0b":"#ef4444",transition:"width .4s",borderRadius:5}}/>
+                    </div>
+                    <div style={{display:"flex",gap:16,marginTop:8,fontSize:12,flexWrap:"wrap"}}>
+                      {[{l:"整備済",c:"#059669",st:"整備済"},{l:"整備中",c:"#d97706",st:"整備中"},{l:"未整備",c:"#ef4444",st:"未整備"}].map(k=>(
+                        <div key={k.st} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:"50%",background:k.c}}/><span style={{color:"#64748b"}}>{k.l}: {allDocs.filter(d=>(docStatus[d.id]?.status||"未整備")===k.st).length}件</span></div>
+                      ))}
+                    </div>
+                  </div>
+                  {!loaded?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>読み込み中...</div>:
+                  REQUIRED_DOCS.map(cat=>(
+                    <div key={cat.cat} style={{marginBottom:18}}>
+                      <div style={{fontWeight:700,fontSize:14,marginBottom:8,paddingBottom:6,borderBottom:"2px solid #f1f5f9"}}>📁 {cat.cat}</div>
+                      <div style={{display:"grid",gap:6}}>
+                        {cat.items.map(doc=>{
+                          const s=docStatus[doc.id]||{status:"未整備"};
+                          const color=s.status==="整備済"?"#059669":s.status==="整備中"?"#d97706":"#ef4444";
+                          const bg=s.status==="整備済"?"#f0fdf4":s.status==="整備中"?"#fffbeb":"#fef2f2";
+                          return(
+                            <div key={doc.id} style={{background:bg,borderRadius:10,padding:"10px 14px",border:`1px solid ${s.status==="整備済"?"#bbf7d0":s.status==="整備中"?"#fde68a":"#fecaca"}`}}>
+                              <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}>
+                                <div style={{flex:1}}>
+                                  <div style={{fontWeight:600,fontSize:13,marginBottom:3}}>{doc.name}</div>
+                                  <div style={{fontSize:11,color:"#64748b"}}>保管期間: {doc.keep} ／ 更新: {doc.freq}</div>
+                                  {s.updated&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>更新日: {s.updated}</div>}
+                                  <input className="input" style={{marginTop:6,fontSize:12}} placeholder="メモ・保管場所・担当者..." value={s.memo||""} onChange={e=>update(doc.id,"memo",e.target.value)}/>
+                                </div>
+                                <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
+                                  <span className="tag" style={{color,border:`1px solid ${color}`,background:"white"}}>{s.status}</span>
+                                  <select style={{fontSize:11,border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 6px",cursor:"pointer"}} value={s.status} onChange={e=>update(doc.id,"status",e.target.value).then(()=>update(doc.id,"updated",today))}>
+                                    <option>未整備</option><option>整備中</option><option>整備済</option>
+                                  </select>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div style={{fontSize:13,color:"#374151",lineHeight:1.7}}>💡 {h.points}</div>
                     </div>
                   ))}
                 </div>
-              ))}
-            </div>
-          )}
+              );
+            };
+            return(
+              <div className="fade-in">
+                <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>必須保存書類管理</div>
+                <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>法定・行政上の保管義務がある書類の整備状況</div>
+                <DocsTab/>
+              </div>
+            );
+          })()}
+
+                    {/* ── 加算ヒント ── */}
+          {tab==="hints"&&isAdmin&&(()=>{
+            const HINT_STATUS_KEY = "hint_progress";
+            const [hStatus,setHStatus]=React.useState({});
+            const [hNote,setHNote]=React.useState({});
+            const [loaded,setLoaded]=React.useState(false);
+            const [filterPri,setFilterPri]=React.useState("全て");
+            const [filterSt,setFilterSt]=React.useState("全て");
+
+            React.useEffect(()=>{
+              supabase.from("app_settings").select("value").eq("key",HINT_STATUS_KEY).single().then(({data})=>{
+                if(data?.value){try{const p=JSON.parse(data.value);setHStatus(p.s||{});setHNote(p.n||{});}catch(e){}}
+                setLoaded(true);
+              });
+            },[]);
+
+            const saveProgress = async(newS,newN)=>{
+              await supabase.from("app_settings").upsert({key:HINT_STATUS_KEY,value:JSON.stringify({s:newS,n:newN})});
+            };
+
+            const setStatus = async(id,val)=>{
+              const newS={...hStatus,[id]:val};
+              setHStatus(newS);
+              saveProgress(newS,hNote);
+            };
+
+            const setNote = async(id,val)=>{
+              const newN={...hNote,[id]:val};
+              setHNote(newN);
+              saveProgress(hStatus,newN);
+            };
+
+            const allH=HINTS;
+            const done=allH.filter(h=>hStatus[h.title]==="取得済").length;
+            const inprog=allH.filter(h=>hStatus[h.title]==="準備中").length;
+            const pct=Math.round(done/allH.length*100);
+
+            const filtered=allH.filter(h=>(filterPri==="全て"||h.pri===filterPri)&&(filterSt==="全て"||( hStatus[h.title]||"未対応")===filterSt));
+
+            const ADVICE = {
+              "夜間支援体制加算（Ⅰ）": ["夜勤専従職員の配置計画を立てる","夜勤記録フォームを整備する","労基法の深夜割増賃金を確認する"],
+              "強度行動障害支援者養成研修加算": ["研修日程を都道府県に確認","受講対象スタッフをリストアップ","研修費用の予算確保"],
+              "個別支援計画未作成減算（回避）": ["6ヶ月サイクルの更新カレンダーを作成","計画期限アラートを設定","サービス管理責任者との連携体制確認"],
+              "精神障害者地域移行特別加算": ["対象利用者の入院歴を確認","退院後1年以内の受入れ体制を整備","病院との連携協定書を締結"],
+              "医療連携体制加算（Ⅳ）": ["連携看護師・医療機関を探す","連携協定書のひな形を準備","医療的ケア手順書を整備"],
+              "自立生活支援加算": ["一人暮らし希望者の意向確認","本人同意書のフォームを準備","地域移行支援機関との連携"],
+              "食事提供体制加算": ["栄養士との連携または献立外注を検討","食事記録フォームを整備","衛生管理マニュアルを作成"],
+            };
+
+            return(
+              <div className="fade-in">
+                <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>加算取得ヒント＆進捗管理</div>
+                <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>取得状況を記録してアドバイスを確認できます</div>
+                <div className="card" style={{marginBottom:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:15}}>取得進捗 — {done}/{allH.length}件取得済</div>
+                    <div className="mono" style={{fontSize:20,fontWeight:800,color:pct>=80?"#059669":pct>=40?"#d97706":"#2563eb"}}>{pct}%</div>
+                  </div>
+                  <div style={{height:10,background:"#e2e8f0",borderRadius:5,overflow:"hidden",marginBottom:10}}>
+                    <div style={{height:"100%",width:pct+"%",background:"linear-gradient(90deg,#2563eb,#059669)",borderRadius:5,transition:"width .4s"}}/>
+                  </div>
+                  <div style={{display:"flex",gap:16,fontSize:12,flexWrap:"wrap"}}>
+                    {[{l:"取得済",c:"#059669",v:done},{l:"準備中",c:"#d97706",v:inprog},{l:"未対応",c:"#94a3b8",v:allH.length-done-inprog}].map(k=>(
+                      <div key={k.l} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:10,height:10,borderRadius:"50%",background:k.c}}/><span style={{color:"#64748b"}}>{k.l}: {k.v}件</span></div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+                  {["全て","高","中","低"].map(p=><button key={p} className={`btn ${filterPri===p?"btn-primary":"btn-secondary"} btn-sm`} onClick={()=>setFilterPri(p)}>{p==="全て"?"全優先度":"優先度 "+p}</button>)}
+                  <div style={{width:1,background:"#e2e8f0"}}/>
+                  {["全て","未対応","準備中","取得済"].map(s=><button key={s} className={`btn ${filterSt===s?"btn-primary":"btn-secondary"} btn-sm`} onClick={()=>setFilterSt(s)}>{s}</button>)}
+                </div>
+                {!loaded?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>読み込み中...</div>:
+                <div style={{display:"grid",gap:12}}>
+                  {filtered.map((h,i)=>{
+                    const st=hStatus[h.title]||"未対応";
+                    const nt=hNote[h.title]||"";
+                    const adv=ADVICE[h.title]||[];
+                    const stColor=st==="取得済"?"#059669":st==="準備中"?"#d97706":"#94a3b8";
+                    const stBg=st==="取得済"?"#ecfdf5":st==="準備中"?"#fffbeb":"#f8fafc";
+                    return(
+                      <div key={i} style={{background:stBg,borderRadius:12,padding:"14px 16px",border:`1px solid ${st==="取得済"?"#bbf7d0":st==="準備中"?"#fde68a":"#e2e8f0"}`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,marginBottom:8}}>
+                          <div style={{flex:1}}>
+                            <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4,flexWrap:"wrap"}}>
+                              <div style={{fontWeight:700,fontSize:13}}>{h.title}</div>
+                              <span className="tag" style={{background:"#f1f5f9",color:"#475569"}}>{h.cat}</span>
+                              <span className="tag" style={{background:h.pri==="高"?"#fee2e2":h.pri==="中"?"#fef3c7":"#f1f5f9",color:h.pri==="高"?"#ef4444":h.pri==="中"?"#d97706":"#94a3b8"}}>優先:{h.pri}</span>
+                            </div>
+                            <div style={{fontSize:13,color:"#374151",lineHeight:1.7}}>💡 {h.points}</div>
+                          </div>
+                          <div style={{flexShrink:0}}>
+                            <select style={{fontSize:12,border:`1px solid ${stColor}`,borderRadius:8,padding:"5px 8px",background:"white",color:stColor,fontWeight:600,cursor:"pointer"}} value={st} onChange={e=>setStatus(h.title,e.target.value)}>
+                              <option>未対応</option><option>準備中</option><option>取得済</option>
+                            </select>
+                          </div>
+                        </div>
+                        {st!=="取得済"&&adv.length>0&&(
+                          <div style={{background:"white",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#2563eb",marginBottom:6}}>📋 次のアクション</div>
+                            {adv.map((a,j)=>(
+                              <div key={j} style={{fontSize:12,color:"#374151",display:"flex",gap:6,marginBottom:3}}>
+                                <span style={{color:"#2563eb",flexShrink:0}}>→</span>{a}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div>
+                          <input className="input" style={{fontSize:12}} placeholder="メモ・担当者・完了予定日など..." value={nt} onChange={e=>setNote(h.title,e.target.value)}/>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>}
+              </div>
+            );
+          })()}
 
           {/* ── ニュース ── */}
           {tab==="news"&&isAdmin&&(
