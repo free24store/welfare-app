@@ -470,6 +470,480 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
   );
 }
 
+function BillingTab({claims, users, perfs, srecs, today}) {
+  const [activeSection, setActiveSection] = useState("menu");
+  const [selMonth, setSelMonth] = useState(today.slice(0,7));
+  const [selUser, setSelUser] = useState("全員");
+  const [printMode, setPrintMode] = useState(false);
+
+  const activeUsers = users.filter(u => u.status === "在籍");
+
+  // 月別実績データ集計
+  const monthPerfs = perfs.filter(p => p.date && p.date.startsWith(selMonth));
+  const monthClaims = claims.filter(c => c.claim_date && c.claim_date.startsWith(selMonth));
+  const monthSrecs = srecs.filter(s => s.date && s.date.startsWith(selMonth));
+
+  // 利用者別日数集計
+  const userDays = activeUsers.map(u => {
+    const days = monthPerfs.filter(p => p.user_id === u.id && p.attended).length ||
+                 monthSrecs.filter(s => s.user_id === u.id).map(s=>s.date).filter((v,i,a)=>a.indexOf(v)===i).length;
+    const claim = monthClaims.filter(c => c.user_id === u.id);
+    const total = claim.reduce((s,c) => s+Number(c.total||0), 0);
+    return { ...u, days, total, claim };
+  });
+
+  // CSV出力ヘルパー
+  const dlCsv = (rows, filename) => {
+    const bom = '\uFEFF';
+    const header = Object.keys(rows[0]||{}).join(',');
+    const body = rows.map(r=>Object.values(r).map(v=>`"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([bom+header+'\n'+body], {type:'text/csv'});
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+    a.download = filename+'.csv'; a.click();
+  };
+
+  // 利用者台帳CSV
+  const exportUserLedger = () => {
+    const rows = activeUsers.map(u => ({
+      受給者番号: u.recipient_no || '', 氏名: u.name, フリガナ: u.kana || '',
+      生年月日: u.birth_date || '', 性別: u.gender || '',
+      障害支援区分: u.disability_level || '', サービス: u.service_type || '',
+      入居日: u.move_in_date || '', 保護者: u.guardian_name || '',
+      連絡先: u.emergency_tel || ''
+    }));
+    dlCsv(rows, `利用者台帳_${selMonth}`);
+  };
+
+  // サービス提供実績記録票CSV
+  const exportServiceRecord = () => {
+    const rows = [];
+    const [y,m] = selMonth.split('-').map(Number);
+    const daysInMonth = new Date(y,m,0).getDate();
+    activeUsers.forEach(u => {
+      const row = { 受給者番号: u.recipient_no||'', 氏名: u.name };
+      for(let d=1; d<=daysInMonth; d++) {
+        const ds = `${selMonth}-${String(d).padStart(2,'0')}`;
+        const rec = monthSrecs.filter(s=>s.user_id===u.id&&s.date===ds);
+        row[`${d}日`] = rec.length > 0 ? '○' : '';
+      }
+      row['提供日数'] = Object.values(row).filter(v=>v==='○').length;
+      rows.push(row);
+    });
+    dlCsv(rows, `サービス提供実績_${selMonth}`);
+  };
+
+  // 請求書CSV（国保連取込用）
+  const exportClaimData = () => {
+    const rows = userDays.filter(u=>u.days>0).map(u => ({
+      受給者番号: u.recipient_no||'', 氏名: u.name,
+      サービス種類: u.service_type||'共同生活援助',
+      提供月: selMonth, 提供日数: u.days,
+      請求額: u.total, 状態: '請求済'
+    }));
+    dlCsv(rows, `国保連請求データ_${selMonth}`);
+  };
+
+  // 利用実績表CSV
+  const exportUsageReport = () => {
+    const rows = userDays.map(u => ({
+      氏名: u.name, 利用日数: u.days,
+      請求額: `¥${u.total.toLocaleString()}`,
+      サービス: u.service_type||'共同生活援助',
+      対象月: selMonth
+    }));
+    dlCsv(rows, `利用実績表_${selMonth}`);
+  };
+
+  const sections = [
+    { id:"service_record", label:"サービス提供実績記録票", icon:"📋", color:"#2563eb" },
+    { id:"claim_print", label:"請求書・明細書", icon:"🧾", color:"#7c3aed" },
+    { id:"receipt", label:"利用者への領収書", icon:"📄", color:"#059669" },
+    { id:"proxy_notice", label:"代理受領通知書", icon:"📨", color:"#d97706" },
+    { id:"user_ledger", label:"利用者台帳CSV", icon:"📊", color:"#0891b2" },
+    { id:"claim_csv", label:"国保連取込データ", icon:"💾", color:"#7c3aed" },
+    { id:"usage_report", label:"利用実績表", icon:"📈", color:"#059669" },
+    { id:"daily_summary", label:"定員日報集計表", icon:"📅", color:"#d97706" },
+  ];
+
+  if(activeSection !== "menu") {
+    const section = sections.find(s=>s.id===activeSection);
+    return (
+      <div className="fade-in">
+        <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:20}}>
+          <button className="btn btn-secondary btn-sm" onClick={()=>setActiveSection("menu")}>← 戻る</button>
+          <div style={{fontWeight:700,fontSize:16}}>{section?.icon} {section?.label}</div>
+        </div>
+        <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap",alignItems:"center"}}>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>対象月</label>
+            <input className="input" type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{width:160}}/>
+          </div>
+          {activeSection !== "user_ledger" && activeSection !== "claim_csv" && (
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
+              <select className="input" value={selUser} onChange={e=>setSelUser(e.target.value)} style={{width:160}}>
+                <option>全員</option>{activeUsers.map(u=><option key={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+          )}
+        </div>
+
+        {/* サービス提供実績記録票 */}
+        {activeSection==="service_record"&&(
+          <div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button className="btn btn-green" onClick={exportServiceRecord}><Icon name="download" size={13}/>CSVダウンロード</button>
+              <button className="btn btn-secondary" onClick={()=>window.print()}>🖨️ 印刷</button>
+            </div>
+            <div className="card" style={{overflowX:"auto"}}>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>サービス提供実績記録票 — {selMonth}</div>
+              {(()=>{
+                const [y,m]=selMonth.split('-').map(Number);
+                const days=Array.from({length:new Date(y,m,0).getDate()},(_,i)=>i+1);
+                const tUsers = selUser==="全員" ? activeUsers : activeUsers.filter(u=>u.name===selUser);
+                return(
+                  <table style={{fontSize:11}}>
+                    <thead><tr>
+                      <th style={{minWidth:80,position:"sticky",left:0,background:"white"}}>利用者</th>
+                      {days.map(d=><th key={d} style={{minWidth:28,textAlign:"center",padding:"6px 2px"}}>{d}</th>)}
+                      <th>提供日数</th><th>請求額</th>
+                    </tr></thead>
+                    <tbody>
+                      {tUsers.map(u=>{
+                        const attended = days.map(d=>{
+                          const ds=`${selMonth}-${String(d).padStart(2,'0')}`;
+                          return monthSrecs.some(s=>s.user_id===u.id&&s.date===ds) ||
+                                 monthPerfs.some(p=>p.user_id===u.id&&p.date===ds&&p.attended);
+                        });
+                        const cnt = attended.filter(Boolean).length;
+                        const total = monthClaims.filter(c=>c.user_id===u.id).reduce((s,c)=>s+Number(c.total||0),0);
+                        return(
+                          <tr key={u.id} className="row-hover">
+                            <td style={{fontWeight:600,fontSize:12,position:"sticky",left:0,background:"white",whiteSpace:"nowrap"}}>{u.name}</td>
+                            {attended.map((a,i)=>(
+                              <td key={i} style={{textAlign:"center",padding:"4px 2px"}}>
+                                {a?<span style={{color:"#2563eb",fontWeight:700}}>○</span>:<span style={{color:"#e2e8f0"}}>-</span>}
+                              </td>
+                            ))}
+                            <td className="mono" style={{fontWeight:700,textAlign:"center"}}>{cnt}日</td>
+                            <td className="mono" style={{fontWeight:700,color:"#059669"}}>¥{total.toLocaleString()}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+
+        {/* 請求書・明細書 */}
+        {activeSection==="claim_print"&&(
+          <div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button className="btn btn-green" onClick={exportClaimData}><Icon name="download" size={13}/>国保連取込CSV</button>
+              <button className="btn btn-secondary" onClick={()=>window.print()}>🖨️ 印刷</button>
+            </div>
+            {(selUser==="全員"?activeUsers:activeUsers.filter(u=>u.name===selUser)).filter(u=>userDays.find(d=>d.id===u.id)?.days>0).map((u,i)=>{
+              const ud = userDays.find(d=>d.id===u.id);
+              const uClaims = monthClaims.filter(c=>c.user_id===u.id);
+              return(
+                <div key={i} className="card" style={{marginBottom:14,pageBreakAfter:"always"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                    <div>
+                      <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>障害福祉サービス費請求書・明細書</div>
+                      <div style={{fontWeight:800,fontSize:16}}>{u.name} 様</div>
+                      <div style={{fontSize:12,color:"#64748b"}}>受給者番号: {u.recipient_no||'未設定'} ／ {selMonth}</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:11,color:"#64748b"}}>サービス提供月</div>
+                      <div style={{fontWeight:700,fontSize:14}}>{selMonth}</div>
+                    </div>
+                  </div>
+                  <table style={{marginBottom:10}}>
+                    <thead><tr><th>サービス種類</th><th>日数</th><th>単位数</th><th>給付費</th><th>利用者負担</th></tr></thead>
+                    <tbody>
+                      {uClaims.length>0 ? uClaims.map((c,j)=>(
+                        <tr key={j}>
+                          <td>{c.service||u.service_type||'共同生活援助'}</td>
+                          <td className="mono" style={{textAlign:"center"}}>{c.days||ud?.days||0}日</td>
+                          <td className="mono" style={{textAlign:"center"}}>{c.units||'-'}</td>
+                          <td className="mono" style={{fontWeight:700}}>¥{Number(c.total||0).toLocaleString()}</td>
+                          <td className="mono">¥{Number(c.user_burden||0).toLocaleString()}</td>
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td>{u.service_type||'共同生活援助'}</td>
+                          <td className="mono" style={{textAlign:"center"}}>{ud?.days||0}日</td>
+                          <td className="mono" style={{textAlign:"center"}}>-</td>
+                          <td className="mono" style={{fontWeight:700}}>¥{(ud?.total||0).toLocaleString()}</td>
+                          <td className="mono">¥0</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                  <div style={{display:"flex",justifyContent:"flex-end"}}>
+                    <div style={{background:"#f0f9ff",borderRadius:10,padding:"10px 18px",textAlign:"right"}}>
+                      <div style={{fontSize:11,color:"#64748b"}}>請求額合計</div>
+                      <div style={{fontSize:22,fontWeight:800,color:"#2563eb"}}>¥{(ud?.total||0).toLocaleString()}</div>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+            {(selUser==="全員"?activeUsers:activeUsers.filter(u=>u.name===selUser)).filter(u=>userDays.find(d=>d.id===u.id)?.days>0).length===0&&(
+              <div style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}>この月の実績データがありません。<br/>実績管理から日別データを入力してください。</div>
+            )}
+          </div>
+        )}
+
+        {/* 領収書 */}
+        {activeSection==="receipt"&&(
+          <div>
+            <button className="btn btn-secondary" style={{marginBottom:12}} onClick={()=>window.print()}>🖨️ 印刷</button>
+            {(selUser==="全員"?activeUsers:activeUsers.filter(u=>u.name===selUser)).map((u,i)=>{
+              const ud=userDays.find(d=>d.id===u.id);
+              return(
+                <div key={i} className="card" style={{marginBottom:14,maxWidth:500}}>
+                  <div style={{textAlign:"center",borderBottom:"2px solid #e2e8f0",paddingBottom:12,marginBottom:12}}>
+                    <div style={{fontSize:18,fontWeight:800,marginBottom:4}}>領 収 書</div>
+                    <div style={{fontSize:12,color:"#64748b"}}>{selMonth}分</div>
+                  </div>
+                  <div style={{marginBottom:12}}>
+                    <div style={{fontSize:13,marginBottom:6}}>{u.name} 様</div>
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"10px 0",borderBottom:"1px solid #e2e8f0"}}>
+                      <span style={{fontSize:13}}>サービス利用料（{u.service_type||'共同生活援助'}）</span>
+                      <span style={{fontWeight:700,fontSize:15}}>¥{(ud?.total||0).toLocaleString()}</span>
+                    </div>
+                  </div>
+                  <div style={{background:"#f0fdf4",borderRadius:8,padding:"10px",textAlign:"center"}}>
+                    <div style={{fontSize:11,color:"#065f46"}}>上記金額を領収いたしました</div>
+                    <div style={{fontSize:11,color:"#64748b",marginTop:4}}>発行日: {today}</div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 代理受領通知書 */}
+        {activeSection==="proxy_notice"&&(
+          <div>
+            <button className="btn btn-secondary" style={{marginBottom:12}} onClick={()=>window.print()}>🖨️ 印刷</button>
+            {(selUser==="全員"?activeUsers:activeUsers.filter(u=>u.name===selUser)).map((u,i)=>{
+              const ud=userDays.find(d=>d.id===u.id);
+              return(
+                <div key={i} className="card" style={{marginBottom:14,maxWidth:540}}>
+                  <div style={{fontWeight:800,fontSize:15,marginBottom:12,textAlign:"center"}}>代理受領通知書</div>
+                  <div style={{fontSize:13,lineHeight:2}}>
+                    <div>受給者番号: {u.recipient_no||'　　　　　　'}</div>
+                    <div>氏名: {u.name} 様</div>
+                    <div>サービス提供月: {selMonth}</div>
+                    <div>サービス種類: {u.service_type||'共同生活援助'}</div>
+                    <div>利用日数: {ud?.days||0}日</div>
+                    <div>給付費: ¥{(ud?.total||0).toLocaleString()}</div>
+                  </div>
+                  <div style={{marginTop:12,fontSize:12,color:"#64748b",borderTop:"1px solid #e2e8f0",paddingTop:10}}>
+                    上記のとおり障害福祉サービス費を代理受領しましたのでお知らせします。
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* 利用者台帳CSV */}
+        {activeSection==="user_ledger"&&(
+          <div>
+            <div style={{display:"flex",gap:8,marginBottom:16}}>
+              <button className="btn btn-green" onClick={exportUserLedger}><Icon name="download" size={13}/>CSVダウンロード</button>
+            </div>
+            <div className="card">
+              <table>
+                <thead><tr><th>受給者番号</th><th>氏名</th><th>生年月日</th><th>障害支援区分</th><th>サービス</th><th>入居日</th></tr></thead>
+                <tbody>
+                  {activeUsers.map((u,i)=>(
+                    <tr key={i} className="row-hover">
+                      <td className="mono" style={{fontSize:12}}>{u.recipient_no||'-'}</td>
+                      <td style={{fontWeight:600}}>{u.name}</td>
+                      <td className="mono" style={{fontSize:12}}>{u.birth_date||'-'}</td>
+                      <td><span className="tag">{u.disability_level||'-'}</span></td>
+                      <td style={{fontSize:12}}>{u.service_type||'共同生活援助'}</td>
+                      <td className="mono" style={{fontSize:12}}>{u.move_in_date||'-'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 国保連取込CSV */}
+        {activeSection==="claim_csv"&&(
+          <div>
+            <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:10,padding:"12px 14px",marginBottom:14,fontSize:13}}>
+              💡 このCSVは国保連電子請求受付システムへの取込用です。内容確認後にダウンロードしてください。
+            </div>
+            <div style={{display:"flex",gap:8,marginBottom:16}}>
+              <button className="btn btn-green" onClick={exportClaimData}><Icon name="download" size={13}/>CSVダウンロード</button>
+            </div>
+            <div className="card">
+              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>請求データ確認 — {selMonth}</div>
+              <table>
+                <thead><tr><th>受給者番号</th><th>氏名</th><th>サービス</th><th>提供日数</th><th>請求額</th></tr></thead>
+                <tbody>
+                  {userDays.map((u,i)=>(
+                    <tr key={i} className="row-hover">
+                      <td className="mono" style={{fontSize:12}}>{u.recipient_no||'-'}</td>
+                      <td style={{fontWeight:600}}>{u.name}</td>
+                      <td style={{fontSize:12}}>{u.service_type||'共同生活援助'}</td>
+                      <td className="mono" style={{textAlign:"center"}}>{u.days}日</td>
+                      <td className="mono" style={{fontWeight:700,color:"#059669"}}>¥{u.total.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                  <tr style={{background:"#f0fdf4",fontWeight:700}}>
+                    <td colSpan={3} style={{textAlign:"right"}}>合計</td>
+                    <td className="mono" style={{textAlign:"center"}}>{userDays.reduce((s,u)=>s+u.days,0)}日</td>
+                    <td className="mono" style={{color:"#059669"}}>¥{userDays.reduce((s,u)=>s+u.total,0).toLocaleString()}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 利用実績表 */}
+        {activeSection==="usage_report"&&(
+          <div>
+            <div style={{display:"flex",gap:8,marginBottom:12}}>
+              <button className="btn btn-green" onClick={exportUsageReport}><Icon name="download" size={13}/>CSVダウンロード</button>
+              <button className="btn btn-secondary" onClick={()=>window.print()}>🖨️ 印刷</button>
+            </div>
+            <div className="card">
+              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>利用実績表 — {selMonth}</div>
+              <table>
+                <thead><tr><th>氏名</th><th>サービス</th><th>利用日数</th><th>請求額</th><th>状態</th></tr></thead>
+                <tbody>
+                  {userDays.map((u,i)=>(
+                    <tr key={i} className="row-hover">
+                      <td style={{fontWeight:600}}>{u.name}</td>
+                      <td style={{fontSize:12}}>{u.service_type||'共同生活援助'}</td>
+                      <td className="mono" style={{textAlign:"center",fontWeight:700}}>{u.days}日</td>
+                      <td className="mono" style={{fontWeight:700,color:"#059669"}}>¥{u.total.toLocaleString()}</td>
+                      <td><span className="tag" style={{background:u.days>0?"#ecfdf5":"#f1f5f9",color:u.days>0?"#059669":"#94a3b8"}}>{u.days>0?"利用あり":"未利用"}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* 定員日報集計表 */}
+        {activeSection==="daily_summary"&&(
+          <div>
+            <button className="btn btn-secondary" style={{marginBottom:12}} onClick={()=>window.print()}>🖨️ 印刷</button>
+            <div className="card" style={{overflowX:"auto"}}>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>定員日報集計表 — {selMonth}</div>
+              {(()=>{
+                const [y,m]=selMonth.split('-').map(Number);
+                const days=Array.from({length:new Date(y,m,0).getDate()},(_,i)=>i+1);
+                return(
+                  <table style={{fontSize:11}}>
+                    <thead><tr>
+                      <th style={{position:"sticky",left:0,background:"white"}}>日付</th>
+                      <th>在籍数</th><th>利用数</th><th>利用率</th>
+                    </tr></thead>
+                    <tbody>
+                      {days.map(d=>{
+                        const ds=`${selMonth}-${String(d).padStart(2,'0')}`;
+                        const cnt=activeUsers.filter(u=>
+                          monthSrecs.some(s=>s.user_id===u.id&&s.date===ds)||
+                          monthPerfs.some(p=>p.user_id===u.id&&p.date===ds&&p.attended)
+                        ).length;
+                        const rate=activeUsers.length>0?Math.round(cnt/activeUsers.length*100):0;
+                        return(
+                          <tr key={d} className="row-hover">
+                            <td style={{position:"sticky",left:0,background:"white",fontWeight:600}}>{selMonth.slice(5)}/{String(d).padStart(2,'0')}</td>
+                            <td className="mono" style={{textAlign:"center"}}>{activeUsers.length}名</td>
+                            <td className="mono" style={{textAlign:"center",fontWeight:700,color:cnt>0?"#2563eb":"#94a3b8"}}>{cnt}名</td>
+                            <td>
+                              <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                <div style={{flex:1,height:6,background:"#e2e8f0",borderRadius:3,overflow:"hidden"}}>
+                                  <div style={{width:rate+"%",height:"100%",background:rate>=80?"#059669":rate>=50?"#f59e0b":"#ef4444",borderRadius:3}}/>
+                                </div>
+                                <span className="mono" style={{fontSize:11,width:32}}>{rate}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                );
+              })()}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // メニュー画面
+  return (
+    <div className="fade-in">
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>国保連請求・帳票管理</div>
+      <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>請求書・実績記録票・CSV出力</div>
+      <div style={{display:"flex",gap:10,marginBottom:20,alignItems:"center",flexWrap:"wrap"}}>
+        <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>対象月</label>
+          <input className="input" type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{width:180}}/>
+        </div>
+        <div style={{background:"#f0f9ff",borderRadius:10,padding:"10px 16px",fontSize:13}}>
+          <span style={{color:"#64748b"}}>在籍利用者: </span>
+          <span style={{fontWeight:700,color:"#2563eb"}}>{activeUsers.length}名</span>
+          <span style={{color:"#64748b",marginLeft:12}}>今月実績あり: </span>
+          <span style={{fontWeight:700,color:"#059669"}}>{userDays.filter(u=>u.days>0).length}名</span>
+        </div>
+      </div>
+
+      <div style={{marginBottom:20}}>
+        <div style={{fontWeight:700,fontSize:14,color:"#1e293b",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{background:"#eff6ff",color:"#2563eb",borderRadius:6,padding:"2px 8px",fontSize:12}}>集計・請求</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
+          {sections.slice(0,4).map(s=>(
+            <button key={s.id} onClick={()=>setActiveSection(s.id)}
+              style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",transition:"all .15s"}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=s.color}
+              onMouseLeave={e=>e.currentTarget.style.borderColor="#e2e8f0"}>
+              <div style={{fontSize:24,flexShrink:0}}>{s.icon}</div>
+              <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{s.label}</div>
+              <div style={{marginLeft:"auto",color:"#94a3b8"}}>›</div>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <div style={{fontWeight:700,fontSize:14,color:"#1e293b",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+          <span style={{background:"#f0fdf4",color:"#059669",borderRadius:6,padding:"2px 8px",fontSize:12}}>データ出力・台帳</span>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
+          {sections.slice(4).map(s=>(
+            <button key={s.id} onClick={()=>setActiveSection(s.id)}
+              style={{background:"white",border:"1px solid #e2e8f0",borderRadius:12,padding:"16px",cursor:"pointer",display:"flex",alignItems:"center",gap:12,textAlign:"left",transition:"all .15s"}}
+              onMouseEnter={e=>e.currentTarget.style.borderColor=s.color}
+              onMouseLeave={e=>e.currentTarget.style.borderColor="#e2e8f0"}>
+              <div style={{fontSize:24,flexShrink:0}}>{s.icon}</div>
+              <div style={{fontWeight:600,fontSize:13,color:"#1e293b"}}>{s.label}</div>
+              <div style={{marginLeft:"auto",color:"#94a3b8"}}>›</div>
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function AdminPinForm({loadAll}) {
   const [cur,setCur]=useState("");
   const [nw,setNw]=useState("");
@@ -1851,44 +2325,7 @@ export default function App() {
           {/* ── 国保連請求 ── */}
           {tab==="claims"&&isAdmin&&(
             <div className="fade-in">
-              <PH title="国保連請求管理" sub="請求・入金管理"
-                extra={<button className="btn btn-secondary btn-sm" onClick={()=>csv(claims,"国保連請求")}><Icon name="download" size={13}/>CSV</button>}
-              />
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:16}}>
-                {[{l:"請求総額",v:"¥"+fmt(totalClaim),c:"#2563eb",i:"📋"},{l:"請求済",v:claims.filter(c=>c.status==="請求済").length+"件",c:"#d97706",i:"⏳"},{l:"入金済",v:claims.filter(c=>c.status==="入金済").length+"件",c:"#059669",i:"✅"}].map((k,i)=>(
-                  <div key={i} className="stat-card"><div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:12,color:"#64748b"}}>{k.l}</div><div style={{fontSize:18}}>{k.i}</div></div><div className="mono" style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div></div>
-                ))}
-              </div>
-              <div className="card" style={{marginBottom:16}}>
-                {claims.length===0?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>請求データがありません</div>:(
-                  <table>
-                    <thead><tr><th>利用者</th><th>サービス</th><th>日数</th><th>単価</th><th>請求額</th><th>状態</th><th>請求日</th><th>操作</th></tr></thead>
-                    <tbody>
-                      {claims.map((c,i)=>(
-                        <tr key={i} className="row-hover">
-                          <td style={{fontWeight:600}}>{c.user_name}</td><td>{c.service}</td>
-                          <td className="mono">{c.days}日</td><td className="mono">¥{fmt(c.unit_price)}</td>
-                          <td className="mono" style={{fontWeight:700}}>¥{fmt(c.total)}</td>
-                          <td><span className="tag" style={{background:c.status==="入金済"?"#ecfdf5":"#fef3c7",color:c.status==="入金済"?"#059669":"#d97706"}}>{c.status}</span></td>
-                          <td className="mono" style={{fontSize:12}}>{c.claim_date}</td>
-                          <td>{c.status==="請求済"&&<button className="btn btn-green btn-sm" onClick={async()=>{await supabase.from("claim_data").update({status:"入金済"}).eq("id",c.id);loadAll();}}>入金確認</button>}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-              <div className="card">
-                <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📤 帳票・CSV出力</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:10}}>
-                  {[{l:"サービス提供実績記録票",d:claims},{l:"給付費明細書",d:claims},{l:"受給者台帳",d:users},{l:"支援記録（月別）",d:srecs},{l:"実績記録表",d:perfs}].map((item,i)=>(
-                    <div key={i} style={{border:"1px solid #e2e8f0",borderRadius:10,padding:"10px 12px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}}>
-                      <div style={{fontWeight:600,fontSize:13}}>{item.l}</div>
-                      <button className="btn btn-green btn-sm" onClick={()=>csv(item.d,item.l)}><Icon name="download" size={12}/>出力</button>
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <BillingTab claims={claims} users={users} perfs={perfs} srecs={srecs} today={today}/>
             </div>
           )}
 
