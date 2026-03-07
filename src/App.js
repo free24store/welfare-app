@@ -1982,8 +1982,7 @@ export default function App() {
                           <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,background:item.type==="custom"?"#f0fdf4":"#f8fafc",borderRadius:8,padding:"10px 12px",border:`1px solid ${item.type==="custom"?"#bbf7d0":"#e2e8f0"}`}}>
                             <div style={{fontSize:13,color:"#334155",flex:1,lineHeight:1.6,whiteSpace:"pre-line"}}>{item.text}{item.type==="custom"&&<span style={{fontSize:10,color:"#059669",marginLeft:6}}>カスタム</span>}</div>
                             <div style={{display:"flex",gap:4,flexShrink:0,flexDirection:"column"}}>
-                              <button className="btn btn-primary btn-sm" onClick={()=>{setForm(f=>({...f,[tmplModal]:(f[tmplModal]?f[tmplModal]+"
-":"")+item.text}));setTmplModal(null);setTmplEditMode(false);}}>利用</button>
+                              <button className="btn btn-primary btn-sm" onClick={()=>{setForm(f=>({...f,[tmplModal]:(f[tmplModal]?f[tmplModal]+"\n":"")+item.text}));setTmplModal(null);setTmplEditMode(false);}}>利用</button>
                               {item.type==="custom"&&<>
                                 <button className="btn btn-secondary btn-sm" style={{fontSize:10,padding:"2px 6px"}} onClick={()=>{setTmplEditMode(true);setTmplEditIdx(item.idx);setTmplEditText(item.text);}}>編集</button>
                                 <button className="btn btn-red btn-sm" style={{fontSize:10,padding:"2px 6px"}} onClick={()=>{
