@@ -65,8 +65,8 @@ const CSS = `
   .nav-item.active{background:#eff6ff;color:#2563eb;}
   .nav-group{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#cbd5e1;padding:10px 12px 4px;}
   .row-hover:hover{background:#f8fafc;cursor:pointer;}
-  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:12px;}
-  .modal{background:white;border-radius:16px;padding:24px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
+  .modal{background:white;border-radius:16px;padding:24px;width:100%;max-width:680px;overflow-y:visible;box-shadow:0 20px 60px rgba(0,0,0,.25);margin:auto;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   .card{overflow-x:auto;}
   th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;border-bottom:2px solid #f1f5f9;white-space:nowrap;}
@@ -1948,8 +1948,7 @@ export default function App() {
                       {SREC_TEMPLATES[tmplTab].map((txt,i)=>(
                         <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e2e8f0"}}>
                           <div style={{fontSize:13,color:"#334155",flex:1,lineHeight:1.6,whiteSpace:"pre-line"}}>{txt}</div>
-                          <button className="btn btn-primary btn-sm" style={{flexShrink:0}} onClick={()=>{setForm(f=>({...f,[tmplModal]:(f[tmplModal]?f[tmplModal]+"
-":"")+txt}));setTmplModal(null);}}>利用する</button>
+                          <button className="btn btn-primary btn-sm" style={{flexShrink:0}} onClick={()=>{setForm(f=>({...f,[tmplModal]:(f[tmplModal]?f[tmplModal]+"\n":"")+txt}));setTmplModal(null);}}>利用する</button>
                         </div>
                       ))}
                     </div>
