@@ -1691,7 +1691,7 @@ export default function App() {
   return (
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",background:"#f0f4f8",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <style>{CSS}</style>
-      <header style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 14px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,flexShrink:0}}>
+      <header style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 14px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {isMobile && (
             <button onClick={()=>setNavOpen(true)} style={{background:"none",border:"none",cursor:"pointer",padding:"6px",display:"flex",flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center",borderRadius:8}}>
@@ -1714,7 +1714,7 @@ export default function App() {
         <div onClick={()=>setNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",zIndex:90}}/>
       )}
 
-      <div style={{display:"flex",flex:1,overflow:isMobile?"visible":"hidden",minHeight:0}}>
+      <div style={{display:"flex",flex:1,overflow:"hidden",minHeight:0}}>
         {/* サイドバー */}
         <aside style={{
           width: 196,
@@ -1748,7 +1748,7 @@ export default function App() {
           ))}
         </aside>
 
-        <main ref={mainRef} style={{flex:1,paddingTop:"16px",paddingLeft:isMobile?"12px":"18px",paddingRight:isMobile?"12px":"18px",paddingBottom:"60px",overflowY:"auto",overflowX:"hidden",minWidth:0,minHeight:0}}>
+        <main ref={mainRef} style={{flex:1,paddingTop:isMobile?"20px":"18px",paddingLeft:isMobile?"12px":"18px",paddingRight:isMobile?"12px":"18px",paddingBottom:"60px",overflowY:"auto",overflowX:"hidden",minWidth:0,minHeight:0}}>
 
           {/* ── DASHBOARD ── */}
           {tab==="dashboard"&&isAdmin&&(
