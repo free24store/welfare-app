@@ -133,13 +133,13 @@ const NEWS = [
 
 function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
   const [selStaff, setSelStaff] = useState("");
-  const [ym, setYm] = useState(today.slice(0,7));
+  const [ym, setYm] = useState((today||new Date().toISOString().slice(0,10)).slice(0,7));
   const [baseHour, setBaseHour] = useState("");
   const [extraPay, setExtraPay] = useState("0");
   const [deduct, setDeduct] = useState("0");
   const [note, setNote] = useState("");
   const [payDate, setPayDate] = useState("");
-  const [filterYm, setFilterYm] = useState(today.slice(0,7));
+  const [filterYm, setFilterYm] = useState((today||new Date().toISOString().slice(0,10)).slice(0,7));
   const [msg, setMsg] = useState("");
 
   const calcHours = (staffId, yearMonth) => {
@@ -506,7 +506,7 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
 
 function BillingTab({claims, users, perfs, srecs, today}) {
   const [activeSection, setActiveSection] = useState("menu");
-  const [selMonth, setSelMonth] = useState(today.slice(0,7));
+  const [selMonth, setSelMonth] = useState((today||new Date().toISOString().slice(0,10)).slice(0,7));
   const [selUser, setSelUser] = useState("全員");
   const [printMode, setPrintMode] = useState(false);
 
@@ -1688,7 +1688,6 @@ export default function App() {
           {tab==="dashboard"&&isAdmin&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>ダッシュボード</div>
-              <div style={{background:"#fef3c7",borderRadius:8,padding:"6px 10px",fontSize:12,marginBottom:8,color:"#92400e"}}>🔍 デバッグ: 画面幅={winW}px / isMobile={String(isMobile)}</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:18}}>{today}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:18}}>
                 {[
