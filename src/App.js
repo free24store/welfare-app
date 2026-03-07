@@ -1454,6 +1454,7 @@ export default function App() {
   const [fCat, setFCat] = useState("全て");
   const [search, setSearch] = useState("");
   const [navOpen, setNavOpen] = useState(false);
+  const mainRef = React.useRef(null);
   const [tmplModal, setTmplModal] = useState(null); // field key e.g. "content"
   const [customTemplates, setCustomTemplates] = useState({}); // {category: [...]}
   const [tmplEditMode, setTmplEditMode] = useState(false);
@@ -1466,6 +1467,9 @@ export default function App() {
     window.addEventListener('resize',onResize);
     return()=>window.removeEventListener('resize',onResize);
   },[]);
+  useEffect(()=>{
+    if(mainRef.current) mainRef.current.scrollTop=0;
+  },[tab]);
   useEffect(()=>{
     let mv=document.querySelector('meta[name=viewport]');
     if(!mv){mv=document.createElement('meta');mv.name='viewport';document.head.prepend(mv);}
@@ -1746,7 +1750,7 @@ export default function App() {
           ))}
         </aside>
 
-        <main style={{flex:1,padding:isMobile?"12px":"18px",overflowY:"auto",overflowX:"hidden",minWidth:0}}>
+        <main ref={mainRef} style={{flex:1,padding:isMobile?"12px":"18px",overflowY:"auto",overflowX:"hidden",minWidth:0}}>
 
           {/* ── DASHBOARD ── */}
           {tab==="dashboard"&&isAdmin&&(
