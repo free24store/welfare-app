@@ -391,11 +391,12 @@ function MySalaryTab({me, salaries, attendance}) {
 
 function ShiftReqTab({me, shifts, loadAll, today}) {
   const [type, setType] = useState("希望休");
-  const [dateFrom, setDateFrom] = useState(today);
-  const [dateTo, setDateTo] = useState(today);
+  const _today = today || new Date().toISOString().slice(0,10);
+  const [dateFrom, setDateFrom] = useState(_today);
+  const [dateTo, setDateTo] = useState(_today);
   const [reason, setReason] = useState("");
   const [correction, setCorrection] = useState("");
-  const [corrDate, setCorrDate] = useState(today);
+  const [corrDate, setCorrDate] = useState(_today);
   const [corrIn, setCorrIn] = useState("");
   const [corrOut, setCorrOut] = useState("");
   const [msg, setMsg] = useState("");
