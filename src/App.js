@@ -91,25 +91,15 @@ const CSS = `
 
   /* ── responsive ── */
   @media(max-width:768px){
-    .card{padding:14px;}
-    .modal{padding:18px;border-radius:12px;}
-    .sidebar{
-      position:fixed;top:0;left:0;height:100%;z-index:100;
-      transform:translateX(-100%);
-      box-shadow:4px 0 24px rgba(0,0,0,.12);
-    }
-    .sidebar.open{transform:translateX(0);}
-    .menu-btn{display:flex !important;}
-    .hamburger-close{display:flex !important;}
-    th,td{padding:7px 8px;font-size:12px;}
-    .stat-card{padding:12px 14px;}
-    .btn{padding:7px 12px;font-size:12px;}
-    .btn-sm{padding:4px 8px;font-size:11px;}
-  }
-  @media(min-width:769px){
-    .menu-btn{display:none !important;}
-    .hamburger-close{display:none !important;}
-    .drawer-overlay{display:none !important;}
+    .card{padding:12px;}
+    .modal{padding:16px;border-radius:12px;}
+    th,td{padding:6px 8px;font-size:11px;}
+    .stat-card{padding:10px 12px;}
+    .btn{padding:7px 10px;font-size:12px;}
+    .btn-sm{padding:4px 7px;font-size:11px;}
+    .nav-group{padding:8px 10px 3px;}
+    select.input{font-size:16px;}
+    input.input{font-size:16px;}
   }
 `;
 
@@ -1345,9 +1335,17 @@ function F({label,k,type="text",opts,span,form,setForm}) {
 
 function PH({title,sub,onAdd,addLabel,extra}) {
   return (
-    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
-      <div><div style={{fontSize:18,fontWeight:700,color:"#0f172a",marginBottom:2}}>{title}</div>{sub&&<div style={{fontSize:13,color:"#94a3b8"}}>{sub}</div>}</div>
-      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>{extra}{onAdd&&<button className="btn btn-primary" onClick={onAdd}><Icon name="plus" size={14}/>{addLabel||"追加"}</button>}</div>
+    <div style={{marginBottom:14}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
+        <div style={{minWidth:0}}>
+          <div style={{fontSize:17,fontWeight:700,color:"#0f172a",marginBottom:2,wordBreak:"keep-all"}}>{title}</div>
+          {sub&&<div style={{fontSize:12,color:"#94a3b8"}}>{sub}</div>}
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",flexShrink:0}}>
+          {extra}
+          {onAdd&&<button className="btn btn-primary" style={{whiteSpace:"nowrap"}} onClick={onAdd}><Icon name="plus" size={14}/>{addLabel||"追加"}</button>}
+        </div>
+      </div>
     </div>
   );
 }
@@ -1741,8 +1739,10 @@ export default function App() {
               <PH title="利用者状況" sub={`在籍 ${users.filter(u=>u.status==="在籍").length}名`}
                 onAdd={isAdmin?()=>openModal("利用者",{name:"",kana:"",age:"",disability:"",support_level:"1",room:"",unit:"A棟",admission_date:"",status:"在籍",guardian:"",guardian_tel:"",medication_note:"",access_code:""}):null}
                 addLabel="新規登録"
-                extra={<select className="input" style={{width:110}} value={fUnit} onChange={e=>setFUnit(e.target.value)}>{["全棟","A棟","B棟","C棟"].map(v=><option key={v}>{v}</option>)}</select>}
               />
+              <div style={{marginBottom:12}}>
+                <select className="input" style={{width:"100%",maxWidth:200}} value={fUnit} onChange={e=>setFUnit(e.target.value)}>{["全棟","A棟","B棟","C棟"].map(v=><option key={v}>{v}</option>)}</select>
+              </div>
               <div style={{display:"grid",gap:10}}>
                 {users.filter(u=>(fUnit==="全棟"||u.unit===fUnit)&&(u.name.includes(search)||!search)).map(u=>{
                   const rec=srecs.find(r=>r.user_id===u.id&&r.date===today);
@@ -1812,14 +1812,14 @@ export default function App() {
               <PH title="支援記録" sub="日々の支援内容"
                 onAdd={()=>openModal("支援記録",{user_id:"",date:today,time_slot:"日中",staff_name:me?.name||"管理者",health:"良好",meal:"完食",content:"",activity:"",behavior:"",note:""})}
                 addLabel="記録追加"
-                extra={<div style={{display:"flex",gap:8}}>
-                  <input className="input" type="date" style={{width:150}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
-                  <select className="input" style={{width:120}} value={fUser} onChange={e=>setFUser(e.target.value)}>
-                    <option value="">全利用者</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
-                  {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs,"支援記録")}><Icon name="download" size={13}/>CSV</button>}
-                </div>}
               />
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+                <input className="input" type="date" style={{flex:1,minWidth:130}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
+                <select className="input" style={{flex:1,minWidth:110}} value={fUser} onChange={e=>setFUser(e.target.value)}>
+                  <option value="">全利用者</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+                {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs,"支援記録")}><Icon name="download" size={13}/>CSV</button>}
+              </div>
               <div style={{display:"grid",gap:10}}>
                 {srecs.filter(r=>(r.date===fDate||!fDate)&&(!fUser||r.user_id===parseInt(fUser))).slice(0,30).map((r,i)=>(
                   <div key={i} className="card">
@@ -1873,12 +1873,11 @@ export default function App() {
           {/* ── 支援記録表 ── */}
           {tab==="srec_table"&&(
             <div className="fade-in">
-              <PH title="支援記録表" sub="利用者×日付マトリクス"
-                extra={<div style={{display:"flex",gap:8}}>
-                  <input className="input" type="month" style={{width:150}} value={fDate.slice(0,7)} onChange={e=>setFDate(e.target.value+"-01")}/>
-                  {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs,"支援記録表")}><Icon name="download" size={13}/>CSV</button>}
-                </div>}
-              />
+              <PH title="支援記録表" sub="利用者×日付マトリクス"/>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+                <input className="input" type="month" style={{flex:1,minWidth:130}} value={fDate.slice(0,7)} onChange={e=>setFDate(e.target.value+"-01")}/>
+                {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs,"支援記録表")}><Icon name="download" size={13}/>CSV</button>}
+              </div>
               <div className="card" style={{overflowX:"auto"}}>
                 {(()=>{
                   const month=fDate.slice(0,7);
@@ -1918,12 +1917,11 @@ export default function App() {
           {/* ── 業務日誌 ── */}
           {tab==="journal"&&(
             <div className="fade-in">
-              <PH title="業務日誌" sub="引継ぎ・全利用者一覧"
-                extra={<div style={{display:"flex",gap:8}}>
-                  <input className="input" type="date" style={{width:160}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
-                  {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs.filter(r=>r.date===fDate),fDate+"_業務日誌")}><Icon name="download" size={13}/>CSV</button>}
-                </div>}
-              />
+              <PH title="業務日誌" sub="引継ぎ・全利用者一覧"/>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+                <input className="input" type="date" style={{flex:1,minWidth:130}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
+                {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs.filter(r=>r.date===fDate),fDate+"_業務日誌")}><Icon name="download" size={13}/>CSV</button>}
+              </div>
               {["日中","夜間","深夜"].map(slot=>{
                 const recs=srecs.filter(r=>r.date===fDate&&r.time_slot===slot);
                 return(
@@ -2036,11 +2034,11 @@ export default function App() {
               <PH title="実績管理（日別）" sub="サービス提供実績"
                 onAdd={()=>openModal("実績",{user_id:"",date:fDate,service_type:"共同生活援助",start_time:"09:00",end_time:"17:00",support_category:"",staff_name:"",is_absence:false,note:""})}
                 addLabel="実績追加"
-                extra={<div style={{display:"flex",gap:8}}>
-                  <input className="input" type="date" style={{width:150}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
-                  <button className="btn btn-secondary btn-sm" onClick={()=>csv(perfs.filter(r=>r.date===fDate),fDate+"_実績")}><Icon name="download" size={13}/>CSV</button>
-                </div>}
               />
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+                <input className="input" type="date" style={{flex:1,minWidth:130}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
+                <button className="btn btn-secondary btn-sm" onClick={()=>csv(perfs.filter(r=>r.date===fDate),fDate+"_実績")}><Icon name="download" size={13}/>CSV</button>
+              </div>
               <div className="card">
                 <table>
                   <thead><tr><th>利用者</th><th>サービス</th><th>開始</th><th>終了</th><th>担当</th><th>状態</th><th>備考</th><th>操作</th></tr></thead>
@@ -2091,12 +2089,11 @@ export default function App() {
           {/* ── 実績管理（集計） ── */}
           {tab==="perf_sum"&&isAdmin&&(
             <div className="fade-in">
-              <PH title="実績管理（集計）" sub="月別・利用者別"
-                extra={<div style={{display:"flex",gap:8}}>
-                  <input className="input" type="month" style={{width:150}} value={fDate.slice(0,7)} onChange={e=>setFDate(e.target.value+"-01")}/>
-                  <button className="btn btn-secondary btn-sm" onClick={()=>csv(perfs,"実績集計")}><Icon name="download" size={13}/>CSV</button>
-                </div>}
-              />
+              <PH title="実績管理（集計）" sub="月別・利用者別"/>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+                <input className="input" type="month" style={{flex:1,minWidth:130}} value={fDate.slice(0,7)} onChange={e=>setFDate(e.target.value+"-01")}/>
+                <button className="btn btn-secondary btn-sm" onClick={()=>csv(perfs,"実績集計")}><Icon name="download" size={13}/>CSV</button>
+              </div>
               <div className="card">
                 <table>
                   <thead><tr><th>利用者</th><th>出席日数</th><th>欠席日数</th><th>出席率</th><th>主サービス</th></tr></thead>
@@ -2134,11 +2131,11 @@ export default function App() {
               <PH title="工賃計算表" sub="利用者工賃管理"
                 onAdd={()=>openModal("工賃",{user_id:"",year_month:fDate.slice(0,7),work_days:0,work_hours:0,unit_wage:0,total_wage:0,paid:false,note:""})}
                 addLabel="工賃追加"
-                extra={<div style={{display:"flex",gap:8}}>
-                  <input className="input" type="month" style={{width:150}} value={fDate.slice(0,7)} onChange={e=>setFDate(e.target.value+"-01")}/>
-                  <button className="btn btn-secondary btn-sm" onClick={()=>csv(wages.filter(r=>r.year_month===fDate.slice(0,7)),"工賃計算表")}><Icon name="download" size={13}/>CSV</button>
-                </div>}
               />
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+                <input className="input" type="month" style={{flex:1,minWidth:130}} value={fDate.slice(0,7)} onChange={e=>setFDate(e.target.value+"-01")}/>
+                <button className="btn btn-secondary btn-sm" onClick={()=>csv(wages.filter(r=>r.year_month===fDate.slice(0,7)),"工賃計算表")}><Icon name="download" size={13}/>CSV</button>
+              </div>
               <div className="card" style={{marginBottom:16,display:"flex",gap:24,flexWrap:"wrap"}}>
                 {[{l:"支払総額",v:"¥"+fmt(wages.filter(r=>r.year_month===fDate.slice(0,7)).reduce((s,r)=>s+r.total_wage,0))},{l:"支払済",v:wages.filter(r=>r.year_month===fDate.slice(0,7)&&r.paid).length+"名"},{l:"未払い",v:wages.filter(r=>r.year_month===fDate.slice(0,7)&&!r.paid).length+"名"}].map((k,i)=>(
                   <div key={i}><div style={{fontSize:11,color:"#94a3b8",marginBottom:2}}>{k.l}</div><div className="mono" style={{fontSize:18,fontWeight:700}}>{k.v}</div></div>
@@ -2471,8 +2468,10 @@ export default function App() {
               <PH title="予定管理" sub="入院・外泊・通院などの予定"
                 onAdd={isAdmin?()=>openModal("予定",{user_id:"",unit:"A棟",type:"外泊",start_date:"",end_date:"",note:"",status:"予定"}):null}
                 addLabel="予定追加"
-                extra={<select className="input" style={{width:110}} value={fUnit} onChange={e=>setFUnit(e.target.value)}>{["全棟","A棟","B棟","C棟"].map(v=><option key={v}>{v}</option>)}</select>}
               />
+              <div style={{marginBottom:12}}>
+                <select className="input" style={{width:"100%",maxWidth:200}} value={fUnit} onChange={e=>setFUnit(e.target.value)}>{["全棟","A棟","B棟","C棟"].map(v=><option key={v}>{v}</option>)}</select>
+              </div>
               {["A棟","B棟","C棟"].filter(u=>fUnit==="全棟"||u===fUnit).map(unit=>{
                 const unitUsers=users.filter(u=>u.unit===unit);
                 return(
