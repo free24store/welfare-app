@@ -1366,6 +1366,57 @@ function MD({name,table,children,wide,modal,editId,closeModal,save}) {
   );
 }
 
+
+const SREC_TEMPLATES = {
+  "日中の様子": [
+    "本日B型作業所〇時まで通所
+帰所後は居室にて休息され、落ち着いて過ごされていた。",
+    "本日B型作業所休み",
+    "本日は午前9時頃に起床し、朝食を摂取後、身支度を整え日中活動先へ出発された。",
+    "表情は穏やかで、職員の声掛けに対しても問題なく応答されていた。",
+    "特に不安や体調不良の訴えはなく、落ち着いて過ごされていた。",
+    "本日は日中活動がお休みのため、居室にてテレビ視聴やスマートフォン操作を行いながら過ごされていた。",
+    "職員の声掛けには応じられていたが、自発的な会話は少なめであった。",
+    "不穏な様子は見られず、安定して過ごされていた。",
+    "午前中は居室にて過ごされた後、午後より近隣コンビニへ買い物のため外出された。",
+    "外出前後の様子は安定しており、職員との会話も問題なく行われていた。"
+  ],
+  "夕方以降の様子": [
+    "17:00リビングで職員の用意した夕食を摂取しその後入浴し自室で入眠準備行う",
+    "夕食は18時頃に自炊され、完食された。",
+    "食後は共有スペースにてテレビを視聴され、その後居室へ戻られた。",
+    "職員との会話もあり、穏やかな様子で過ごされていた。",
+    "夕食は問題なく摂取された。",
+    "食後は居室にてスマートフォンを使用しながら過ごされていた。",
+    "特に問題行動は見られず、落ち着いた様子であった。",
+    "夕食は摂取されたが、やや表情が硬く、会話は少なめであった。",
+    "職員が声掛けを行うと短い返答は見られた。",
+    "その後は居室に戻り、休息されていた。大きな不穏は見られず。"
+  ],
+  "健康状態等": [
+    "本日の体調不良の訴えはなく、食事・水分ともに問題なく摂取されていた。",
+    "表情、歩行状態ともに安定しており、健康状態は良好であった。",
+    "本日、軽度の疲労感を訴えられていたが、食事は摂取されていた。",
+    "発熱等の症状は見られず、経過観察とした。",
+    "本人は居室にて安静に過ごされていた。",
+    "服薬は職員確認のもと、問題なく実施された。",
+    "体調不良の訴えはなく、普段通りの様子であった。",
+    "引き続き健康状態の観察を行う。"
+  ],
+  "深夜帯の様子、その他": [
+    "自室で入眠される",
+    "2時頃に1度トイレで起きるがその後自室で入眠される",
+    "消灯後は速やかに入眠された様子であった。",
+    "巡視時も安眠されており、覚醒等は見られなかった。",
+    "深夜帯に一度覚醒され、トイレを利用された。",
+    "一度起き、その後は再度入眠され、以降は安眠されていた。",
+    "不穏な様子は見られなかった。",
+    "深夜帯に居室内で覚醒されている様子が確認された。",
+    "職員の声掛けに対し問題なく応答され、「大丈夫です」との返答あり。",
+    "その後は再入眠された。"
+  ]
+};
+
 export default function App() {
   const [auth, setAuth] = useState("select");
   const [isAdmin, setIsAdmin] = useState(false);
@@ -1392,6 +1443,7 @@ export default function App() {
   const [msgs, setMsgs] = useState([]);
   const [salaries, setSalaries] = useState([]);
   const [shifts, setShifts] = useState([]);
+  const [health, setHealth] = useState([]);
 
   const [selUser, setSelUser] = useState(null);
   const [modal, setModal] = useState(null);
@@ -1403,6 +1455,8 @@ export default function App() {
   const [fCat, setFCat] = useState("全て");
   const [search, setSearch] = useState("");
   const [navOpen, setNavOpen] = useState(false);
+  const [tmplModal, setTmplModal] = useState(null); // {field, slot}
+  const [tmplTab, setTmplTab] = useState("日中の様子");
   const [winW, setWinW] = useState(375);
   useEffect(()=>{
     setWinW(window.innerWidth);
@@ -1425,7 +1479,7 @@ export default function App() {
 
   const loadAll = async () => {
     setLoading(true);
-    const [u,t,e,c,a,sr,sp,mo,pr,wr,fr,sc,um,st,sal,shf] = await Promise.all([
+    const [u,t,e,c,a,sr,sp,mo,pr,wr,fr,sc,um,st,sal,shf,hl] = await Promise.all([
       supabase.from("users").select("*").order("id"),
       supabase.from("transport_log").select("*").order("date",{ascending:false}),
       supabase.from("accounting_entries").select("*").order("date",{ascending:false}),
@@ -1864,11 +1918,45 @@ export default function App() {
                   <F label="健康状態" k="health" opts={["良好","普通","不調","体調不良","通院"]} form={form} setForm={setForm}/>
                   <F label="食事" k="meal" opts={["完食","8割","半分","少量","欠食"]} form={form} setForm={setForm}/>
                 </div>
-                <F label="支援内容" k="content" type="textarea" span form={form} setForm={setForm}/>
-                <F label="活動内容" k="activity" type="textarea" span form={form} setForm={setForm}/>
-                <F label="様子・行動" k="behavior" type="textarea" span form={form} setForm={setForm}/>
-                <F label="特記事項" k="note" type="textarea" span form={form} setForm={setForm}/>
+                {["content","activity","behavior","note"].map(k=>{
+                  const labels={"content":"支援内容","activity":"活動内容","behavior":"様子・行動","note":"特記事項"};
+                  const slots={"content":"日中の様子","activity":"夕方以降の様子","behavior":"健康状態等","note":"深夜帯の様子、その他"};
+                  return(
+                    <div key={k}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        <label style={{fontSize:12,color:"#64748b"}}>{labels[k]}</label>
+                        <button type="button" className="btn btn-secondary btn-sm" style={{fontSize:11,padding:"3px 8px"}} onClick={()=>{setTmplTab(slots[k]);setTmplModal(k);}}>テンプレ</button>
+                      </div>
+                      <textarea className="input" rows={3} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={{width:"100%",resize:"vertical"}}/>
+                    </div>
+                  );
+                })}
               </MD>
+              {/* Template Modal */}
+              {tmplModal&&(
+                <div className="modal-overlay" onClick={()=>setTmplModal(null)}>
+                  <div className="modal" style={{maxWidth:700}} onClick={e=>e.stopPropagation()}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                      <div style={{fontWeight:700,fontSize:16}}>テンプレート選択</div>
+                      <button className="btn btn-secondary" style={{padding:"4px 8px"}} onClick={()=>setTmplModal(null)}>×</button>
+                    </div>
+                    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap",borderBottom:"1px solid #e2e8f0",paddingBottom:10}}>
+                      {Object.keys(SREC_TEMPLATES).map(t=>(
+                        <button key={t} className="btn btn-sm" style={{background:tmplTab===t?"#2563eb":"#f1f5f9",color:tmplTab===t?"white":"#475569",border:"none"}} onClick={()=>setTmplTab(t)}>{t}</button>
+                      ))}
+                    </div>
+                    <div style={{display:"grid",gap:8,maxHeight:400,overflowY:"auto"}}>
+                      {SREC_TEMPLATES[tmplTab].map((txt,i)=>(
+                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e2e8f0"}}>
+                          <div style={{fontSize:13,color:"#334155",flex:1,lineHeight:1.6,whiteSpace:"pre-line"}}>{txt}</div>
+                          <button className="btn btn-primary btn-sm" style={{flexShrink:0}} onClick={()=>{setForm(f=>({...f,[tmplModal]:(f[tmplModal]?f[tmplModal]+"
+":"")+txt}));setTmplModal(null);}}>利用する</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -2001,7 +2089,7 @@ export default function App() {
                 })}
                 {plans.length===0&&<div className="card" style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📋</div>支援計画がありません</div>}
               </div>
-              <MD name="支援計画" table="support_plans" modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="支援計画" table="support_plans" wide modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
@@ -2014,8 +2102,17 @@ export default function App() {
                   <F label="更新予定日" k="review_date" type="date" form={form} setForm={setForm}/>
                   <F label="作成者" k="created_by" form={form} setForm={setForm}/>
                 </div>
-                <F label="アセスメント" k="assessment" type="textarea" span form={form} setForm={setForm}/>
-                <F label="支援目標" k="goals" type="textarea" span form={form} setForm={setForm}/>
+                <div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,marginTop:4}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#475569",marginBottom:8}}>📋 支援計画詳細</div>
+                  <div style={{display:"grid",gap:10}}>
+                    <F label="総合的な援助の方針（支援内容）" k="assessment" type="textarea" span form={form} setForm={setForm}/>
+                    <F label="長期目標" k="goals" type="textarea" span form={form} setForm={setForm}/>
+                    <F label="短期目標" k="short_term_goal" type="textarea" span form={form} setForm={setForm}/>
+                    <F label="自立生活への移行目標" k="independence_goal" type="textarea" span form={form} setForm={setForm}/>
+                    <F label="本人の意向・希望" k="user_hope" type="textarea" span form={form} setForm={setForm}/>
+                    <F label="家族の意向" k="family_hope" type="textarea" span form={form} setForm={setForm}/>
+                  </div>
+                </div>
               </MD>
               <MD name="モニタリング" table="monitoring" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
@@ -2064,7 +2161,7 @@ export default function App() {
                 </table>
                 {perfs.filter(r=>r.date===fDate).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この日の実績記録がありません</div>}
               </div>
-              <MD name="実績" table="performance_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="実績" table="performance_records" wide modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
@@ -2072,10 +2169,20 @@ export default function App() {
                     </select>
                   </div>
                   <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
-                  <F label="サービス種別" k="service_type" opts={["共同生活援助","短期入所","日中支援"]} form={form} setForm={setForm}/>
+                  <F label="サービス種別" k="service_type" opts={["共同生活援助（介護サービス包括型）","共同生活援助（外部サービス利用型）","共同生活援助（日中サービス支援型）","短期入所","日中支援"]} form={form} setForm={setForm}/>
                   <F label="担当スタッフ" k="staff_name" form={form} setForm={setForm}/>
                   <F label="開始時刻" k="start_time" type="time" form={form} setForm={setForm}/>
                   <F label="終了時刻" k="end_time" type="time" form={form} setForm={setForm}/>
+                </div>
+                <div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,marginTop:4}}>
+                  <div style={{fontSize:12,fontWeight:700,color:"#475569",marginBottom:8}}>📊 実績記録用（共同生活援助）</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                    <F label="サービス提供" k="service_provided" opts={["サービス有","サービス無（入院）","サービス無（外泊）","サービス無（その他）"]} form={form} setForm={setForm}/>
+                    <F label="日中支援" k="daytime_support" opts={["--","あり","なし"]} form={form} setForm={setForm}/>
+                    <F label="夜間支援" k="night_support" opts={["初期設定と同じ","体制Ⅰ","体制Ⅱ","なし"]} form={form} setForm={setForm}/>
+                    <F label="自立生活支援加算" k="independence_support" opts={["--","算定あり","算定なし"]} form={form} setForm={setForm}/>
+                    <F label="ピアサポート実施加算" k="peer_support" opts={["--","算定あり","算定なし"]} form={form} setForm={setForm}/>
+                  </div>
                 </div>
                 <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>欠席</label>
                   <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
@@ -2343,7 +2450,75 @@ export default function App() {
             </div>
           )}
 
-          {/* ── 送迎管理 ── */}
+
+          {/* ── 健康管理 ── */}
+          {tab==="health"&&(
+            <div className="fade-in">
+              <PH title="健康管理" sub="利用者の健康記録"
+                onAdd={()=>openModal("健康記録",{user_id:"",date:today,measured_at:"",temperature:"",bp_high:"",bp_low:"",pulse:"",spo2:"",blood_sugar:"",height:"",weight:"",water_intake:"",food_intake:"",other_note:""})}
+                addLabel="記録追加"
+              />
+              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
+                <input className="input" type="date" style={{flex:1,minWidth:130}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
+                <select className="input" style={{flex:1,minWidth:110}} value={fUser} onChange={e=>setFUser(e.target.value)}>
+                  <option value="">全利用者</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+                </select>
+              </div>
+              <div style={{display:"grid",gap:10}}>
+                {(health||[]).filter(r=>(r.date===fDate||!fDate)&&(!fUser||r.user_id===parseInt(fUser))).map((r,i)=>(
+                  <div key={i} className="card">
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                      <div>
+                        <div style={{fontWeight:700,fontSize:14}}>{r.user_name}</div>
+                        <div style={{fontSize:12,color:"#64748b"}}>{r.date} {r.measured_at&&`${r.measured_at}測定`}</div>
+                      </div>
+                      <div style={{display:"flex",gap:6}}>
+                        <button className="btn btn-secondary btn-sm" onClick={()=>openEdit("健康記録",r)}><Icon name="edit" size={12}/></button>
+                        <button className="btn btn-red btn-sm" onClick={()=>del("health_records",r.id)}><Icon name="trash" size={12}/></button>
+                      </div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:6,fontSize:12}}>
+                      {r.temperature&&<div style={{background:"#fff7ed",borderRadius:6,padding:"5px 8px"}}><div style={{fontSize:10,color:"#94a3b8"}}>体温</div><span style={{fontWeight:700}}>{r.temperature}</span>度</div>}
+                      {(r.bp_high||r.bp_low)&&<div style={{background:"#fef2f2",borderRadius:6,padding:"5px 8px"}}><div style={{fontSize:10,color:"#94a3b8"}}>血圧</div><span style={{fontWeight:700}}>{r.bp_high}/{r.bp_low}</span>mmHg</div>}
+                      {r.pulse&&<div style={{background:"#fdf4ff",borderRadius:6,padding:"5px 8px"}}><div style={{fontSize:10,color:"#94a3b8"}}>脈拍</div><span style={{fontWeight:700}}>{r.pulse}</span>回</div>}
+                      {r.spo2&&<div style={{background:"#eff6ff",borderRadius:6,padding:"5px 8px"}}><div style={{fontSize:10,color:"#94a3b8"}}>SpO2</div><span style={{fontWeight:700}}>{r.spo2}</span>%</div>}
+                      {r.blood_sugar&&<div style={{background:"#f0fdf4",borderRadius:6,padding:"5px 8px"}}><div style={{fontSize:10,color:"#94a3b8"}}>血糖値</div><span style={{fontWeight:700}}>{r.blood_sugar}</span>mg/dL</div>}
+                      {r.weight&&<div style={{background:"#f8fafc",borderRadius:6,padding:"5px 8px"}}><div style={{fontSize:10,color:"#94a3b8"}}>体重</div><span style={{fontWeight:700}}>{r.weight}</span>kg</div>}
+                      {r.water_intake&&<div style={{background:"#ecfeff",borderRadius:6,padding:"5px 8px"}}><div style={{fontSize:10,color:"#94a3b8"}}>水分</div><span style={{fontWeight:700}}>{r.water_intake}</span>ml</div>}
+                    </div>
+                    {r.other_note&&<div style={{marginTop:6,fontSize:12,color:"#475569",background:"#f8fafc",borderRadius:6,padding:"5px 8px"}}>{r.other_note}</div>}
+                  </div>
+                ))}
+                {(health||[]).filter(r=>(r.date===fDate||!fDate)&&(!fUser||r.user_id===parseInt(fUser))).length===0&&(
+                  <div className="card" style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>🏥</div>健康記録がありません</div>
+                )}
+              </div>
+              <MD name="健康記録" table="health_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10}}>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
+                    <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
+                      <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                  <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
+                  <F label="測定時刻" k="measured_at" type="time" form={form} setForm={setForm}/>
+                  <F label="体温（度）" k="temperature" type="number" form={form} setForm={setForm}/>
+                  <F label="血圧（高）mmHg" k="bp_high" type="number" form={form} setForm={setForm}/>
+                  <F label="血圧（低）mmHg" k="bp_low" type="number" form={form} setForm={setForm}/>
+                  <F label="脈拍（回）" k="pulse" type="number" form={form} setForm={setForm}/>
+                  <F label="酸素濃度 SpO2（%）" k="spo2" type="number" form={form} setForm={setForm}/>
+                  <F label="血糖値 mg/dL" k="blood_sugar" type="number" form={form} setForm={setForm}/>
+                  <F label="身長（cm）" k="height" type="number" form={form} setForm={setForm}/>
+                  <F label="体重（kg）" k="weight" type="number" form={form} setForm={setForm}/>
+                  <F label="水分摂取量（ml）" k="water_intake" type="number" form={form} setForm={setForm}/>
+                  <F label="食事摂取量" k="food_intake" form={form} setForm={setForm}/>
+                </div>
+                <F label="その他（睡眠・排便・排尿等）" k="other_note" type="textarea" span form={form} setForm={setForm}/>
+              </MD>
+            </div>
+          )}
+
+          {/* ── 送迎管理 ── */
           {tab==="transport"&&(
             <div className="fade-in">
               <PH title="送迎管理" sub="送迎記録・コスト分析"
