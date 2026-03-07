@@ -1714,7 +1714,7 @@ export default function App() {
         <div onClick={()=>setNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",zIndex:90}}/>
       )}
 
-      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
+      <div style={{display:"flex",flex:1,overflow:isMobile?"visible":"hidden",minHeight:0}}>
         {/* サイドバー */}
         <aside style={{
           width: 196,
@@ -1748,7 +1748,7 @@ export default function App() {
           ))}
         </aside>
 
-        <main ref={mainRef} style={{flex:1,padding:isMobile?"12px":"18px",overflowY:"auto",overflowX:"hidden",minWidth:0}}>
+        <main ref={mainRef} style={{flex:1,paddingTop:"16px",paddingLeft:isMobile?"12px":"18px",paddingRight:isMobile?"12px":"18px",paddingBottom:"60px",overflowY:"auto",overflowX:"hidden",minWidth:0,minHeight:0}}>
 
           {/* ── DASHBOARD ── */}
           {tab==="dashboard"&&isAdmin&&(
