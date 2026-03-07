@@ -1476,8 +1476,10 @@ export default function App() {
 
   const save = async (tbl,extra={}) => {
     const p = {...form,...extra};
-    if(editId) await supabase.from(tbl).update(p).eq("id",editId);
-    else await supabase.from(tbl).insert(p);
+    let res;
+    if(editId) res = await supabase.from(tbl).update(p).eq("id",editId);
+    else res = await supabase.from(tbl).insert(p);
+    if(res.error){ alert("保存エラー: " + res.error.message); return; }
     closeModal(); loadAll();
   };
   const del = async (tbl,id) => {
