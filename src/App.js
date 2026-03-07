@@ -1336,16 +1336,14 @@ function F({label,k,type="text",opts,span,form,setForm}) {
 function PH({title,sub,onAdd,addLabel,extra}) {
   return (
     <div style={{marginBottom:14}}>
-      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
-        <div style={{minWidth:0,flex:1}}>
-          <div style={{fontSize:17,fontWeight:700,color:"#0f172a",marginBottom:2,wordBreak:"keep-all"}}>{title}</div>
-          {sub&&<div style={{fontSize:12,color:"#94a3b8"}}>{sub}</div>}
-        </div>
-        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",flexShrink:0}}>
+      <div style={{fontSize:18,fontWeight:700,color:"#0f172a",marginBottom:2}}>{title}</div>
+      {sub&&<div style={{fontSize:12,color:"#94a3b8",marginBottom:8}}>{sub}</div>}
+      {(onAdd||extra)&&(
+        <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginTop:8}}>
           {extra}
           {onAdd&&<button className="btn btn-primary" style={{whiteSpace:"nowrap"}} onClick={onAdd}><Icon name="plus" size={14}/>{addLabel||"追加"}</button>}
         </div>
-      </div>
+      )}
     </div>
   );
 }
