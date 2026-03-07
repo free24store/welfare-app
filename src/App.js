@@ -1403,6 +1403,13 @@ export default function App() {
   const [fCat, setFCat] = useState("全て");
   const [search, setSearch] = useState("");
   const [navOpen, setNavOpen] = useState(false);
+  const [winW, setWinW] = useState(typeof window!=='undefined'?window.innerWidth:1024);
+  useEffect(()=>{
+    const onResize=()=>setWinW(window.innerWidth);
+    window.addEventListener('resize',onResize);
+    return()=>window.removeEventListener('resize',onResize);
+  },[]);
+  const isMobile = winW < 768;
 
   const today = new Date().toISOString().slice(0,10);
   const fmt = n => Number(n||0).toLocaleString("ja-JP");
@@ -1606,35 +1613,60 @@ export default function App() {
   ];
   const tabs = isAdmin ? adminTabs : staffTabs;
 
+  // viewport meta injection (for mobile)
+  useEffect(()=>{
+    let mv = document.querySelector('meta[name=viewport]');
+    if(!mv){mv=document.createElement('meta');mv.name='viewport';document.head.prepend(mv);}
+    mv.content='width=device-width,initial-scale=1,maximum-scale=1';
+  },[]);
+
   return (
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",background:"#f0f4f8",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <style>{CSS}</style>
       <header style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 14px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
-          {/* ハンバーガーボタン（モバイルのみ表示） */}
-          <button className="menu-btn" style={{display:"none",background:"none",border:"none",cursor:"pointer",padding:"6px",borderRadius:8,flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center"}} onClick={()=>setNavOpen(true)}>
-            <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
-            <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
-            <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
-          </button>
+          {isMobile && (
+            <button onClick={()=>setNavOpen(true)} style={{background:"none",border:"none",cursor:"pointer",padding:"6px",display:"flex",flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center",borderRadius:8}}>
+              <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
+              <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
+              <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
+            </button>
+          )}
           <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏠</div>
           <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>グループホーム管理</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":`👤 ${me?.name}`}</div></div>
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {unread>0&&<span style={{background:"#ef4444",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 8px"}}>📩 {unread}</span>}
-          <button className="btn btn-secondary btn-sm" onClick={logout}><Icon name="logout" size={13}/>ログアウト</button>
+          <button className="btn btn-secondary btn-sm" onClick={logout}><Icon name="logout" size={13}/>{isMobile?"":"ログアウト"}</button>
         </div>
       </header>
 
       {/* ドロワーオーバーレイ（モバイル） */}
-      <div className={`drawer-overlay${navOpen?" open":""}`} onClick={()=>setNavOpen(false)}/>
+      {isMobile && navOpen && (
+        <div onClick={()=>setNavOpen(false)} style={{position:"fixed",inset:0,background:"rgba(15,23,42,.5)",zIndex:90}}/>
+      )}
 
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-        <aside className={`sidebar${navOpen?" open":""}`}>
-          {/* 閉じるボタン（モバイルのみ） */}
-          <div className="hamburger-close" style={{display:"none",justifyContent:"flex-end",padding:"4px 4px 8px"}}>
-            <button style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#94a3b8",padding:"4px 8px"}} onClick={()=>setNavOpen(false)}>✕</button>
-          </div>
+        {/* サイドバー */}
+        <aside style={{
+          width: 196,
+          background:"white",
+          borderRight:"1px solid #e2e8f0",
+          padding:"8px 6px",
+          flexShrink:0,
+          overflowY:"auto",
+          ...(isMobile ? {
+            position:"fixed", top:0, left:0, height:"100%", zIndex:100,
+            transform: navOpen ? "translateX(0)" : "translateX(-100%)",
+            transition:"transform .25s ease",
+            boxShadow: navOpen ? "4px 0 24px rgba(0,0,0,.15)" : "none",
+          } : {})
+        }}>
+          {isMobile && (
+            <div style={{display:"flex",justifyContent:"flex-end",padding:"4px 4px 8px"}}>
+              <button style={{background:"none",border:"none",cursor:"pointer",fontSize:22,color:"#94a3b8",padding:"4px 8px",lineHeight:1}} onClick={()=>setNavOpen(false)}>✕</button>
+            </div>
+          )}
           {tabs.map(g=>(
             <div key={g.g}>
               <div className="nav-group">{g.g}</div>
@@ -1648,7 +1680,7 @@ export default function App() {
           ))}
         </aside>
 
-        <main style={{flex:1,padding:"14px 16px",overflowY:"auto",overflowX:"hidden",minWidth:0}}>
+        <main style={{flex:1,padding:isMobile?"12px":"18px",overflowY:"auto",overflowX:"hidden",minWidth:0}}>
 
           {/* ── DASHBOARD ── */}
           {tab==="dashboard"&&isAdmin&&(
