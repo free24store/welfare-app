@@ -2053,7 +2053,7 @@ export default function App() {
           {/* ── 業務日誌 ── */}
           {tab==="journal"&&(
             <div className="fade-in">
-              <PH title="業務日誌" sub="引継ぎ・全利用者一覧"/>
+              <PH title="業務日誌" sub="引継ぎ・全利用者一覧" onAdd={()=>{ setTab("srecs"); setTimeout(()=>openModal("支援記録",{user_id:"",date:fDate||today,time_slot:"日中",staff_name:me?.name||"管理者",health:"良好",meal:"完食",content:"",activity:"",behavior:"",note:""}),50); }} addLabel="支援記録を書く"/>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
                 <input className="input" type="date" style={{flex:1,minWidth:130}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
                 {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs.filter(r=>r.date===fDate),fDate+"_業務日誌")}><Icon name="download" size={13}/>CSV</button>}
@@ -2136,7 +2136,7 @@ export default function App() {
                 {plans.length===0&&<div className="card" style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📋</div>支援計画がありません</div>}
               </div>
               <MD name="支援計画" table="support_plans" wide modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,overflow:"hidden"}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
@@ -2161,7 +2161,7 @@ export default function App() {
                 </div>
               </MD>
               <MD name="モニタリング" table="monitoring" modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,overflow:"hidden"}}>
                   <F label="評価日" k="date" type="date" form={form} setForm={setForm}/>
                   <F label="評価者" k="evaluator" form={form} setForm={setForm}/>
                   <F label="ステータス" k="status" opts={["未完","実施済","承認済"]} form={form} setForm={setForm}/>
