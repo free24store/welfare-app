@@ -100,7 +100,7 @@ const CSS = `
     .nav-group{padding:8px 10px 3px;}
     select.input{font-size:16px;}
     input.input{font-size:16px;}
-    input[type="date"].input{-webkit-appearance:none;appearance:none;border-radius:8px !important;width:100% !important;box-sizing:border-box !important;max-width:100% !important;}
+    input[type="date"].input,input[type="time"].input{-webkit-appearance:none;appearance:none;border-radius:8px !important;width:100% !important;box-sizing:border-box !important;max-width:100% !important;display:block !important;color:#0f172a;}
   }
 `;
 
@@ -1322,13 +1322,13 @@ function UserMsgScreen({onBack}) {
 
 function F({label,k,type="text",opts,span,form,setForm}) {
   return (
-    <div style={span?{gridColumn:"1/-1"}:{}}>
+    <div style={{...(span?{gridColumn:"1/-1"}:{}),minWidth:0,overflow:"hidden"}}>
       <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
       {opts
         ? <select className="input" value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}>{opts.map(v=><option key={v}>{v}</option>)}</select>
         : type==="textarea"
           ? <textarea className="textarea" value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/>
-          : <input className="input" type={type} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/>
+          : <input className="input" type={type} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={{display:"block",width:"100%",boxSizing:"border-box",maxWidth:"100%"}}/>
       }
     </div>
   );
