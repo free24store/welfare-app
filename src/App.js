@@ -56,7 +56,7 @@ const CSS = `
   .btn-purple{background:#7c3aed;color:white;} .btn-purple:hover{background:#6d28d9;}
   .btn-sm{padding:5px 10px;font-size:12px;}
   .tag{display:inline-block;padding:2px 10px;border-radius:99px;font-size:11px;font-weight:600;}
-  .input{border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;outline:none;transition:border .15s;font-family:inherit;}
+  .input{border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;outline:none;transition:border .15s;font-family:inherit;box-sizing:border-box;}
   .input:focus{border-color:#3b82f6;box-shadow:0 0 0 3px rgba(59,130,246,.1);}
   .textarea{border:1px solid #e2e8f0;border-radius:8px;padding:8px 12px;font-size:13px;width:100%;outline:none;resize:vertical;font-family:inherit;min-height:80px;}
   .textarea:focus{border-color:#3b82f6;}
@@ -1724,7 +1724,7 @@ export default function App() {
           flexShrink:0,
           overflowY:"auto",
           ...(isMobile ? {
-            position:"fixed", top:54, left:0, height:"calc(100% - 54px)", zIndex:100,
+            position:"fixed", top:0, left:0, height:"100%", zIndex:100,
             transform: navOpen ? "translateX(0)" : "translateX(-100%)",
             transition:"transform .25s ease",
             boxShadow: navOpen ? "4px 0 24px rgba(0,0,0,.15)" : "none",
@@ -1861,7 +1861,7 @@ export default function App() {
                 </div>
               )}
               <MD name="利用者" table="users" modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,overflow:"hidden"}}>
                   <F label="名前" k="name" form={form} setForm={setForm}/><F label="フリガナ" k="kana" form={form} setForm={setForm}/>
                   <F label="年齢" k="age" type="number" form={form} setForm={setForm}/><F label="部屋番号" k="room" form={form} setForm={setForm}/>
                   <F label="棟" k="unit" opts={["A棟","B棟","C棟"]} form={form} setForm={setForm}/><F label="支援区分" k="support_level" opts={["1","2","3","4","5","6"]} form={form} setForm={setForm}/>
