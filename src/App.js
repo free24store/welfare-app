@@ -65,8 +65,8 @@ const CSS = `
   .nav-item.active{background:#eff6ff;color:#2563eb;}
   .nav-group{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#cbd5e1;padding:10px 12px 4px;}
   .row-hover:hover{background:#f8fafc;cursor:pointer;}
-  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:20px;}
-  .modal{background:white;border-radius:16px;padding:28px;width:100%;max-width:680px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:12px;}
+  .modal{background:white;border-radius:16px;padding:24px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;border-bottom:2px solid #f1f5f9;white-space:nowrap;}
   td{padding:10px 12px;border-bottom:1px solid #f8fafc;color:#374151;vertical-align:middle;}
@@ -77,6 +77,39 @@ const CSS = `
   .alert-badge{background:#ef4444;color:white;border-radius:99px;font-size:10px;font-weight:700;padding:1px 6px;margin-left:auto;}
   .timebadge{background:#1e3a8a;color:white;border-radius:6px;padding:2px 8px;font-size:11px;font-family:'DM Mono',monospace;}
   .hint-card{border-left:4px solid #f59e0b;background:#fffbeb;border-radius:0 12px 12px 0;padding:12px 16px;margin-bottom:10px;}
+
+  /* ── drawer overlay ── */
+  .drawer-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);z-index:90;display:none;}
+  .drawer-overlay.open{display:block;}
+
+  /* ── mobile nav drawer ── */
+  .sidebar{width:196px;background:white;border-right:1px solid #e2e8f0;padding:8px 6px;flex-shrink:0;overflow-y:auto;transition:transform .25s ease;}
+
+  /* ── table scroll wrapper ── */
+  .tbl-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+
+  /* ── responsive ── */
+  @media(max-width:768px){
+    .card{padding:14px;}
+    .modal{padding:18px;border-radius:12px;}
+    .sidebar{
+      position:fixed;top:0;left:0;height:100%;z-index:100;
+      transform:translateX(-100%);
+      box-shadow:4px 0 24px rgba(0,0,0,.12);
+    }
+    .sidebar.open{transform:translateX(0);}
+    .menu-btn{display:flex !important;}
+    .hamburger-close{display:flex !important;}
+    th,td{padding:7px 8px;font-size:12px;}
+    .stat-card{padding:12px 14px;}
+    .btn{padding:7px 12px;font-size:12px;}
+    .btn-sm{padding:4px 8px;font-size:11px;}
+  }
+  @media(min-width:769px){
+    .menu-btn{display:none !important;}
+    .hamburger-close{display:none !important;}
+    .drawer-overlay{display:none !important;}
+  }
 `;
 
 const HINTS = [
@@ -165,11 +198,11 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
     <div>
       <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>給与計算・支払管理</div>
       <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>勤怠データから自動計算・支払管理</div>
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:20}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:16,marginBottom:20}}>
         <div className="card">
           <div style={{fontWeight:700,fontSize:14,marginBottom:14}}>📝 給与計算</div>
           <div style={{display:"grid",gap:10}}>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
               <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>対象月</label>
                 <input className="input" type="month" value={ym} onChange={e=>setYm(e.target.value)}/>
               </div>
@@ -191,7 +224,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
                 </div>
               </div>
             )}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
               <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>時給上書き（円）</label>
                 <input className="input" type="number" placeholder={selStaffData?.hourly_rate||"自動"} value={baseHour} onChange={e=>setBaseHour(e.target.value)}/>
               </div>
@@ -199,7 +232,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
                 <input className="input" type="number" value={extraPay} onChange={e=>setExtraPay(e.target.value)}/>
               </div>
             </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
               <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>控除額（円）</label>
                 <input className="input" type="number" value={deduct} onChange={e=>setDeduct(e.target.value)}/>
               </div>
@@ -258,7 +291,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
       </div>
       <div className="card">
         <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📋 全履歴</div>
-        <table>
+        <div className="tbl-wrap"><table>
           <thead><tr><th>月</th><th>スタッフ</th><th>勤務時間</th><th>支給額</th><th>給料日</th><th>状態</th><th>操作</th></tr></thead>
           <tbody>
             {salaries.slice(0,50).map((r,i)=>(
@@ -275,7 +308,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
               </tr>
             ))}
           </tbody>
-        </table>
+        </table></div>
       </div>
     </div>
   );
@@ -320,7 +353,7 @@ function MySalaryTab({me, salaries, attendance}) {
           給与情報は管理者が入力後に表示されます
         </div>
       )}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,marginBottom:16}}>
         <div className="stat-card" style={{borderTop:"3px solid #2563eb",textAlign:"center"}}>
           <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>今月の勤務時間</div>
           <div className="mono" style={{fontSize:20,fontWeight:800,color:"#2563eb"}}>{Math.floor(totalMins/60)}h{totalMins%60}m</div>
@@ -412,7 +445,7 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
               <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>訂正日</label>
                 <input className="input" type="date" value={corrDate} onChange={e=>setCorrDate(e.target.value)}/>
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
                 <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>正しい出勤時刻</label>
                   <input className="input" type="time" value={corrIn} onChange={e=>setCorrIn(e.target.value)}/>
                 </div>
@@ -426,7 +459,7 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
             </>
           ) : (
             <>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
                 <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>開始日</label>
                   <input className="input" type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)}/>
                 </div>
@@ -629,7 +662,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table></div>
                 );
               })()}
             </div>
@@ -680,7 +713,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                         </tr>
                       )}
                     </tbody>
-                  </table>
+                  </table></div>
                   <div style={{display:"flex",justifyContent:"flex-end"}}>
                     <div style={{background:"#f0f9ff",borderRadius:10,padding:"10px 18px",textAlign:"right"}}>
                       <div style={{fontSize:11,color:"#64748b"}}>請求額合計</div>
@@ -758,7 +791,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
               <button className="btn btn-green" onClick={exportUserLedger}><Icon name="download" size={13}/>CSVダウンロード</button>
             </div>
             <div className="card">
-              <table>
+              <div className="tbl-wrap"><table>
                 <thead><tr><th>受給者番号</th><th>氏名</th><th>生年月日</th><th>障害支援区分</th><th>サービス</th><th>入居日</th></tr></thead>
                 <tbody>
                   {activeUsers.map((u,i)=>(
@@ -772,7 +805,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
         )}
@@ -788,7 +821,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
             </div>
             <div className="card">
               <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>請求データ確認 — {selMonth}</div>
-              <table>
+              <div className="tbl-wrap"><table>
                 <thead><tr><th>受給者番号</th><th>氏名</th><th>サービス</th><th>提供日数</th><th>請求額</th></tr></thead>
                 <tbody>
                   {userDays.map((u,i)=>(
@@ -806,7 +839,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                     <td className="mono" style={{color:"#059669"}}>¥{userDays.reduce((s,u)=>s+u.total,0).toLocaleString()}</td>
                   </tr>
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
         )}
@@ -820,7 +853,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
             </div>
             <div className="card">
               <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>利用実績表 — {selMonth}</div>
-              <table>
+              <div className="tbl-wrap"><table>
                 <thead><tr><th>氏名</th><th>サービス</th><th>利用日数</th><th>請求額</th><th>状態</th></tr></thead>
                 <tbody>
                   {userDays.map((u,i)=>(
@@ -833,7 +866,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
           </div>
         )}
@@ -878,7 +911,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                         );
                       })}
                     </tbody>
-                  </table>
+                  </table></div>
                 );
               })()}
             </div>
@@ -1369,6 +1402,7 @@ export default function App() {
   const [fUnit, setFUnit] = useState("全棟");
   const [fCat, setFCat] = useState("全て");
   const [search, setSearch] = useState("");
+  const [navOpen, setNavOpen] = useState(false);
 
   const today = new Date().toISOString().slice(0,10);
   const fmt = n => Number(n||0).toLocaleString("ja-JP");
@@ -1575,24 +1609,37 @@ export default function App() {
   return (
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",background:"#f0f4f8",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
       <style>{CSS}</style>
-      <header style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 18px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15}}>🏠</div>
+      <header style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 14px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50,flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          {/* ハンバーガーボタン（モバイルのみ表示） */}
+          <button className="menu-btn" style={{display:"none",background:"none",border:"none",cursor:"pointer",padding:"6px",borderRadius:8,flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center"}} onClick={()=>setNavOpen(true)}>
+            <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
+            <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
+            <div style={{width:20,height:2,background:"#475569",borderRadius:2}}/>
+          </button>
+          <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏠</div>
           <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>グループホーム管理</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":`👤 ${me?.name}`}</div></div>
         </div>
-        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+        <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {unread>0&&<span style={{background:"#ef4444",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 8px"}}>📩 {unread}</span>}
           <button className="btn btn-secondary btn-sm" onClick={logout}><Icon name="logout" size={13}/>ログアウト</button>
         </div>
       </header>
 
+      {/* ドロワーオーバーレイ（モバイル） */}
+      <div className={`drawer-overlay${navOpen?" open":""}`} onClick={()=>setNavOpen(false)}/>
+
       <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-        <aside style={{width:196,background:"white",borderRight:"1px solid #e2e8f0",padding:"8px 6px",flexShrink:0,overflowY:"auto"}}>
+        <aside className={`sidebar${navOpen?" open":""}`}>
+          {/* 閉じるボタン（モバイルのみ） */}
+          <div className="hamburger-close" style={{display:"none",justifyContent:"flex-end",padding:"4px 4px 8px"}}>
+            <button style={{background:"none",border:"none",cursor:"pointer",fontSize:20,color:"#94a3b8",padding:"4px 8px"}} onClick={()=>setNavOpen(false)}>✕</button>
+          </div>
           {tabs.map(g=>(
             <div key={g.g}>
               <div className="nav-group">{g.g}</div>
               {g.items.map(t=>(
-                <button key={t.id} className={`nav-item ${tab===t.id?"active":""}`} onClick={()=>{setTab(t.id);setSearch("");}}>
+                <button key={t.id} className={`nav-item ${tab===t.id?"active":""}`} onClick={()=>{setTab(t.id);setSearch("");setNavOpen(false);}}>
                   <Icon name={t.icon} size={14}/>{t.label}
                   {t.badge>0&&<span className="alert-badge">{t.badge}</span>}
                 </button>
@@ -1601,7 +1648,7 @@ export default function App() {
           ))}
         </aside>
 
-        <main style={{flex:1,padding:"18px",overflowY:"auto",overflowX:"hidden"}}>
+        <main style={{flex:1,padding:"14px 16px",overflowY:"auto",overflowX:"hidden",minWidth:0}}>
 
           {/* ── DASHBOARD ── */}
           {tab==="dashboard"&&isAdmin&&(
@@ -1624,7 +1671,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:16}}>
                 <div className="card">
                   <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>⚠️ 要対応事項</div>
                   {[
@@ -1698,7 +1745,7 @@ export default function App() {
                       <div style={{fontWeight:700,fontSize:17}}>{selUser.name} さん</div>
                       <button className="btn btn-secondary" style={{padding:"5px 8px"}} onClick={()=>setSelUser(null)}><Icon name="close" size={15}/></button>
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:9,marginBottom:14}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:9,marginBottom:14}}>
                       {[["フリガナ",selUser.kana],["年齢",selUser.age+"歳"],["部屋",selUser.room+"号室"],["棟",selUser.unit],["障害種別",selUser.disability],["支援区分","区分"+selUser.support_level],["ステータス",selUser.status],["入居日",selUser.admission_date],["保護者",selUser.guardian],["保護者連絡先",selUser.guardian_tel],["投薬",selUser.medication_note],["アクセスコード",selUser.access_code||"未設定"]].map(([k,v])=>(
                         <div key={k} style={{background:"#f8fafc",borderRadius:8,padding:"8px 11px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:1}}>{k}</div><div style={{fontSize:13,fontWeight:600}}>{v}</div></div>
                       ))}
@@ -1712,7 +1759,7 @@ export default function App() {
                 </div>
               )}
               <MD name="利用者" table="users"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <F label="名前" k="name"form={form} setForm={setForm}/><F label="フリガナ" k="kana"form={form} setForm={setForm}/>
                   <F label="年齢" k="age" type="number"form={form} setForm={setForm}/><F label="部屋番号" k="room"form={form} setForm={setForm}/>
                   <F label="棟" k="unit" opts={["A棟","B棟","C棟"]}form={form} setForm={setForm}/><F label="支援区分" k="support_level" opts={["1","2","3","4","5","6"]}form={form} setForm={setForm}/>
@@ -1757,7 +1804,7 @@ export default function App() {
                         {isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>del("support_records",r.id)}><Icon name="trash" size={12}/></button>}
                       </div>
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,fontSize:13}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,fontSize:13}}>
                       {r.content&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>支援内容</div>{r.content}</div>}
                       {r.activity&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>活動</div>{r.activity}</div>}
                       {r.behavior&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>様子</div>{r.behavior}</div>}
@@ -1770,7 +1817,7 @@ export default function App() {
                 )}
               </div>
               <MD name="支援記録" table="support_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
@@ -1805,7 +1852,7 @@ export default function App() {
                   const [y,m]=month.split("-").map(Number);
                   const days=Array.from({length:new Date(y,m,0).getDate()},(_,i)=>i+1);
                   return(
-                    <table>
+                    <div className="tbl-wrap"><table>
                       <thead><tr>
                         <th style={{minWidth:80,position:"sticky",left:0,background:"white"}}>利用者</th>
                         {days.map(d=><th key={d} style={{minWidth:32,textAlign:"center",padding:"9px 4px"}}>{d}</th>)}
@@ -1828,7 +1875,7 @@ export default function App() {
                           </tr>
                         ))}
                       </tbody>
-                    </table>
+                    </table></div>
                   );
                 })()}
               </div>
@@ -1903,7 +1950,7 @@ export default function App() {
                           <button className="btn btn-red btn-sm" onClick={()=>del("support_plans",p.id)}><Icon name="trash" size={12}/></button>
                         </div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,fontSize:12,marginBottom:8}}>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,fontSize:12,marginBottom:8}}>
                         <div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:1}}>期間</div>{p.period_start} 〜 {p.period_end}</div>
                         <div style={{background:overdue?"#fee2e2":"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:1}}>更新日</div>{p.review_date||"未設定"}</div>
                         {p.goals&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px",gridColumn:"1/-1"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:1}}>支援目標</div>{p.goals}</div>}
@@ -1922,7 +1969,7 @@ export default function App() {
                 {plans.length===0&&<div className="card" style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📋</div>支援計画がありません</div>}
               </div>
               <MD name="支援計画" table="support_plans"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
@@ -1938,7 +1985,7 @@ export default function App() {
                 <F label="支援目標" k="goals" type="textarea" spanform={form} setForm={setForm}/>
               </MD>
               <MD name="モニタリング" table="monitoring"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <F label="評価日" k="date" type="date"form={form} setForm={setForm}/>
                   <F label="評価者" k="evaluator"form={form} setForm={setForm}/>
                   <F label="ステータス" k="status" opts={["未完","実施済","承認済"]}form={form} setForm={setForm}/>
@@ -1962,7 +2009,7 @@ export default function App() {
                 </div>}
               />
               <div className="card">
-                <table>
+                <div className="tbl-wrap"><table>
                   <thead><tr><th>利用者</th><th>サービス</th><th>開始</th><th>終了</th><th>担当</th><th>状態</th><th>備考</th><th>操作</th></tr></thead>
                   <tbody>
                     {perfs.filter(r=>r.date===fDate).map((r,i)=>(
@@ -1981,11 +2028,11 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
                 {perfs.filter(r=>r.date===fDate).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この日の実績記録がありません</div>}
               </div>
               <MD name="実績" table="performance_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
@@ -2018,7 +2065,7 @@ export default function App() {
                 </div>}
               />
               <div className="card">
-                <table>
+                <div className="tbl-wrap"><table>
                   <thead><tr><th>利用者</th><th>出席日数</th><th>欠席日数</th><th>出席率</th><th>主サービス</th></tr></thead>
                   <tbody>
                     {users.filter(u=>u.status==="在籍").map(u=>{
@@ -2043,7 +2090,7 @@ export default function App() {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -2065,7 +2112,7 @@ export default function App() {
                 ))}
               </div>
               <div className="card">
-                <table>
+                <div className="tbl-wrap"><table>
                   <thead><tr><th>利用者</th><th>年月</th><th>勤務日数</th><th>勤務時間</th><th>単価</th><th>工賃合計</th><th>支払状況</th><th>操作</th></tr></thead>
                   <tbody>
                     {wages.filter(r=>r.year_month===fDate.slice(0,7)).map((r,i)=>(
@@ -2085,11 +2132,11 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
                 {wages.filter(r=>r.year_month===fDate.slice(0,7)).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>工賃データがありません</div>}
               </div>
               <MD name="工賃" table="wage_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
@@ -2131,7 +2178,7 @@ export default function App() {
                 ))}
               </div>
               <MD name="スタッフ" table="staff_members"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <F label="名前" k="name"form={form} setForm={setForm}/><F label="フリガナ" k="kana"form={form} setForm={setForm}/>
                   <F label="電話" k="tel"form={form} setForm={setForm}/><F label="メール" k="email" type="email"form={form} setForm={setForm}/>
                   <F label="役職" k="role" opts={["世話人","生活支援員","運転手","施設管理者","サービス管理責任者"]}form={form} setForm={setForm}/>
@@ -2152,7 +2199,7 @@ export default function App() {
                 extra={<button className="btn btn-secondary btn-sm" onClick={()=>csv(attendance,"勤怠記録")}><Icon name="download" size={13}/>CSV</button>}
               />
               <div className="card">
-                <table>
+                <div className="tbl-wrap"><table>
                   <thead><tr><th>日付</th><th>スタッフ</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>備考</th><th>編集</th></tr></thead>
                   <tbody>
                     {attendance.slice(0,50).map((a,i)=>{
@@ -2172,7 +2219,7 @@ export default function App() {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
                 {attendance.length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>打刻記録がありません</div>}
               </div>
             </div>
@@ -2210,13 +2257,13 @@ export default function App() {
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>勤怠打刻</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>{me?.name} さん — {today}</div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,maxWidth:440,marginBottom:24}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:16,maxWidth:440,marginBottom:24}}>
                 <button className="btn btn-green" style={{padding:"24px",fontSize:16,justifyContent:"center",flexDirection:"column",gap:8,borderRadius:14}} onClick={clockIn}><Icon name="clock" size={28}/>出勤</button>
                 <button className="btn btn-red" style={{padding:"24px",fontSize:16,justifyContent:"center",flexDirection:"column",gap:8,borderRadius:14}} onClick={clockOut}><Icon name="clock" size={28}/>退勤</button>
               </div>
               <div className="card" style={{maxWidth:540}}>
                 <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>今月の勤怠</div>
-                <table>
+                <div className="tbl-wrap"><table>
                   <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th></tr></thead>
                   <tbody>
                     {attendance.filter(a=>a.staff_id===me?.id).map((a,i)=>{
@@ -2232,7 +2279,7 @@ export default function App() {
                       );
                     })}
                   </tbody>
-                </table>
+                </table></div>
               </div>
             </div>
           )}
@@ -2278,7 +2325,7 @@ export default function App() {
                 ))}
               </div>}
               <div className="card">
-                <table>
+                <div className="tbl-wrap"><table>
                   <thead><tr><th>日付</th><th>利用者</th><th>種別</th><th>目的地</th><th>担当</th><th>距離</th><th>コスト</th>{isAdmin&&<th>操作</th>}</tr></thead>
                   <tbody>
                     {transport.slice(0,30).map((t,i)=>(
@@ -2297,10 +2344,10 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
               <MD name="送迎" table="transport_log"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
                   <F label="時刻" k="time" type="time"form={form} setForm={setForm}/>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
@@ -2333,14 +2380,14 @@ export default function App() {
           {tab==="accounting"&&isAdmin&&(
             <div className="fade-in">
               <PH title="経理・決算管理" onAdd={()=>openModal("仕訳",{date:"",category:"支出",sub_category:"",description:"",amount:"",debit:"",credit:""})} addLabel="仕訳入力"/>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14,marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:14,marginBottom:16}}>
                 <div className="stat-card" style={{borderLeft:"4px solid #059669"}}><div style={{fontSize:12,color:"#64748b",marginBottom:8}}>収入合計</div><div className="mono" style={{fontSize:20,fontWeight:800,color:"#059669"}}>¥{fmt(totalInc)}</div></div>
                 <div className="stat-card" style={{borderLeft:"4px solid #ef4444"}}><div style={{fontSize:12,color:"#64748b",marginBottom:8}}>支出合計</div><div className="mono" style={{fontSize:20,fontWeight:800,color:"#ef4444"}}>¥{fmt(totalExp)}</div></div>
                 <div className="stat-card" style={{borderLeft:"4px solid #2563eb"}}><div style={{fontSize:12,color:"#64748b",marginBottom:8}}>収支差額</div><div className="mono" style={{fontSize:20,fontWeight:800,color:totalInc-totalExp>=0?"#059669":"#ef4444"}}>{totalInc-totalExp>=0?"+":""}¥{fmt(totalInc-totalExp)}</div></div>
               </div>
               <div className="card" style={{marginBottom:16}}>
                 {entries.length===0?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>仕訳データがありません</div>:(
-                  <table>
+                  <div className="tbl-wrap"><table>
                     <thead><tr><th>日付</th><th>区分</th><th>科目</th><th>摘要</th><th>金額</th><th>操作</th></tr></thead>
                     <tbody>
                       {entries.map((e,i)=>(
@@ -2357,7 +2404,7 @@ export default function App() {
                         </tr>
                       ))}
                     </tbody>
-                  </table>
+                  </table></div>
                 )}
               </div>
               <div className="card">
@@ -2372,7 +2419,7 @@ export default function App() {
                 </div>
               </div>
               <MD name="仕訳" table="accounting_entries"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
                   <F label="区分" k="category" opts={["収入","支出"]}form={form} setForm={setForm}/>
                   <F label="科目" k="sub_category"form={form} setForm={setForm}/>
@@ -2419,7 +2466,7 @@ export default function App() {
                 );
               })}
               <div className="card" style={{marginTop:16}}>
-                <table>
+                <div className="tbl-wrap"><table>
                   <thead><tr><th>利用者</th><th>棟</th><th>種別</th><th>開始</th><th>終了</th><th>状態</th><th>備考</th>{isAdmin&&<th>操作</th>}</tr></thead>
                   <tbody>
                     {scheds.slice(0,30).map((s,i)=>(
@@ -2437,10 +2484,10 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table>
+                </table></div>
               </div>
               <MD name="予定" table="schedules"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||"",unit:u?.unit||"A棟"}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
@@ -2526,7 +2573,7 @@ export default function App() {
                 </div>
               )}
               <MD name="ファイル" table="file_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <F label="カテゴリ" k="category" opts={["職員会議","虐待防止","BCP","ヒヤリハット","事故報告","研修記録","その他"]}form={form} setForm={setForm}/>
                   <F label="種別" k="file_type" opts={["議事録","報告書","計画書","マニュアル","記録票","その他"]}form={form} setForm={setForm}/>
                   <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
