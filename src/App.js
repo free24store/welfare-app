@@ -65,8 +65,8 @@ const CSS = `
   .nav-item.active{background:#eff6ff;color:#2563eb;}
   .nav-group{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#cbd5e1;padding:10px 12px 4px;}
   .row-hover:hover{background:#f8fafc;cursor:pointer;}
-  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;display:flex;align-items:flex-start;justify-content:center;padding:16px;overflow-y:auto;}
-  .modal{background:white;border-radius:16px;padding:24px;width:100%;max-width:680px;overflow-y:visible;box-shadow:0 20px 60px rgba(0,0,0,.25);margin:auto;}
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;overflow-y:auto;padding:60px 12px 20px;}
+  .modal{background:white;border-radius:16px;padding:20px;width:100%;max-width:680px;box-shadow:0 20px 60px rgba(0,0,0,.25);margin:0 auto;}
   table{width:100%;border-collapse:collapse;font-size:13px;}
   .card{overflow-x:auto;}
   th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;border-bottom:2px solid #f1f5f9;white-space:nowrap;}
@@ -1337,7 +1337,7 @@ function PH({title,sub,onAdd,addLabel,extra}) {
   return (
     <div style={{marginBottom:14}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
-        <div style={{minWidth:0}}>
+        <div style={{minWidth:0,flex:1}}>
           <div style={{fontSize:17,fontWeight:700,color:"#0f172a",marginBottom:2,wordBreak:"keep-all"}}>{title}</div>
           {sub&&<div style={{fontSize:12,color:"#94a3b8"}}>{sub}</div>}
         </div>
@@ -1454,8 +1454,11 @@ export default function App() {
   const [fCat, setFCat] = useState("全て");
   const [search, setSearch] = useState("");
   const [navOpen, setNavOpen] = useState(false);
-  const [tmplModal, setTmplModal] = useState(null); // {field, slot}
-  const [tmplTab, setTmplTab] = useState("日中の様子");
+  const [tmplModal, setTmplModal] = useState(null); // field key e.g. "content"
+  const [customTemplates, setCustomTemplates] = useState({}); // {category: [...]}
+  const [tmplEditMode, setTmplEditMode] = useState(false);
+  const [tmplEditIdx, setTmplEditIdx] = useState(null);
+  const [tmplEditText, setTmplEditText] = useState("");
   const [winW, setWinW] = useState(375);
   useEffect(()=>{
     setWinW(window.innerWidth);
@@ -1538,6 +1541,15 @@ export default function App() {
   const del = async (tbl,id) => {
     if(!window.confirm("削除しますか？")) return;
     await supabase.from(tbl).delete().eq("id",id); loadAll();
+  };
+
+  const loadCustomTemplates = async () => {
+    const {data} = await supabase.from("app_settings").select("value").eq("key","custom_templates").single();
+    if(data?.value) try{ setCustomTemplates(JSON.parse(data.value)); }catch(e){}
+  };
+  const saveCustomTemplates = async (newT) => {
+    setCustomTemplates(newT);
+    await supabase.from("app_settings").upsert({key:"custom_templates",value:JSON.stringify(newT)},{onConflict:"key"});
   };
 
   const clockIn = async () => {
@@ -1918,7 +1930,7 @@ export default function App() {
                   <F label="食事" k="meal" opts={["完食","8割","半分","少量","欠食"]} form={form} setForm={setForm}/>
                 </div>
                 {["content","activity","behavior","note"].map(k=>{
-                  const labels={"content":"支援内容","activity":"活動内容","behavior":"様子・行動","note":"特記事項"};
+                  const labels={"content":"日中の様子","activity":"夕方以降の様子","behavior":"健康状態等","note":"深夜帯の様子、その他"};
                   const slots={"content":"日中の様子","activity":"夕方以降の様子","behavior":"健康状態等","note":"深夜帯の様子、その他"};
                   return(
                     <div key={k}>
@@ -1932,29 +1944,64 @@ export default function App() {
                 })}
               </MD>
               {/* Template Modal */}
-              {tmplModal&&(
-                <div className="modal-overlay" onClick={()=>setTmplModal(null)}>
-                  <div className="modal" style={{maxWidth:700}} onClick={e=>e.stopPropagation()}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                      <div style={{fontWeight:700,fontSize:16}}>テンプレート選択</div>
-                      <button className="btn btn-secondary" style={{padding:"4px 8px"}} onClick={()=>setTmplModal(null)}>×</button>
-                    </div>
-                    <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap",borderBottom:"1px solid #e2e8f0",paddingBottom:10}}>
-                      {Object.keys(SREC_TEMPLATES).map(t=>(
-                        <button key={t} className="btn btn-sm" style={{background:tmplTab===t?"#2563eb":"#f1f5f9",color:tmplTab===t?"white":"#475569",border:"none"}} onClick={()=>setTmplTab(t)}>{t}</button>
-                      ))}
-                    </div>
-                    <div style={{display:"grid",gap:8,maxHeight:400,overflowY:"auto"}}>
-                      {SREC_TEMPLATES[tmplTab].map((txt,i)=>(
-                        <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,background:"#f8fafc",borderRadius:8,padding:"10px 12px",border:"1px solid #e2e8f0"}}>
-                          <div style={{fontSize:13,color:"#334155",flex:1,lineHeight:1.6,whiteSpace:"pre-line"}}>{txt}</div>
-                          <button className="btn btn-primary btn-sm" style={{flexShrink:0}} onClick={()=>{setForm(f=>({...f,[tmplModal]:(f[tmplModal]?f[tmplModal]+"\n":"")+txt}));setTmplModal(null);}}>利用する</button>
+              {tmplModal&&(()=>{
+                const fieldLabels={"content":"日中の様子","activity":"夕方以降の様子","behavior":"健康状態等","note":"深夜帯の様子、その他"};
+                const cat = fieldLabels[tmplModal];
+                const builtIn = SREC_TEMPLATES[cat]||[];
+                const custom = customTemplates[cat]||[];
+                const allTmpls = [...builtIn.map(t=>({text:t,type:"builtin"})),...custom.map((t,i)=>({text:t,type:"custom",idx:i}))];
+                return(
+                  <div className="modal-overlay" onClick={()=>{setTmplModal(null);setTmplEditMode(false);setTmplEditIdx(null);setTmplEditText("");}}>
+                    <div className="modal" style={{maxWidth:680}} onClick={e=>e.stopPropagation()}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                        <div style={{fontWeight:700,fontSize:16}}>📝 {cat}</div>
+                        <div style={{display:"flex",gap:6}}>
+                          <button className="btn btn-secondary btn-sm" onClick={()=>{setTmplEditMode(true);setTmplEditIdx(null);setTmplEditText("");}}>＋ 追加</button>
+                          <button className="btn btn-secondary" style={{padding:"4px 10px"}} onClick={()=>{setTmplModal(null);setTmplEditMode(false);setTmplEditIdx(null);setTmplEditText("");}}>×</button>
                         </div>
-                      ))}
+                      </div>
+                      {tmplEditMode&&(
+                        <div style={{background:"#f0f9ff",borderRadius:10,padding:12,marginBottom:12,border:"1px solid #bae6fd"}}>
+                          <div style={{fontSize:12,color:"#0369a1",marginBottom:6,fontWeight:600}}>{tmplEditIdx!==null?"テンプレ編集":"新規テンプレ追加"}</div>
+                          <textarea className="input" rows={4} style={{width:"100%",marginBottom:8,resize:"vertical"}} value={tmplEditText} onChange={e=>setTmplEditText(e.target.value)} placeholder="テンプレートの内容を入力..."/>
+                          <div style={{display:"flex",gap:6}}>
+                            <button className="btn btn-primary btn-sm" onClick={()=>{
+                              if(!tmplEditText.trim()) return;
+                              const cur = [...(customTemplates[cat]||[])];
+                              if(tmplEditIdx!==null) cur[tmplEditIdx]=tmplEditText.trim();
+                              else cur.push(tmplEditText.trim());
+                              saveCustomTemplates({...customTemplates,[cat]:cur});
+                              setTmplEditMode(false);setTmplEditIdx(null);setTmplEditText("");
+                            }}>保存</button>
+                            <button className="btn btn-secondary btn-sm" onClick={()=>{setTmplEditMode(false);setTmplEditIdx(null);setTmplEditText("");}}>キャンセル</button>
+                          </div>
+                        </div>
+                      )}
+                      <div style={{display:"grid",gap:8,maxHeight:450,overflowY:"auto"}}>
+                        {allTmpls.map((item,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,background:item.type==="custom"?"#f0fdf4":"#f8fafc",borderRadius:8,padding:"10px 12px",border:`1px solid ${item.type==="custom"?"#bbf7d0":"#e2e8f0"}`}}>
+                            <div style={{fontSize:13,color:"#334155",flex:1,lineHeight:1.6,whiteSpace:"pre-line"}}>{item.text}{item.type==="custom"&&<span style={{fontSize:10,color:"#059669",marginLeft:6}}>カスタム</span>}</div>
+                            <div style={{display:"flex",gap:4,flexShrink:0,flexDirection:"column"}}>
+                              <button className="btn btn-primary btn-sm" onClick={()=>{setForm(f=>({...f,[tmplModal]:(f[tmplModal]?f[tmplModal]+"
+":"")+item.text}));setTmplModal(null);setTmplEditMode(false);}}>利用</button>
+                              {item.type==="custom"&&<>
+                                <button className="btn btn-secondary btn-sm" style={{fontSize:10,padding:"2px 6px"}} onClick={()=>{setTmplEditMode(true);setTmplEditIdx(item.idx);setTmplEditText(item.text);}}>編集</button>
+                                <button className="btn btn-red btn-sm" style={{fontSize:10,padding:"2px 6px"}} onClick={()=>{
+                                  if(!window.confirm("削除しますか？")) return;
+                                  const cur=[...(customTemplates[cat]||[])];
+                                  cur.splice(item.idx,1);
+                                  saveCustomTemplates({...customTemplates,[cat]:cur});
+                                }}>削除</button>
+                              </>}
+                            </div>
+                          </div>
+                        ))}
+                        {allTmpls.length===0&&<div style={{textAlign:"center",color:"#94a3b8",padding:"30px"}}>テンプレートがありません</div>}
+                      </div>
                     </div>
                   </div>
-                </div>
-              )}
+                );
+              })()}
             </div>
           )}
 
