@@ -1791,17 +1791,17 @@ export default function App() {
                   </div>
                 </div>
               )}
-              <MD name="利用者" table="users"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="利用者" table="users" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="名前" k="name"form={form} setForm={setForm}/><F label="フリガナ" k="kana"form={form} setForm={setForm}/>
-                  <F label="年齢" k="age" type="number"form={form} setForm={setForm}/><F label="部屋番号" k="room"form={form} setForm={setForm}/>
-                  <F label="棟" k="unit" opts={["A棟","B棟","C棟"]}form={form} setForm={setForm}/><F label="支援区分" k="support_level" opts={["1","2","3","4","5","6"]}form={form} setForm={setForm}/>
-                  <F label="ステータス" k="status" opts={["在籍","外泊中","退去","入院中"]}form={form} setForm={setForm}/><F label="入居日" k="admission_date" type="date"form={form} setForm={setForm}/>
-                  <F label="保護者" k="guardian"form={form} setForm={setForm}/><F label="保護者連絡先" k="guardian_tel"form={form} setForm={setForm}/>
+                  <F label="名前" k="name" form={form} setForm={setForm}/><F label="フリガナ" k="kana" form={form} setForm={setForm}/>
+                  <F label="年齢" k="age" type="number" form={form} setForm={setForm}/><F label="部屋番号" k="room" form={form} setForm={setForm}/>
+                  <F label="棟" k="unit" opts={["A棟","B棟","C棟"]} form={form} setForm={setForm}/><F label="支援区分" k="support_level" opts={["1","2","3","4","5","6"]} form={form} setForm={setForm}/>
+                  <F label="ステータス" k="status" opts={["在籍","外泊中","退去","入院中"]} form={form} setForm={setForm}/><F label="入居日" k="admission_date" type="date" form={form} setForm={setForm}/>
+                  <F label="保護者" k="guardian" form={form} setForm={setForm}/><F label="保護者連絡先" k="guardian_tel" form={form} setForm={setForm}/>
                 </div>
-                <F label="障害種別" k="disability"form={form} setForm={setForm}/>
-                <F label="投薬メモ" k="medication_note" type="textarea"form={form} setForm={setForm}/>
-                <F label="利用者アクセスコード（メッセージ用）" k="access_code"form={form} setForm={setForm}/>
+                <F label="障害種別" k="disability" form={form} setForm={setForm}/>
+                <F label="投薬メモ" k="medication_note" type="textarea" form={form} setForm={setForm}/>
+                <F label="利用者アクセスコード（メッセージ用）" k="access_code" form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -1849,23 +1849,23 @@ export default function App() {
                   <div className="card" style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📝</div>記録がありません</div>
                 )}
               </div>
-              <MD name="支援記録" table="support_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="支援記録" table="support_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
-                  <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
-                  <F label="時間帯" k="time_slot" opts={["日中","夜間","深夜"]}form={form} setForm={setForm}/>
-                  <F label="記録者" k="staff_name"form={form} setForm={setForm}/>
-                  <F label="健康状態" k="health" opts={["良好","普通","不調","体調不良","通院"]}form={form} setForm={setForm}/>
-                  <F label="食事" k="meal" opts={["完食","8割","半分","少量","欠食"]}form={form} setForm={setForm}/>
+                  <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
+                  <F label="時間帯" k="time_slot" opts={["日中","夜間","深夜"]} form={form} setForm={setForm}/>
+                  <F label="記録者" k="staff_name" form={form} setForm={setForm}/>
+                  <F label="健康状態" k="health" opts={["良好","普通","不調","体調不良","通院"]} form={form} setForm={setForm}/>
+                  <F label="食事" k="meal" opts={["完食","8割","半分","少量","欠食"]} form={form} setForm={setForm}/>
                 </div>
-                <F label="支援内容" k="content" type="textarea" spanform={form} setForm={setForm}/>
-                <F label="活動内容" k="activity" type="textarea" spanform={form} setForm={setForm}/>
-                <F label="様子・行動" k="behavior" type="textarea" spanform={form} setForm={setForm}/>
-                <F label="特記事項" k="note" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="支援内容" k="content" type="textarea" span form={form} setForm={setForm}/>
+                <F label="活動内容" k="activity" type="textarea" span form={form} setForm={setForm}/>
+                <F label="様子・行動" k="behavior" type="textarea" span form={form} setForm={setForm}/>
+                <F label="特記事項" k="note" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -2001,31 +2001,31 @@ export default function App() {
                 })}
                 {plans.length===0&&<div className="card" style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📋</div>支援計画がありません</div>}
               </div>
-              <MD name="支援計画" table="support_plans"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="支援計画" table="support_plans" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
-                  <F label="ステータス" k="status" opts={["作成中","進行中","完了"]}form={form} setForm={setForm}/>
-                  <F label="計画開始日" k="period_start" type="date"form={form} setForm={setForm}/>
-                  <F label="計画終了日" k="period_end" type="date"form={form} setForm={setForm}/>
-                  <F label="更新予定日" k="review_date" type="date"form={form} setForm={setForm}/>
-                  <F label="作成者" k="created_by"form={form} setForm={setForm}/>
+                  <F label="ステータス" k="status" opts={["作成中","進行中","完了"]} form={form} setForm={setForm}/>
+                  <F label="計画開始日" k="period_start" type="date" form={form} setForm={setForm}/>
+                  <F label="計画終了日" k="period_end" type="date" form={form} setForm={setForm}/>
+                  <F label="更新予定日" k="review_date" type="date" form={form} setForm={setForm}/>
+                  <F label="作成者" k="created_by" form={form} setForm={setForm}/>
                 </div>
-                <F label="アセスメント" k="assessment" type="textarea" spanform={form} setForm={setForm}/>
-                <F label="支援目標" k="goals" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="アセスメント" k="assessment" type="textarea" span form={form} setForm={setForm}/>
+                <F label="支援目標" k="goals" type="textarea" span form={form} setForm={setForm}/>
               </MD>
-              <MD name="モニタリング" table="monitoring"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="モニタリング" table="monitoring" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="評価日" k="date" type="date"form={form} setForm={setForm}/>
-                  <F label="評価者" k="evaluator"form={form} setForm={setForm}/>
-                  <F label="ステータス" k="status" opts={["未完","実施済","承認済"]}form={form} setForm={setForm}/>
+                  <F label="評価日" k="date" type="date" form={form} setForm={setForm}/>
+                  <F label="評価者" k="evaluator" form={form} setForm={setForm}/>
+                  <F label="ステータス" k="status" opts={["未完","実施済","承認済"]} form={form} setForm={setForm}/>
                 </div>
-                <F label="目標達成状況" k="goal_achievement" type="textarea" spanform={form} setForm={setForm}/>
-                <F label="課題・問題点" k="issues" type="textarea" spanform={form} setForm={setForm}/>
-                <F label="次期計画の方向性" k="next_plan" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="目標達成状況" k="goal_achievement" type="textarea" span form={form} setForm={setForm}/>
+                <F label="課題・問題点" k="issues" type="textarea" span form={form} setForm={setForm}/>
+                <F label="次期計画の方向性" k="next_plan" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -2064,18 +2064,18 @@ export default function App() {
                 </table>
                 {perfs.filter(r=>r.date===fDate).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この日の実績記録がありません</div>}
               </div>
-              <MD name="実績" table="performance_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="実績" table="performance_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
-                  <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
-                  <F label="サービス種別" k="service_type" opts={["共同生活援助","短期入所","日中支援"]}form={form} setForm={setForm}/>
-                  <F label="担当スタッフ" k="staff_name"form={form} setForm={setForm}/>
-                  <F label="開始時刻" k="start_time" type="time"form={form} setForm={setForm}/>
-                  <F label="終了時刻" k="end_time" type="time"form={form} setForm={setForm}/>
+                  <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
+                  <F label="サービス種別" k="service_type" opts={["共同生活援助","短期入所","日中支援"]} form={form} setForm={setForm}/>
+                  <F label="担当スタッフ" k="staff_name" form={form} setForm={setForm}/>
+                  <F label="開始時刻" k="start_time" type="time" form={form} setForm={setForm}/>
+                  <F label="終了時刻" k="end_time" type="time" form={form} setForm={setForm}/>
                 </div>
                 <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>欠席</label>
                   <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
@@ -2083,7 +2083,7 @@ export default function App() {
                     <span style={{fontSize:13}}>欠席扱いにする</span>
                   </label>
                 </div>
-                <F label="備考" k="note" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="備考" k="note" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -2168,22 +2168,22 @@ export default function App() {
                 </table>
                 {wages.filter(r=>r.year_month===fDate.slice(0,7)).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>工賃データがありません</div>}
               </div>
-              <MD name="工賃" table="wage_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="工賃" table="wage_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
-                  <F label="年月" k="year_month" type="month"form={form} setForm={setForm}/>
-                  <F label="勤務日数" k="work_days" type="number"form={form} setForm={setForm}/>
-                  <F label="勤務時間" k="work_hours" type="number"form={form} setForm={setForm}/>
-                  <F label="単価（円）" k="unit_wage" type="number"form={form} setForm={setForm}/>
+                  <F label="年月" k="year_month" type="month" form={form} setForm={setForm}/>
+                  <F label="勤務日数" k="work_days" type="number" form={form} setForm={setForm}/>
+                  <F label="勤務時間" k="work_hours" type="number" form={form} setForm={setForm}/>
+                  <F label="単価（円）" k="unit_wage" type="number" form={form} setForm={setForm}/>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>工賃合計</label>
                     <div className="input" style={{background:"#f8fafc",fontWeight:700,color:"#059669"}}>¥{fmt((form.work_hours||0)*(form.unit_wage||0))}</div>
                   </div>
                 </div>
-                <F label="備考" k="note" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="備考" k="note" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -2210,17 +2210,17 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <MD name="スタッフ" table="staff_members"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="スタッフ" table="staff_members" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="名前" k="name"form={form} setForm={setForm}/><F label="フリガナ" k="kana"form={form} setForm={setForm}/>
-                  <F label="電話" k="tel"form={form} setForm={setForm}/><F label="メール" k="email" type="email"form={form} setForm={setForm}/>
-                  <F label="役職" k="role" opts={["世話人","生活支援員","運転手","施設管理者","サービス管理責任者"]}form={form} setForm={setForm}/>
-                  <F label="雇用形態" k="full_time" opts={["true","false"]}form={form} setForm={setForm}/>
-                  <F label="時給（円）" k="hourly_rate" type="number"form={form} setForm={setForm}/>
-                  <F label="PINコード" k="pin"form={form} setForm={setForm}/>
-                  <F label="入職日" k="hire_date" type="date"form={form} setForm={setForm}/>
+                  <F label="名前" k="name" form={form} setForm={setForm}/><F label="フリガナ" k="kana" form={form} setForm={setForm}/>
+                  <F label="電話" k="tel" form={form} setForm={setForm}/><F label="メール" k="email" type="email" form={form} setForm={setForm}/>
+                  <F label="役職" k="role" opts={["世話人","生活支援員","運転手","施設管理者","サービス管理責任者"]} form={form} setForm={setForm}/>
+                  <F label="雇用形態" k="full_time" opts={["true","false"]} form={form} setForm={setForm}/>
+                  <F label="時給（円）" k="hourly_rate" type="number" form={form} setForm={setForm}/>
+                  <F label="PINコード" k="pin" form={form} setForm={setForm}/>
+                  <F label="入職日" k="hire_date" type="date" form={form} setForm={setForm}/>
                 </div>
-                <F label="保有資格（カンマ区切り）" k="certifications" spanform={form} setForm={setForm}/>
+                <F label="保有資格（カンマ区切り）" k="certifications" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -2379,24 +2379,24 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <MD name="送迎" table="transport_log"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="送迎" table="transport_log" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
-                  <F label="時刻" k="time" type="time"form={form} setForm={setForm}/>
+                  <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
+                  <F label="時刻" k="time" type="time" form={form} setForm={setForm}/>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
-                  <F label="種別" k="type" opts={["送迎（往）","送迎（復）","通院送迎","その他"]}form={form} setForm={setForm}/>
+                  <F label="種別" k="type" opts={["送迎（往）","送迎（復）","通院送迎","その他"]} form={form} setForm={setForm}/>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当</label>
                     <select className="input" value={form.driver||""} onChange={e=>setForm(f=>({...f,driver:e.target.value}))}>
                       <option value="">選択...</option>{staffList.map(s=><option key={s.id}>{s.name}</option>)}
                     </select>
                   </div>
-                  <F label="目的地" k="destination"form={form} setForm={setForm}/>
-                  <F label="距離(km)" k="distance" type="number"form={form} setForm={setForm}/>
-                  <F label="コスト(円)" k="cost" type="number"form={form} setForm={setForm}/>
+                  <F label="目的地" k="destination" form={form} setForm={setForm}/>
+                  <F label="距離(km)" k="distance" type="number" form={form} setForm={setForm}/>
+                  <F label="コスト(円)" k="cost" type="number" form={form} setForm={setForm}/>
                 </div>
               </MD>
             </div>
@@ -2451,16 +2451,16 @@ export default function App() {
                   ))}
                 </div>
               </div>
-              <MD name="仕訳" table="accounting_entries"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="仕訳" table="accounting_entries" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
-                  <F label="区分" k="category" opts={["収入","支出"]}form={form} setForm={setForm}/>
-                  <F label="科目" k="sub_category"form={form} setForm={setForm}/>
-                  <F label="金額（円）" k="amount" type="number"form={form} setForm={setForm}/>
-                  <F label="借方" k="debit"form={form} setForm={setForm}/>
-                  <F label="貸方" k="credit"form={form} setForm={setForm}/>
+                  <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
+                  <F label="区分" k="category" opts={["収入","支出"]} form={form} setForm={setForm}/>
+                  <F label="科目" k="sub_category" form={form} setForm={setForm}/>
+                  <F label="金額（円）" k="amount" type="number" form={form} setForm={setForm}/>
+                  <F label="借方" k="debit" form={form} setForm={setForm}/>
+                  <F label="貸方" k="credit" form={form} setForm={setForm}/>
                 </div>
-                <F label="摘要" k="description" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="摘要" k="description" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -2519,20 +2519,20 @@ export default function App() {
                   </tbody>
                 </table>
               </div>
-              <MD name="予定" table="schedules"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="予定" table="schedules" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
                     <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||"",unit:u?.unit||"A棟"}));}}>
                       <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
                     </select>
                   </div>
-                  <F label="棟" k="unit" opts={["A棟","B棟","C棟"]}form={form} setForm={setForm}/>
-                  <F label="種別" k="type" opts={["外泊","通院","入院","服薬変更","短期入所","その他"]}form={form} setForm={setForm}/>
-                  <F label="状態" k="status" opts={["予定","実施中","実施済","キャンセル"]}form={form} setForm={setForm}/>
-                  <F label="開始日" k="start_date" type="date"form={form} setForm={setForm}/>
-                  <F label="終了日" k="end_date" type="date"form={form} setForm={setForm}/>
+                  <F label="棟" k="unit" opts={["A棟","B棟","C棟"]} form={form} setForm={setForm}/>
+                  <F label="種別" k="type" opts={["外泊","通院","入院","服薬変更","短期入所","その他"]} form={form} setForm={setForm}/>
+                  <F label="状態" k="status" opts={["予定","実施中","実施済","キャンセル"]} form={form} setForm={setForm}/>
+                  <F label="開始日" k="start_date" type="date" form={form} setForm={setForm}/>
+                  <F label="終了日" k="end_date" type="date" form={form} setForm={setForm}/>
                 </div>
-                <F label="備考" k="note" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="備考" k="note" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
@@ -2605,15 +2605,15 @@ export default function App() {
                   ))}
                 </div>
               )}
-              <MD name="ファイル" table="file_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
+              <MD name="ファイル" table="file_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="カテゴリ" k="category" opts={["職員会議","虐待防止","BCP","ヒヤリハット","事故報告","研修記録","その他"]}form={form} setForm={setForm}/>
-                  <F label="種別" k="file_type" opts={["議事録","報告書","計画書","マニュアル","記録票","その他"]}form={form} setForm={setForm}/>
-                  <F label="日付" k="date" type="date"form={form} setForm={setForm}/>
-                  <F label="作成者" k="author"form={form} setForm={setForm}/>
+                  <F label="カテゴリ" k="category" opts={["職員会議","虐待防止","BCP","ヒヤリハット","事故報告","研修記録","その他"]} form={form} setForm={setForm}/>
+                  <F label="種別" k="file_type" opts={["議事録","報告書","計画書","マニュアル","記録票","その他"]} form={form} setForm={setForm}/>
+                  <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
+                  <F label="作成者" k="author" form={form} setForm={setForm}/>
                 </div>
-                <F label="タイトル" k="title" spanform={form} setForm={setForm}/>
-                <F label="内容" k="content" type="textarea" spanform={form} setForm={setForm}/>
+                <F label="タイトル" k="title" span form={form} setForm={setForm}/>
+                <F label="内容" k="content" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
