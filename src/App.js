@@ -1702,7 +1702,7 @@ export default function App() {
             </button>
           )}
           <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏠</div>
-          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a"}}>グループホーム管理</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":`👤 ${me?.name}`}</div></div>
+          <div><div style={{fontWeight:700,fontSize:11,color:"#0f172a",whiteSpace:"nowrap"}}>グループホーム管理システム</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":`👤 ${me?.name}`}</div></div>
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {unread>0&&<span style={{background:"#ef4444",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 8px"}}>📩 {unread}</span>}
