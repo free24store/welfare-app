@@ -1403,13 +1403,14 @@ export default function App() {
   const [fCat, setFCat] = useState("全て");
   const [search, setSearch] = useState("");
   const [navOpen, setNavOpen] = useState(false);
-  const [winW, setWinW] = useState(typeof window!=='undefined'?window.innerWidth:1024);
+  const [winW, setWinW] = useState(375);
   useEffect(()=>{
+    setWinW(window.innerWidth);
     const onResize=()=>setWinW(window.innerWidth);
     window.addEventListener('resize',onResize);
     return()=>window.removeEventListener('resize',onResize);
   },[]);
-  const isMobile = winW < 768;
+  const isMobile = winW < 1024;
 
   const today = new Date().toISOString().slice(0,10);
   const fmt = n => Number(n||0).toLocaleString("ja-JP");
@@ -1686,6 +1687,7 @@ export default function App() {
           {tab==="dashboard"&&isAdmin&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>ダッシュボード</div>
+              <div style={{background:"#fef3c7",borderRadius:8,padding:"6px 10px",fontSize:12,marginBottom:8,color:"#92400e"}}>🔍 デバッグ: 画面幅={winW}px / isMobile={String(isMobile)}</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:18}}>{today}</div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:18}}>
                 {[
