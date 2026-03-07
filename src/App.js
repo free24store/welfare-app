@@ -68,6 +68,7 @@ const CSS = `
   .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.5);z-index:200;display:flex;align-items:center;justify-content:center;padding:12px;}
   .modal{background:white;border-radius:16px;padding:24px;width:100%;max-width:680px;max-height:92vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.25);}
   table{width:100%;border-collapse:collapse;font-size:13px;}
+  .card{overflow-x:auto;}
   th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#94a3b8;border-bottom:2px solid #f1f5f9;white-space:nowrap;}
   td{padding:10px 12px;border-bottom:1px solid #f8fafc;color:#374151;vertical-align:middle;}
   .stat-card{background:white;border-radius:14px;padding:18px 20px;box-shadow:0 1px 3px rgba(0,0,0,.06);}
@@ -291,7 +292,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
       </div>
       <div className="card">
         <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📋 全履歴</div>
-        <div className="tbl-wrap"><table>
+        <table>
           <thead><tr><th>月</th><th>スタッフ</th><th>勤務時間</th><th>支給額</th><th>給料日</th><th>状態</th><th>操作</th></tr></thead>
           <tbody>
             {salaries.slice(0,50).map((r,i)=>(
@@ -308,7 +309,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today}) {
               </tr>
             ))}
           </tbody>
-        </table></div>
+        </table>
       </div>
     </div>
   );
@@ -662,7 +663,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                         );
                       })}
                     </tbody>
-                  </table></div>
+                  </table>
                 );
               })()}
             </div>
@@ -713,7 +714,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                         </tr>
                       )}
                     </tbody>
-                  </table></div>
+                  </table>
                   <div style={{display:"flex",justifyContent:"flex-end"}}>
                     <div style={{background:"#f0f9ff",borderRadius:10,padding:"10px 18px",textAlign:"right"}}>
                       <div style={{fontSize:11,color:"#64748b"}}>請求額合計</div>
@@ -791,7 +792,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
               <button className="btn btn-green" onClick={exportUserLedger}><Icon name="download" size={13}/>CSVダウンロード</button>
             </div>
             <div className="card">
-              <div className="tbl-wrap"><table>
+              <table>
                 <thead><tr><th>受給者番号</th><th>氏名</th><th>生年月日</th><th>障害支援区分</th><th>サービス</th><th>入居日</th></tr></thead>
                 <tbody>
                   {activeUsers.map((u,i)=>(
@@ -805,7 +806,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                     </tr>
                   ))}
                 </tbody>
-              </table></div>
+              </table>
             </div>
           </div>
         )}
@@ -821,7 +822,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
             </div>
             <div className="card">
               <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>請求データ確認 — {selMonth}</div>
-              <div className="tbl-wrap"><table>
+              <table>
                 <thead><tr><th>受給者番号</th><th>氏名</th><th>サービス</th><th>提供日数</th><th>請求額</th></tr></thead>
                 <tbody>
                   {userDays.map((u,i)=>(
@@ -839,7 +840,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                     <td className="mono" style={{color:"#059669"}}>¥{userDays.reduce((s,u)=>s+u.total,0).toLocaleString()}</td>
                   </tr>
                 </tbody>
-              </table></div>
+              </table>
             </div>
           </div>
         )}
@@ -853,7 +854,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
             </div>
             <div className="card">
               <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>利用実績表 — {selMonth}</div>
-              <div className="tbl-wrap"><table>
+              <table>
                 <thead><tr><th>氏名</th><th>サービス</th><th>利用日数</th><th>請求額</th><th>状態</th></tr></thead>
                 <tbody>
                   {userDays.map((u,i)=>(
@@ -866,7 +867,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                     </tr>
                   ))}
                 </tbody>
-              </table></div>
+              </table>
             </div>
           </div>
         )}
@@ -911,7 +912,7 @@ function BillingTab({claims, users, perfs, srecs, today}) {
                         );
                       })}
                     </tbody>
-                  </table></div>
+                  </table>
                 );
               })()}
             </div>
@@ -1886,7 +1887,7 @@ export default function App() {
                   const [y,m]=month.split("-").map(Number);
                   const days=Array.from({length:new Date(y,m,0).getDate()},(_,i)=>i+1);
                   return(
-                    <div className="tbl-wrap"><table>
+                    <table>
                       <thead><tr>
                         <th style={{minWidth:80,position:"sticky",left:0,background:"white"}}>利用者</th>
                         {days.map(d=><th key={d} style={{minWidth:32,textAlign:"center",padding:"9px 4px"}}>{d}</th>)}
@@ -1909,7 +1910,7 @@ export default function App() {
                           </tr>
                         ))}
                       </tbody>
-                    </table></div>
+                    </table>
                   );
                 })()}
               </div>
@@ -2043,7 +2044,7 @@ export default function App() {
                 </div>}
               />
               <div className="card">
-                <div className="tbl-wrap"><table>
+                <table>
                   <thead><tr><th>利用者</th><th>サービス</th><th>開始</th><th>終了</th><th>担当</th><th>状態</th><th>備考</th><th>操作</th></tr></thead>
                   <tbody>
                     {perfs.filter(r=>r.date===fDate).map((r,i)=>(
@@ -2062,7 +2063,7 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table></div>
+                </table>
                 {perfs.filter(r=>r.date===fDate).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この日の実績記録がありません</div>}
               </div>
               <MD name="実績" table="performance_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
@@ -2099,7 +2100,7 @@ export default function App() {
                 </div>}
               />
               <div className="card">
-                <div className="tbl-wrap"><table>
+                <table>
                   <thead><tr><th>利用者</th><th>出席日数</th><th>欠席日数</th><th>出席率</th><th>主サービス</th></tr></thead>
                   <tbody>
                     {users.filter(u=>u.status==="在籍").map(u=>{
@@ -2124,7 +2125,7 @@ export default function App() {
                       );
                     })}
                   </tbody>
-                </table></div>
+                </table>
               </div>
             </div>
           )}
@@ -2146,7 +2147,7 @@ export default function App() {
                 ))}
               </div>
               <div className="card">
-                <div className="tbl-wrap"><table>
+                <table>
                   <thead><tr><th>利用者</th><th>年月</th><th>勤務日数</th><th>勤務時間</th><th>単価</th><th>工賃合計</th><th>支払状況</th><th>操作</th></tr></thead>
                   <tbody>
                     {wages.filter(r=>r.year_month===fDate.slice(0,7)).map((r,i)=>(
@@ -2166,7 +2167,7 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table></div>
+                </table>
                 {wages.filter(r=>r.year_month===fDate.slice(0,7)).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>工賃データがありません</div>}
               </div>
               <MD name="工賃" table="wage_records"modal={modal} editId={editId} closeModal={closeModal} save={save}>
@@ -2233,7 +2234,7 @@ export default function App() {
                 extra={<button className="btn btn-secondary btn-sm" onClick={()=>csv(attendance,"勤怠記録")}><Icon name="download" size={13}/>CSV</button>}
               />
               <div className="card">
-                <div className="tbl-wrap"><table>
+                <table>
                   <thead><tr><th>日付</th><th>スタッフ</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>備考</th><th>編集</th></tr></thead>
                   <tbody>
                     {attendance.slice(0,50).map((a,i)=>{
@@ -2253,7 +2254,7 @@ export default function App() {
                       );
                     })}
                   </tbody>
-                </table></div>
+                </table>
                 {attendance.length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>打刻記録がありません</div>}
               </div>
             </div>
@@ -2297,7 +2298,7 @@ export default function App() {
               </div>
               <div className="card" style={{maxWidth:540}}>
                 <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>今月の勤怠</div>
-                <div className="tbl-wrap"><table>
+                <table>
                   <thead><tr><th>日付</th><th>出勤</th><th>退勤</th><th>勤務時間</th></tr></thead>
                   <tbody>
                     {attendance.filter(a=>a.staff_id===me?.id).map((a,i)=>{
@@ -2313,7 +2314,7 @@ export default function App() {
                       );
                     })}
                   </tbody>
-                </table></div>
+                </table>
               </div>
             </div>
           )}
@@ -2359,7 +2360,7 @@ export default function App() {
                 ))}
               </div>}
               <div className="card">
-                <div className="tbl-wrap"><table>
+                <table>
                   <thead><tr><th>日付</th><th>利用者</th><th>種別</th><th>目的地</th><th>担当</th><th>距離</th><th>コスト</th>{isAdmin&&<th>操作</th>}</tr></thead>
                   <tbody>
                     {transport.slice(0,30).map((t,i)=>(
@@ -2378,7 +2379,7 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table></div>
+                </table>
               </div>
               <MD name="送迎" table="transport_log"modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
@@ -2421,7 +2422,7 @@ export default function App() {
               </div>
               <div className="card" style={{marginBottom:16}}>
                 {entries.length===0?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>仕訳データがありません</div>:(
-                  <div className="tbl-wrap"><table>
+                  <table>
                     <thead><tr><th>日付</th><th>区分</th><th>科目</th><th>摘要</th><th>金額</th><th>操作</th></tr></thead>
                     <tbody>
                       {entries.map((e,i)=>(
@@ -2438,7 +2439,7 @@ export default function App() {
                         </tr>
                       ))}
                     </tbody>
-                  </table></div>
+                  </table>
                 )}
               </div>
               <div className="card">
@@ -2500,7 +2501,7 @@ export default function App() {
                 );
               })}
               <div className="card" style={{marginTop:16}}>
-                <div className="tbl-wrap"><table>
+                <table>
                   <thead><tr><th>利用者</th><th>棟</th><th>種別</th><th>開始</th><th>終了</th><th>状態</th><th>備考</th>{isAdmin&&<th>操作</th>}</tr></thead>
                   <tbody>
                     {scheds.slice(0,30).map((s,i)=>(
@@ -2518,7 +2519,7 @@ export default function App() {
                       </tr>
                     ))}
                   </tbody>
-                </table></div>
+                </table>
               </div>
               <MD name="予定" table="schedules"modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
