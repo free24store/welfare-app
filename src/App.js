@@ -1724,7 +1724,7 @@ export default function App() {
           flexShrink:0,
           overflowY:"auto",
           ...(isMobile ? {
-            position:"fixed", top:0, left:0, height:"100%", zIndex:100,
+            position:"fixed", top:54, left:0, height:"calc(100% - 54px)", zIndex:100,
             transform: navOpen ? "translateX(0)" : "translateX(-100%)",
             transition:"transform .25s ease",
             boxShadow: navOpen ? "4px 0 24px rgba(0,0,0,.15)" : "none",
@@ -1861,7 +1861,7 @@ export default function App() {
                 </div>
               )}
               <MD name="利用者" table="users" modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10}}>
                   <F label="名前" k="name" form={form} setForm={setForm}/><F label="フリガナ" k="kana" form={form} setForm={setForm}/>
                   <F label="年齢" k="age" type="number" form={form} setForm={setForm}/><F label="部屋番号" k="room" form={form} setForm={setForm}/>
                   <F label="棟" k="unit" opts={["A棟","B棟","C棟"]} form={form} setForm={setForm}/><F label="支援区分" k="support_level" opts={["1","2","3","4","5","6"]} form={form} setForm={setForm}/>
@@ -1938,7 +1938,7 @@ export default function App() {
                     <div key={k}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
                         <label style={{fontSize:12,color:"#64748b"}}>{labels[k]}</label>
-                        <button type="button" className="btn btn-secondary btn-sm" style={{fontSize:11,padding:"3px 8px"}} onClick={()=>{setTmplTab(slots[k]);setTmplModal(k);}}>テンプレ</button>
+                        <button type="button" className="btn btn-secondary btn-sm" style={{fontSize:11,padding:"3px 8px"}} onClick={()=>setTmplModal(k)}>テンプレ</button>
                       </div>
                       <textarea className="input" rows={3} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))} style={{width:"100%",resize:"vertical"}}/>
                     </div>
