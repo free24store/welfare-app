@@ -1412,6 +1412,11 @@ export default function App() {
     window.addEventListener('resize',onResize);
     return()=>window.removeEventListener('resize',onResize);
   },[]);
+  useEffect(()=>{
+    let mv=document.querySelector('meta[name=viewport]');
+    if(!mv){mv=document.createElement('meta');mv.name='viewport';document.head.prepend(mv);}
+    mv.content='width=device-width,initial-scale=1,maximum-scale=1';
+  },[]);
   const isMobile = winW < 1024;
 
   const today = new Date().toISOString().slice(0,10);
@@ -1615,13 +1620,6 @@ export default function App() {
     ]},
   ];
   const tabs = isAdmin ? adminTabs : staffTabs;
-
-  // viewport meta injection (for mobile)
-  useEffect(()=>{
-    let mv = document.querySelector('meta[name=viewport]');
-    if(!mv){mv=document.createElement('meta');mv.name='viewport';document.head.prepend(mv);}
-    mv.content='width=device-width,initial-scale=1,maximum-scale=1';
-  },[]);
 
   return (
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",background:"#f0f4f8",minHeight:"100vh",display:"flex",flexDirection:"column"}}>
