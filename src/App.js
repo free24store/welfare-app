@@ -2516,7 +2516,7 @@ export default function App() {
             </div>
           )}
 
-          {/* ── 送迎管理 ── */
+          {/* ── 送迎管理 ── */}
           {tab==="transport"&&(
             <div className="fade-in">
               <PH title="送迎管理" sub="送迎記録・コスト分析"
