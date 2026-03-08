@@ -1063,55 +1063,122 @@ function SelfPinForm({me,loadAll}) {
 }
 
 function CleaningTab({staffList}) {
-  const DAYS=["月","火","水","木","金","土","日"];
-  const [cleanData,setCleanData]=useState(null);
-  const [loaded,setLoaded]=useState(false);
+  const today = new Date().toISOString().slice(0,10);
+  const [records, setRecords] = useState([]); // [{date, shift, staff, done, note}]
+  const [loaded, setLoaded] = useState(false);
+  const [selDate, setSelDate] = useState(today);
+  const [viewMode, setViewMode] = useState("input"); // "input" | "history"
+  const [histMonth, setHistMonth] = useState(today.slice(0,7));
+
   useEffect(()=>{
-    supabase.from("app_settings").select("value").eq("key","cleaning_schedule").single().then(({data})=>{
-      if(data?.value){try{setCleanData(JSON.parse(data.value));}catch(e){}}
-      else setCleanData({日勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""},夜勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""}});
+    supabase.from("app_settings").select("value").eq("key","cleaning_records").single().then(({data})=>{
+      if(data?.value){try{setRecords(JSON.parse(data.value));}catch(e){setRecords([]);}}
+      else setRecords([]);
       setLoaded(true);
     });
   },[]);
-  const save=async(newD)=>{
-    setCleanData(newD);
-    await supabase.from("app_settings").upsert({key:"cleaning_schedule",value:JSON.stringify(newD)},{onConflict:"key"});
+
+  const saveRecords = async(newR)=>{
+    setRecords(newR);
+    await supabase.from("app_settings").upsert({key:"cleaning_records",value:JSON.stringify(newR)},{onConflict:"key"});
   };
+
+  const getRecord = (date, shift) => records.find(r=>r.date===date&&r.shift===shift)||{date,shift,staff:"",done:false,note:""};
+
+  const updateRecord = (date, shift, field, value) => {
+    const existing = records.find(r=>r.date===date&&r.shift===shift);
+    let newR;
+    if(existing) newR = records.map(r=>r.date===date&&r.shift===shift?{...r,[field]:value}:r);
+    else newR = [...records,{date,shift,staff:"",done:false,note:"",[field]:value}];
+    saveRecords(newR);
+  };
+
   if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+
+  const shifts = [{key:"日勤",label:"日勤（事務所掃除）",color:"#2563eb"},{key:"夜勤",label:"夜勤（GH掃除）",color:"#7c3aed"}];
+
+  // History: records for selected month
+  const histRecords = records
+    .filter(r=>r.date.startsWith(histMonth))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+
   return(
     <div className="fade-in">
-      <PH title="掃除当番表" sub="日勤：事務所掃除 / 夜勤：GH掃除"/>
-      <div className="card" style={{overflowX:"auto"}}>
-        <table style={{minWidth:500}}>
-          <thead><tr>
-            <th style={{width:80}}>区分</th>
-            {DAYS.map(d=><th key={d} style={{textAlign:"center"}}>{d}</th>)}
-          </tr></thead>
-          <tbody>
-            {["日勤","夜勤"].map(shift=>(
-              <tr key={shift}>
-                <td><span style={{fontWeight:700,fontSize:13,color:shift==="日勤"?"#2563eb":"#7c3aed"}}>{shift}</span>
-                  <div style={{fontSize:10,color:"#94a3b8"}}>{shift==="日勤"?"事務所掃除":"GH掃除"}</div>
-                </td>
-                {DAYS.map(d=>(
-                  <td key={d} style={{textAlign:"center",padding:"6px 4px"}}>
-                    <select className="input" style={{fontSize:12,padding:"4px 6px",minWidth:70}} value={cleanData?.[shift]?.[d]||""} onChange={e=>{
-                      const newD={...cleanData,[shift]:{...cleanData[shift],[d]:e.target.value}};
-                      save(newD);
-                    }}>
-                      <option value="">--</option>
-                      {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <PH title="掃除当番表" sub="日付ごとの担当・実施記録"/>
+      <div style={{display:"flex",gap:8,marginBottom:16}}>
+        <button className="btn btn-sm" style={{background:viewMode==="input"?"#2563eb":"#f1f5f9",color:viewMode==="input"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("input")}>📝 入力</button>
+        <button className="btn btn-sm" style={{background:viewMode==="history"?"#2563eb":"#f1f5f9",color:viewMode==="history"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("history")}>📋 履歴</button>
       </div>
+
+      {viewMode==="input"&&(
+        <>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14}}>
+            <input className="input" type="date" style={{flex:1,maxWidth:180}} value={selDate} onChange={e=>setSelDate(e.target.value)}/>
+            <span style={{fontSize:12,color:"#94a3b8"}}>の記録</span>
+          </div>
+          <div style={{display:"grid",gap:12}}>
+            {shifts.map(({key,label,color})=>{
+              const rec = getRecord(selDate, key);
+              return(
+                <div key={key} className="card" style={{borderLeft:`4px solid ${color}`}}>
+                  <div style={{fontWeight:700,fontSize:14,color,marginBottom:12}}>{label}</div>
+                  <div style={{display:"grid",gap:10}}>
+                    <div>
+                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当者</label>
+                      <select className="input" value={rec.staff||""} onChange={e=>updateRecord(selDate,key,"staff",e.target.value)}>
+                        <option value="">選択...</option>
+                        {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
+                      <input className="input" value={rec.note||""} onChange={e=>updateRecord(selDate,key,"note",e.target.value)} placeholder="特記事項があれば"/>
+                    </div>
+                    <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 12px",background:rec.done?"#f0fdf4":"#f8fafc",borderRadius:8,border:`1px solid ${rec.done?"#bbf7d0":"#e2e8f0"}`}}>
+                      <input type="checkbox" checked={rec.done||false} onChange={e=>updateRecord(selDate,key,"done",e.target.checked)} style={{width:16,height:16}}/>
+                      <span style={{fontSize:13,fontWeight:600,color:rec.done?"#059669":"#64748b"}}>{rec.done?"✅ 実施済み":"未実施"}</span>
+                    </label>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {viewMode==="history"&&(
+        <>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14}}>
+            <input className="input" type="month" style={{flex:1,maxWidth:180}} value={histMonth} onChange={e=>setHistMonth(e.target.value)}/>
+            <span style={{fontSize:12,color:"#94a3b8"}}>{histRecords.length}件</span>
+          </div>
+          {histRecords.length===0
+            ?<div className="card" style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この月の記録はありません</div>
+            :<div className="card" style={{overflowX:"auto"}}>
+              <table>
+                <thead><tr>
+                  <th>日付</th><th>区分</th><th>担当</th><th>実施</th><th>備考</th>
+                </tr></thead>
+                <tbody>
+                  {histRecords.map((r,i)=>(
+                    <tr key={i}>
+                      <td style={{whiteSpace:"nowrap"}}>{r.date}</td>
+                      <td><span style={{fontSize:12,fontWeight:600,color:r.shift==="日勤"?"#2563eb":"#7c3aed"}}>{r.shift}</span></td>
+                      <td>{r.staff||<span style={{color:"#94a3b8"}}>未定</span>}</td>
+                      <td style={{textAlign:"center"}}>{r.done?"✅":"❌"}</td>
+                      <td style={{fontSize:12,color:"#64748b"}}>{r.note}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          }
+        </>
+      )}
     </div>
   );
 }
+
 
 function SuppliesTab() {
   const [items,setItems]=useState([]);
@@ -2961,7 +3028,7 @@ export default function App() {
           {tab==="files"&&isAdmin&&(
             <div className="fade-in">
               <PH title="ファイル・会議報告書" sub={`${files.length}件`}
-                onAdd={()=>openModal("ファイル",{category:"職員会議",title:"",date:today,author:me?.name||"管理者",content:"",file_type:"議事録"})}
+                onAdd={()=>openModal("ファイル",{category:"職員会議",title:"",date:today,author:me?.name||"管理者",content:"",file_type:"議事録",url:"",file_name:"",file_data:""})}
                 addLabel="新規作成"
                 extra={<button className="btn btn-secondary btn-sm" onClick={()=>csv(files,"ファイル一覧")}><Icon name="download" size={13}/>CSV</button>}
               />
@@ -2977,32 +3044,76 @@ export default function App() {
                   {files.filter(f=>fCat==="全て"||f.category===fCat).map((f,i)=>(
                     <div key={i} className="card">
                       <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                           <span className="tag" style={{background:"#eff6ff",color:"#2563eb"}}>{f.category}</span>
                           <span className="tag" style={{background:"#f1f5f9",color:"#475569"}}>{f.file_type}</span>
                           <span className="mono" style={{fontSize:11,color:"#94a3b8"}}>{f.date}</span>
                         </div>
                         <div style={{display:"flex",gap:6}}>
+                          {(f.url||f.file_data)&&(
+                            <a href={f.file_data?"data:application/octet-stream;base64,"+f.file_data:f.url}
+                              download={f.file_name||f.title}
+                              target="_blank" rel="noreferrer"
+                              className="btn btn-secondary btn-sm"
+                              style={{textDecoration:"none"}}>
+                              <Icon name="download" size={12}/>
+                            </a>
+                          )}
                           <button className="btn btn-secondary btn-sm" onClick={()=>openEdit("ファイル",f)}><Icon name="edit" size={12}/></button>
                           <button className="btn btn-red btn-sm" onClick={()=>del("file_records",f.id)}><Icon name="trash" size={12}/></button>
                         </div>
                       </div>
                       <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{f.title}</div>
-                      <div style={{fontSize:12,color:"#64748b",marginBottom:f.content?6:0}}>作成者: {f.author}</div>
-                      {f.content&&<div style={{fontSize:13,background:"#f8fafc",borderRadius:8,padding:"10px 12px",lineHeight:1.7}}>{f.content}</div>}
+                      <div style={{fontSize:12,color:"#64748b",marginBottom:4}}>作成者: {f.author}</div>
+                      {f.file_name&&<div style={{fontSize:12,color:"#2563eb",marginBottom:4}}>📎 {f.file_name}</div>}
+                      {f.url&&!f.file_data&&<a href={f.url} target="_blank" rel="noreferrer" style={{fontSize:12,color:"#2563eb",display:"block",marginBottom:4,wordBreak:"break-all"}}>🔗 {f.url}</a>}
+                      {f.content&&<div style={{fontSize:13,background:"#f8fafc",borderRadius:8,padding:"10px 12px",lineHeight:1.7,marginTop:4}}>{f.content}</div>}
                     </div>
                   ))}
                 </div>
               )}
               <MD name="ファイル" table="file_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr",gap:10,overflow:"hidden"}}>
                   <F label="カテゴリ" k="category" opts={["職員会議","虐待防止","BCP","ヒヤリハット","事故報告","研修記録","その他"]} form={form} setForm={setForm}/>
                   <F label="種別" k="file_type" opts={["議事録","報告書","計画書","マニュアル","記録票","その他"]} form={form} setForm={setForm}/>
+                  <F label="タイトル" k="title" span form={form} setForm={setForm}/>
                   <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
-                  <F label="作成者" k="author" form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>作成者</label>
+                    <select className="input" value={form.author||""} onChange={e=>setForm(f=>({...f,author:e.target.value}))}>
+                      <option value="">選択...</option>
+                      {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div style={{border:"1px solid #e2e8f0",borderRadius:10,padding:12}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#475569",marginBottom:10}}>📎 ファイル添付（いずれか）</div>
+                    <div style={{marginBottom:10}}>
+                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:4}}>ファイルをアップロード</label>
+                      <input type="file" style={{fontSize:13,width:"100%"}} onChange={e=>{
+                        const file=e.target.files[0];
+                        if(!file) return;
+                        if(file.size>3*1024*1024){alert("3MB以下のファイルを選択してください");return;}
+                        const reader=new FileReader();
+                        reader.onload=ev=>{
+                          const b64=ev.target.result.split(",")[1];
+                          setForm(f=>({...f,file_data:b64,file_name:file.name,url:""}));
+                        };
+                        reader.readAsDataURL(file);
+                      }}/>
+                      {form.file_name&&<div style={{fontSize:12,color:"#059669",marginTop:4}}>✅ {form.file_name}</div>}
+                      <div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>※ 3MB以下のファイル（PDF・Word・Excel等）</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                      <div style={{flex:1,height:1,background:"#e2e8f0"}}/>
+                      <span style={{fontSize:11,color:"#94a3b8"}}>または</span>
+                      <div style={{flex:1,height:1,background:"#e2e8f0"}}/>
+                    </div>
+                    <div>
+                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:4}}>URLを入力（Google Drive・Dropbox等）</label>
+                      <input className="input" value={form.url||""} onChange={e=>setForm(f=>({...f,url:e.target.value,file_data:"",file_name:""}))} placeholder="https://..."/>
+                    </div>
+                  </div>
+                  <F label="内容・メモ" k="content" type="textarea" span form={form} setForm={setForm}/>
                 </div>
-                <F label="タイトル" k="title" span form={form} setForm={setForm}/>
-                <F label="内容" k="content" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
