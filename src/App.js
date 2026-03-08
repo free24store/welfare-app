@@ -122,6 +122,67 @@ const NEWS = [
 ];
 
 
+// 給与明細PDF生成（印刷用HTMLをウィンドウで開く）
+function generatePayslip(r, staffInfo, attRows) {
+  const nightRate = Math.floor((staffInfo?.hourly_rate||r.hourly_rate||0) * 1.25);
+  const dayRate = staffInfo?.hourly_rate || r.hourly_rate || 0;
+  // 勤務明細行
+  const attHtml = attRows.length > 0 ? attRows.map(a => {
+    const ci = a.clock_in ? new Date(a.clock_in) : null;
+    const co = a.clock_out ? new Date(a.clock_out) : null;
+    const mins = ci && co ? Math.max(0, Math.round((co - ci) / 60000) - (a.break_minutes||0)) : 0;
+    const h = Math.floor(mins/60), m = mins%60;
+    const isNight = a.shift_type === "夜勤";
+    return `<tr><td>${a.date||""}</td><td>${a.shift_type||"日勤"}</td><td>${ci?ci.toTimeString().slice(0,5):"-"}</td><td>${co?co.toTimeString().slice(0,5):"-"}</td><td>${a.break_minutes||0}分</td><td>${h}h${m}m</td><td>¥${((isNight?nightRate:dayRate)*mins/60).toFixed(0).replace(/\B(?=(\d{3})+(?!\d))/g,",")||0}</td></tr>`;
+  }).join("") : `<tr><td colspan="7" style="text-align:center;color:#999">勤務記録なし</td></tr>`;
+
+  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>給与明細 ${r.year_month} ${r.staff_name}</title>
+<style>
+  body{font-family:'Noto Sans JP',sans-serif;margin:0;padding:24px;color:#1e293b;font-size:13px;}
+  h2{margin:0 0 4px;font-size:20px;} .sub{color:#64748b;font-size:12px;margin-bottom:20px;}
+  .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;padding-bottom:14px;border-bottom:2px solid #1e3a8a;}
+  .company{font-size:12px;color:#64748b;text-align:right;}
+  table{width:100%;border-collapse:collapse;margin-bottom:16px;font-size:12px;}
+  th{background:#1e3a8a;color:white;padding:7px 10px;text-align:left;}
+  td{padding:6px 10px;border-bottom:1px solid #e2e8f0;}
+  .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;}
+  .box{border:1px solid #e2e8f0;border-radius:8px;padding:12px;text-align:center;}
+  .box-label{font-size:11px;color:#64748b;margin-bottom:4px;}
+  .box-val{font-size:18px;font-weight:800;}
+  .total-box{background:#1e3a8a;color:white;border-radius:10px;padding:16px;text-align:center;margin-bottom:20px;}
+  .total-box .label{font-size:11px;opacity:.8;margin-bottom:4px;}
+  .total-box .val{font-size:28px;font-weight:800;}
+  .note{font-size:11px;color:#64748b;margin-top:4px;}
+  @media print{body{padding:10px;} button{display:none;}}
+</style></head><body>
+<div class="header">
+  <div><h2>給 与 明 細 書</h2><div class="sub">${r.year_month} 分</div></div>
+  <div class="company"><div style="font-weight:700;font-size:14px">グループホーム管理システム</div><div>発行日: ${new Date().toLocaleDateString("ja-JP")}</div></div>
+</div>
+<table style="margin-bottom:16px">
+  <tr><th colspan="4">スタッフ情報</th></tr>
+  <tr><td style="width:25%;color:#64748b">氏名</td><td style="font-weight:700;font-size:15px">${r.staff_name} 様</td><td style="width:25%;color:#64748b">基本時給</td><td>¥${Number(dayRate).toLocaleString()} / 夜勤 ¥${nightRate.toLocaleString()}</td></tr>
+  <tr><td style="color:#64748b">対象月</td><td>${r.year_month}</td><td style="color:#64748b">給料日</td><td>${r.pay_date||"調整中"}</td></tr>
+</table>
+<div class="summary">
+  <div class="box"><div class="box-label">総勤務時間</div><div class="box-val" style="color:#2563eb">${Math.floor((r.work_minutes||0)/60)}h${(r.work_minutes||0)%60}m</div></div>
+  <div class="box"><div class="box-label">手当・追加</div><div class="box-val" style="color:#059669">¥${(r.extra_pay||0).toLocaleString()}</div></div>
+  <div class="box"><div class="box-label">控除額</div><div class="box-val" style="color:#ef4444">¥${(r.deduction||0).toLocaleString()}</div></div>
+</div>
+<div class="total-box"><div class="label">支 給 額（手 取 り）</div><div class="val">¥${(r.net_pay||0).toLocaleString()}</div>${r.note?`<div class="note">📝 ${r.note}</div>`:""}</div>
+<table>
+  <tr><th>日付</th><th>区分</th><th>出勤</th><th>退勤</th><th>休憩</th><th>勤務時間</th><th>賃金</th></tr>
+  ${attHtml}
+</table>
+<div style="text-align:center;margin-top:20px">
+  <button onclick="window.print()" style="padding:10px 28px;background:#1e3a8a;color:white;border:none;border-radius:8px;font-size:14px;cursor:pointer;margin-right:8px">🖨️ 印刷・PDF保存</button>
+  <button onclick="window.close()" style="padding:10px 20px;background:#f1f5f9;color:#475569;border:none;border-radius:8px;font-size:14px;cursor:pointer">閉じる</button>
+</div>
+</body></html>`;
+  const w = window.open("","_blank","width=800,height=900");
+  if(w){ w.document.write(html); w.document.close(); }
+}
+
 function SalaryAdminTab({staffList, salaries, attendance, loadAll, today, isMobile}) {
   const [selStaff, setSelStaff] = useState("");
   const [ym, setYm] = useState((today||new Date().toISOString().slice(0,10)).slice(0,7));
@@ -276,6 +337,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today, isMobi
                     ?<span className="tag" style={{background:"#dcfce7",color:"#059669",fontSize:11}}>支払済</span>
                     :<button className="btn btn-green btn-sm" style={{marginTop:4}} onClick={()=>markPaid(r.id)}>支払済にする</button>
                   }
+                  <button className="btn btn-secondary btn-sm" style={{marginTop:4,display:"block"}} onClick={()=>{const s=staffList.find(x=>x.id===r.staff_id);const att=attendance.filter(a=>a.staff_id===r.staff_id&&a.date?.startsWith(r.year_month));generatePayslip(r,s,att);}}>📄 明細</button>
                 </div>
               </div>
             ))}
@@ -297,6 +359,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today, isMobi
                 <td><span className="tag" style={{background:r.status==="支払済"?"#dcfce7":"#fef3c7",color:r.status==="支払済"?"#059669":"#d97706"}}>{r.status||"計算済"}</span></td>
                 <td>
                   {r.status!=="支払済" && <button className="btn btn-green btn-sm" onClick={()=>markPaid(r.id)}>支払済</button>}
+                  <button className="btn btn-secondary btn-sm" style={{marginLeft:4}} onClick={()=>{const s=staffList.find(x=>x.id===r.staff_id);const att=attendance.filter(a=>a.staff_id===r.staff_id&&a.date?.startsWith(r.year_month));generatePayslip(r,s,att);}}>📄 明細</button>
                 </td>
               </tr>
             ))}
@@ -369,9 +432,10 @@ function MySalaryTab({me, salaries, attendance}) {
                   {r.pay_date && <span style={{marginLeft:6}}>💳 {r.pay_date}</span>}
                 </div>
               </div>
-              <div style={{textAlign:"right"}}>
+              <div style={{textAlign:"right",display:"flex",flexDirection:"column",alignItems:"flex-end",gap:4}}>
                 <div style={{fontWeight:800,fontSize:16,color:"#1e293b"}}>¥{(r.net_pay||0).toLocaleString()}</div>
                 <span className="tag" style={{background:r.status==="支払済"?"#dcfce7":"#fef3c7",color:r.status==="支払済"?"#059669":"#d97706",fontSize:11}}>{r.status||"確認中"}</span>
+                <button className="btn btn-secondary btn-sm" onClick={()=>{const att=attendance.filter(a=>a.staff_id===me?.id&&a.date?.startsWith(r.year_month));generatePayslip(r,me,att);}}>📄 明細</button>
               </div>
             </div>
           ))}
@@ -3097,6 +3161,10 @@ export default function App() {
 
   const save = async (tbl,extra={}) => {
     const p = {...form,...extra};
+    if(tbl==="staff_members"){
+      if(!p.name||!p.name.trim()){alert("名前を入力してください");return;}
+      if(!p.hourly_rate||isNaN(Number(p.hourly_rate))||Number(p.hourly_rate)<=0){alert("時給を入力してください（必須）");return;}
+    }
     let res;
     if(editId) res = await supabase.from(tbl).update(p).eq("id",editId);
     else res = await supabase.from(tbl).insert(p);
@@ -4153,7 +4221,10 @@ export default function App() {
                   <F label="電話" k="tel" form={form} setForm={setForm}/><F label="メール" k="email" type="email" form={form} setForm={setForm}/>
                   <F label="役職" k="role" opts={["世話人","生活支援員","運転手","施設管理者","サービス管理責任者"]} form={form} setForm={setForm}/>
                   <F label="雇用形態" k="full_time" opts={["true","false"]} form={form} setForm={setForm}/>
-                  <F label="時給（円）" k="hourly_rate" type="number" form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>時給（円）<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                    <input className="input" type="number" min={1} value={form.hourly_rate||""} onChange={e=>setForm(f=>({...f,hourly_rate:e.target.value}))} placeholder="例: 1100"/>
+                    {form.hourly_rate&&Number(form.hourly_rate)>0&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>夜勤時給: ¥{Math.floor(Number(form.hourly_rate)*1.25).toLocaleString()}（×1.25）</div>}
+                  </div>
                   <F label="PINコード" k="pin" form={form} setForm={setForm}/>
                   <F label="入職日" k="hire_date" type="date" form={form} setForm={setForm}/>
                 </div>
