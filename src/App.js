@@ -971,6 +971,85 @@ function BillingTab({claims, users, perfs, srecs, today}) {
   );
 }
 
+function SabikanMgmtTab() {
+  const [list, setList] = useState([]);
+  const [adding, setAdding] = useState(false);
+  const [editIdx, setEditIdx] = useState(null);
+  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
+
+  const KEY = "sabikan_members";
+  useEffect(()=>{
+    supabase.from("app_settings").select("value").eq("key",KEY).single().then(({data})=>{
+      try{ setList(JSON.parse(data?.value||"[]")); }catch(e){ setList([]); }
+    });
+  },[]);
+  const save = async(newList)=>{ setList(newList); await supabase.from("app_settings").upsert({key:KEY,value:JSON.stringify(newList)},{onConflict:"key"}); };
+  const del = (i)=>{ if(window.confirm("本当に削除しますか？この操作は元に戻せません")) save(list.filter((_,j)=>j!==i)); };
+  const submit = ()=>{
+    if(!form.name.trim()){alert("入力されていない項目があります。ご確認ください");return;}
+    if(editIdx!==null){ const n=[...list];n[editIdx]={...form};save(n);setEditIdx(null); }
+    else save([...list,{...form,id:Date.now()}]);
+    setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
+    setAdding(false);
+  };
+  const startEdit=(i)=>{ setForm({...list[i]});setEditIdx(i);setAdding(true); };
+  const cancel=()=>{ setAdding(false);setEditIdx(null);setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""}); };
+
+  return(
+    <div className="fade-in">
+      <PH title="サービス管理責任者管理" sub={`${list.length}名`} onAdd={()=>{cancel();setAdding(true);}} addLabel="新規登録"/>
+      {adding&&(
+        <div className="card" style={{marginBottom:14,border:"2px solid #0284c7"}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editIdx!==null?"✏️ 編集":"➕ 新規登録"}</div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginBottom:10}}>
+            {[["名前 *","name","text"],["フリガナ","kana","text"],["電話","tel","tel"],["メール","email","email"],["入職日","hire_date","date"]].map(([label,k,type])=>(
+              <div key={k}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
+                <input className="input" type={type} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/></div>
+            ))}
+          </div>
+          <div style={{marginBottom:10}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>保有資格（カンマ区切り）</label>
+            <input className="input" value={form.certifications||""} onChange={e=>setForm(f=>({...f,certifications:e.target.value}))} placeholder="例: 社会福祉士, 精神保健福祉士"/></div>
+          <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
+            <textarea className="input" rows={2} value={form.note||""} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/></div>
+          <div style={{display:"flex",gap:8}}>
+            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editIdx!==null?"更新":"登録"}</button>
+            <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={cancel}>キャンセル</button>
+          </div>
+        </div>
+      )}
+      {list.length===0&&!adding
+        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>記録がありません</div></div>
+        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14,marginBottom:16}}>
+          {list.map((s,i)=>(
+            <div key={i} className="card">
+              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
+                <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"white",flexShrink:0,fontWeight:700}}>📋</div>
+                <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{fontSize:12,color:"#64748b"}}>{s.kana}</div></div>
+              </div>
+              <div style={{fontSize:12,color:"#64748b",lineHeight:2,marginBottom:8}}>
+                {s.tel&&<div>📞 {s.tel}</div>}
+                {s.email&&<div>✉️ {s.email}</div>}
+                {s.hire_date&&<div>📅 入職: {s.hire_date}</div>}
+                {s.certifications&&<div>🎓 {s.certifications}</div>}
+                {s.note&&<div style={{color:"#475569"}}>📝 {s.note}</div>}
+              </div>
+              <div style={{display:"flex",gap:8}}>
+                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(i)}><Icon name="edit" size={13}/>編集</button>
+                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(i)}><Icon name="trash" size={13}/></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      }
+      <div className="card" style={{maxWidth:480,marginTop:8}}>
+        <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>🔑 ログインPINコード管理</div>
+        <SabikanPinResetForm/>
+        <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>※ PINはサービス管理責任者ログイン画面で使用します</div>
+      </div>
+    </div>
+  );
+}
+
 function SabikanPinResetForm() {
   const [newPin, setNewPin] = useState("");
   const [show, setShow] = useState(false);
@@ -1417,15 +1496,15 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
   const [cellForm, setCellForm] = useState({});
   const [viewMode, setViewMode] = useState("table");
   const SHIFT_TYPES = [
-    {label:"日勤",short:"日",color:"#2563eb",bg:"#eff6ff",start:"09:00",end:"18:00"},
-    {label:"夜勤",short:"夜",color:"#7c3aed",bg:"#f5f3ff",start:"17:00",end:"09:00"},
-    {label:"早番",short:"早",color:"#059669",bg:"#f0fdf4",start:"07:00",end:"16:00"},
-    {label:"遅番",short:"遅",color:"#d97706",bg:"#fffbeb",start:"11:00",end:"20:00"},
-    {label:"公休",short:"休",color:"#94a3b8",bg:"#f8fafc",start:"",end:""},
-    {label:"有休",short:"有",color:"#10b981",bg:"#ecfdf5",start:"",end:""},
-    {label:"欠勤",short:"欠",color:"#ef4444",bg:"#fef2f2",start:"",end:""},
-    {label:"研修",short:"研",color:"#f59e0b",bg:"#fefce8",start:"",end:""},
-    {label:"",short:"",color:"#e2e8f0",bg:"white",start:"",end:""},
+    {label:"日勤",short:"日",color:"#2563eb",bg:"#eff6ff",start:"09:00",end:"18:00",break:60},
+    {label:"夜勤",short:"夜",color:"#7c3aed",bg:"#f5f3ff",start:"22:00",end:"05:00",break:0},
+    {label:"早番",short:"早",color:"#059669",bg:"#f0fdf4",start:"07:00",end:"16:00",break:60},
+    {label:"遅番",short:"遅",color:"#d97706",bg:"#fffbeb",start:"11:00",end:"20:00",break:60},
+    {label:"公休",short:"休",color:"#94a3b8",bg:"#f8fafc",start:"",end:"",break:0},
+    {label:"有休",short:"有",color:"#10b981",bg:"#ecfdf5",start:"",end:"",break:0},
+    {label:"欠勤",short:"欠",color:"#ef4444",bg:"#fef2f2",start:"",end:"",break:0},
+    {label:"研修",short:"研",color:"#f59e0b",bg:"#fefce8",start:"",end:"",break:0},
+    {label:"",short:"",color:"#e2e8f0",bg:"white",start:"",end:"",break:0},
   ];
   const ROLES = ["サービス管理責任者","世話人","生活支援員","夜間支援員","管理者","その他"];
   const WDAYS = ["日","月","火","水","木","金","土"];
@@ -1452,7 +1531,7 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
   const openEdit = (staffId,date)=>{
     const c=shiftData[skey(staffId,date)]||{};
     const st=SHIFT_TYPES.find(s=>s.label===c.shift)||SHIFT_TYPES[8];
-    setCellForm({shift:c.shift||"",start:c.start||st.start,end:c.end||st.end,role:c.role||"",note:c.note||""});
+    setCellForm({shift:c.shift||"",start:c.start||st.start,end:c.end||st.end,break_minutes:c.break_minutes!==undefined?c.break_minutes:(st.break||0),role:c.role||"",note:c.note||""});
     setEditCell({staffId,date});
   };
   const saveCell=async()=>{
@@ -1604,7 +1683,7 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
               <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:6}}>シフト区分</label>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
                   {SHIFT_TYPES.filter(s=>s.label).map(s=>(
-                    <button key={s.label} onClick={()=>{const def=SHIFT_TYPES.find(t=>t.label===s.label)||{};setCellForm(f=>({...f,shift:s.label,start:def.start||f.start,end:def.end||f.end}));}}
+                    <button key={s.label} onClick={()=>{const def=SHIFT_TYPES.find(t=>t.label===s.label)||{};setCellForm(f=>({...f,shift:s.label,start:def.start||f.start,end:def.end||f.end,break_minutes:def.break!==undefined?def.break:f.break_minutes}));}}
                       style={{padding:"8px 2px",borderRadius:8,border:"2px solid "+(cellForm.shift===s.label?s.color:"#e2e8f0"),background:cellForm.shift===s.label?s.bg:"white",color:s.color,fontWeight:700,fontSize:11,cursor:"pointer"}}>
                       {s.short}<br/><span style={{fontSize:9,fontWeight:400}}>{s.label}</span>
                     </button>
@@ -1612,9 +1691,10 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
                 </div>
               </div>
               {cellForm.shift&&!["公休","有休","欠勤"].includes(cellForm.shift)&&(
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>開始</label><input className="input" type="time" value={cellForm.start||""} onChange={e=>setCellForm(f=>({...f,start:e.target.value}))}/></div>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>終了</label><input className="input" type="time" value={cellForm.end||""} onChange={e=>setCellForm(f=>({...f,end:e.target.value}))}/></div>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>休憩（分）</label><input className="input" type="number" min={0} max={240} value={cellForm.break_minutes!==undefined?cellForm.break_minutes:""} onChange={e=>setCellForm(f=>({...f,break_minutes:e.target.value===""?"":parseInt(e.target.value)||0}))}/></div>
                 </div>
               )}
               <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>職種・役割</label>
@@ -3065,9 +3145,9 @@ export default function App() {
         <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>グループホーム管理システム</div>
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:32}}>powered by SOMME合同会社</div>
         <div style={{display:"grid",gap:12}}>
-          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:12,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏡 利用者ログイン</button>
+          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏡 利用者ログイン</button>
           <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={preloadStaff}><Icon name="staff" size={18}/>スタッフログイン</button>
-          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:12,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("sabikan_pin")}>📋 サービス管理責任者ログイン</button>
+          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("sabikan_pin")}>📋 サービス管理責任者ログイン</button>
           <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={()=>setAuth("admin_pin")}><Icon name="shield" size={18}/>管理者ログイン</button>
         </div>
       </div>
@@ -3758,7 +3838,7 @@ export default function App() {
           )}
 
           {/* ── 支援計画・モニタリング ── */}
-          {tab==="plans"&&isAdmin&&(
+          {tab==="plans"&&(isAdmin||isSabikan)&&(
             <div className="fade-in">
               <PH title="支援計画・モニタリング" sub={`${plans.length}件`}
                 onAdd={()=>openModal("支援計画",{user_id:"",period_start:"",period_end:"",goals:"",assessment:"",review_date:"",status:"作成中",created_by:""})}
@@ -3889,8 +3969,8 @@ export default function App() {
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>時間帯パターン</label>
                     <select className="input" onChange={e=>{
                       const v=e.target.value;
-                      if(v==="日勤") setForm(f=>({...f,start_time:"09:00",end_time:"17:00"}));
-                      else if(v==="夜勤") setForm(f=>({...f,start_time:"17:00",end_time:"09:00"}));
+                      if(v==="日勤") setForm(f=>({...f,start_time:"09:00",end_time:"18:00"}));
+                      else if(v==="夜勤") setForm(f=>({...f,start_time:"22:00",end_time:"05:00"}));
                       else if(v==="早番") setForm(f=>({...f,start_time:"07:00",end_time:"15:00"}));
                       else if(v==="遅番") setForm(f=>({...f,start_time:"11:00",end_time:"19:00"}));
                     }}>
@@ -4074,42 +4154,7 @@ export default function App() {
           )}
 
           {/* ── サービス管理責任者管理 ── */}
-          {tab==="sabikan_mgmt"&&isAdmin&&(
-            <div className="fade-in">
-              <PH title="サービス管理責任者管理" sub="サビ管アカウント・PINコード管理"/>
-              <div className="card" style={{maxWidth:480,marginBottom:16}}>
-                <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:16}}>
-                  <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>📋</div>
-                  <div>
-                    <div style={{fontWeight:700,fontSize:15}}>サービス管理責任者</div>
-                    <div style={{fontSize:12,color:"#64748b",marginTop:2}}>個別支援計画・利用者支援管理・アセスメント・モニタリング担当</div>
-                  </div>
-                </div>
-                <div style={{background:"#f0f9ff",borderRadius:10,padding:"12px 14px",marginBottom:14,border:"1px solid #bae6fd"}}>
-                  <div style={{fontSize:12,color:"#0369a1",fontWeight:600,marginBottom:6}}>📌 主な業務</div>
-                  <div style={{fontSize:12,color:"#0c4a6e",lineHeight:2}}>
-                    <div>• 個別支援計画の作成・管理・更新</div>
-                    <div>• 利用者のアセスメント・モニタリング</div>
-                    <div>• 現場スタッフへの指導・助言</div>
-                    <div>• 関係機関（医療・相談支援等）との連携</div>
-                    <div>• サービス提供の法令適合管理</div>
-                  </div>
-                </div>
-                <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
-                  <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>🔑 PINコード管理（管理者による強制変更）</div>
-                  <SabikanPinResetForm/>
-                </div>
-              </div>
-              <div className="card" style={{maxWidth:480,background:"#fffbeb",border:"1px solid #fde68a"}}>
-                <div style={{fontWeight:600,fontSize:13,marginBottom:8,color:"#92400e"}}>⚠️ ご注意</div>
-                <div style={{fontSize:12,color:"#78350f",lineHeight:1.8}}>
-                  <div>• サービス管理責任者ログインには専用PINコードが必要です</div>
-                  <div>• 支援計画・利用者情報へのアクセス権限があります</div>
-                  <div>• PINコードの管理・変更は管理者が行ってください</div>
-                </div>
-              </div>
-            </div>
-          )}
+          {tab==="sabikan_mgmt"&&isAdmin&&<SabikanMgmtTab/>}
 
           {/* ── 勤怠管理（管理者） ── */}
           {tab==="att_admin"&&isAdmin&&<AttAdminTab attendance={attendance} today={today} loadAll={loadAll} csv={csv}/>}
@@ -4526,7 +4571,7 @@ export default function App() {
           )}
 
           {/* ── 利用者メッセージ ── */}
-          {tab==="notices"&&isAdmin&&<div className="fade-in"><NoticeManagerTab/></div>}
+          {tab==="notices"&&(isAdmin||isSabikan)&&<div className="fade-in"><NoticeManagerTab/></div>}
 
           {/* ── お薬管理 ── */}
           {tab==="medication"&&<div className="fade-in"><MedicationTab users={users} isAdmin={isAdmin}/></div>}
@@ -4544,7 +4589,7 @@ export default function App() {
           )}
 
           {/* ── ファイル・会議報告書 ── */}
-          {tab==="files"&&isAdmin&&(
+          {tab==="files"&&(isAdmin||isSabikan)&&(
             <div className="fade-in">
               <PH title="ファイル・会議報告書" sub={`${files.length}件`}
                 onAdd={()=>openModal("ファイル",{category:"職員会議",title:"",date:today,author:me?.name||"管理者",content:"",file_type:"議事録",url:"",file_name:"",file_data:""})}
@@ -4664,7 +4709,7 @@ export default function App() {
           {tab==="supplies"&&isAdmin&&<SuppliesTab/>}
 
           {/* ── 必須保存書類管理 ── */}
-          {tab==="docs"&&isAdmin&&(
+          {tab==="docs"&&(isAdmin||isSabikan)&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>必須保存書類管理</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>法定・行政上の保管義務がある書類の整備状況</div>
@@ -4673,7 +4718,7 @@ export default function App() {
           )}
 
           {/* ── 加算ヒント ── */}
-          {tab==="hints"&&isAdmin&&<HintsTab/>}
+          {tab==="hints"&&(isAdmin||isSabikan)&&<HintsTab/>}
 
           {/* ── ニュース ── */}
           {tab==="news"&&(isAdmin||isSabikan)&&(
