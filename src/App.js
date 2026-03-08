@@ -1538,7 +1538,7 @@ export default function App() {
     let res;
     if(editId) res = await supabase.from(tbl).update(p).eq("id",editId);
     else res = await supabase.from(tbl).insert(p);
-    if(res.error){ alert("保存エラー: " + res.error.message); return; }
+    if(res.error){ alert("空欄があります。確認してください。"); return; }
     closeModal(); loadAll();
   };
   const del = async (tbl,id) => {
@@ -1668,6 +1668,8 @@ export default function App() {
     {g:"情報管理",items:[
       {id:"docs",label:"必須保存書類管理",icon:"file"},
       {id:"files",label:"ファイル・会議報告書",icon:"file"},
+      {id:"cleaning",label:"掃除当番表",icon:"check"},
+      {id:"supplies",label:"備品管理表",icon:"list"},
       {id:"hints",label:"加算ヒント",icon:"hint"},
       {id:"news",label:"最新ニュース",icon:"news"},
     ]},
@@ -1880,7 +1882,7 @@ export default function App() {
           {tab==="srecs"&&(
             <div className="fade-in">
               <PH title="支援記録" sub="日々の支援内容"
-                onAdd={()=>openModal("支援記録",{user_id:"",date:today,time_slot:"日中",staff_name:me?.name||"管理者",health:"良好",meal:"完食",content:"",activity:"",behavior:"",note:""})}
+                onAdd={()=>openModal("支援記録",{user_id:"",date:today,staff_name:me?.name||"管理者",health:"良好",content:"",activity:"",behavior:"",note:""})}
                 addLabel="記録追加"
               />
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
@@ -1896,22 +1898,19 @@ export default function App() {
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
                       <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
                         <div style={{fontWeight:700,fontSize:14}}>{r.user_name}</div>
-                        <span className="timebadge">{r.time_slot||"日中"}</span>
                         <span className="mono" style={{fontSize:11,color:"#94a3b8"}}>{r.date}</span>
                         <span style={{fontSize:12,color:"#64748b"}}>{r.staff_name}</span>
                       </div>
                       <div style={{display:"flex",gap:6,flexShrink:0}}>
-                        <span className="tag" style={{background:r.health==="良好"?"#ecfdf5":"#fef3c7",color:r.health==="良好"?"#059669":"#d97706"}}>{r.health}</span>
-                        <span className="tag" style={{background:"#eff6ff",color:"#2563eb"}}>{r.meal}</span>
                         {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>openEdit("支援記録",r)}><Icon name="edit" size={12}/></button>}
                         {isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>del("support_records",r.id)}><Icon name="trash" size={12}/></button>}
                       </div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8,fontSize:13}}>
-                      {r.content&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>支援内容</div>{r.content}</div>}
-                      {r.activity&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>活動</div>{r.activity}</div>}
-                      {r.behavior&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>様子</div>{r.behavior}</div>}
-                      {r.note&&<div style={{background:"#fffbeb",borderRadius:8,padding:"7px 10px",gridColumn:"1/-1"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>特記</div>{r.note}</div>}
+                      {r.content&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px",gridColumn:"1/-1"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>日中の様子</div>{r.content}</div>}
+                      {r.activity&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px",gridColumn:"1/-1"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>夕方以降の様子</div>{r.activity}</div>}
+                      {r.behavior&&<div style={{background:"#f8fafc",borderRadius:8,padding:"7px 10px",gridColumn:"1/-1"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>健康状態等</div>{r.behavior}</div>}
+                      {r.note&&<div style={{background:"#fffbeb",borderRadius:8,padding:"7px 10px",gridColumn:"1/-1"}}><div style={{fontSize:10,color:"#94a3b8",marginBottom:2}}>深夜帯の様子、その他</div>{r.note}</div>}
                     </div>
                   </div>
                 ))}
@@ -1927,10 +1926,11 @@ export default function App() {
                     </select>
                   </div>
                   <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
-                  <F label="時間帯" k="time_slot" opts={["日中","夜間","深夜"]} form={form} setForm={setForm}/>
-                  <F label="記録者" k="staff_name" form={form} setForm={setForm}/>
-                  <F label="健康状態" k="health" opts={["良好","普通","不調","体調不良","通院"]} form={form} setForm={setForm}/>
-                  <F label="食事" k="meal" opts={["完食","8割","半分","少量","欠食"]} form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>記録者</label>
+                    <select className="input" value={form.staff_name||""} onChange={e=>setForm(f=>({...f,staff_name:e.target.value}))}>
+                      <option value="">選択...</option>{staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
                 </div>
                 {["content","activity","behavior","note"].map(k=>{
                   const labels={"content":"日中の様子","activity":"夕方以降の様子","behavior":"健康状態等","note":"深夜帯の様子、その他"};
@@ -2056,7 +2056,7 @@ export default function App() {
           {/* ── 業務日誌 ── */}
           {tab==="journal"&&(
             <div className="fade-in">
-              <PH title="業務日誌" sub="引継ぎ・全利用者一覧" onAdd={()=>{ setTab("srecs"); setTimeout(()=>openModal("支援記録",{user_id:"",date:fDate||today,time_slot:"日中",staff_name:me?.name||"管理者",health:"良好",meal:"完食",content:"",activity:"",behavior:"",note:""}),50); }} addLabel="支援記録を書く"/>
+              <PH title="業務日誌" sub="引継ぎ・全利用者一覧" onAdd={()=>{ setTab("srecs"); setTimeout(()=>openModal("支援記録",{user_id:"",date:fDate||today,staff_name:me?.name||"管理者",health:"良好",content:"",activity:"",behavior:"",note:""}),50); }} addLabel="支援記録を書く"/>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
                 <input className="input" type="date" style={{flex:1,minWidth:130}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
                 {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs.filter(r=>r.date===fDate),fDate+"_業務日誌")}><Icon name="download" size={13}/>CSV</button>}
@@ -2219,17 +2219,48 @@ export default function App() {
                   </div>
                   <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
                   <F label="サービス種別" k="service_type" opts={["共同生活援助（介護サービス包括型）","共同生活援助（外部サービス利用型）","共同生活援助（日中サービス支援型）","短期入所","日中支援"]} form={form} setForm={setForm}/>
-                  <F label="担当スタッフ" k="staff_name" form={form} setForm={setForm}/>
-                  <F label="開始時刻" k="start_time" type="time" form={form} setForm={setForm}/>
-                  <F label="終了時刻" k="end_time" type="time" form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当スタッフ</label>
+                    <select className="input" value={form.staff_name||""} onChange={e=>setForm(f=>({...f,staff_name:e.target.value}))}>
+                      <option value="">選択...</option>{staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>時間帯パターン</label>
+                    <select className="input" onChange={e=>{
+                      const v=e.target.value;
+                      if(v==="日勤") setForm(f=>({...f,start_time:"09:00",end_time:"17:00"}));
+                      else if(v==="夜勤") setForm(f=>({...f,start_time:"17:00",end_time:"09:00"}));
+                      else if(v==="早番") setForm(f=>({...f,start_time:"07:00",end_time:"15:00"}));
+                      else if(v==="遅番") setForm(f=>({...f,start_time:"11:00",end_time:"19:00"}));
+                    }}>
+                      <option value="">パターン選択...</option>
+                      <option value="日勤">日勤（9:00〜17:00）</option>
+                      <option value="夜勤">夜勤（17:00〜翌9:00）</option>
+                      <option value="早番">早番（7:00〜15:00）</option>
+                      <option value="遅番">遅番（11:00〜19:00）</option>
+                    </select>
+                  </div>
+                  <F label="開始時刻（変更可）" k="start_time" type="time" form={form} setForm={setForm}/>
+                  <F label="終了時刻（変更可）" k="end_time" type="time" form={form} setForm={setForm}/>
                 </div>
                 <div style={{borderTop:"1px solid #e2e8f0",paddingTop:12,marginTop:4}}>
                   <div style={{fontSize:12,fontWeight:700,color:"#475569",marginBottom:8}}>📊 実績記録用（共同生活援助）</div>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
                     <F label="サービス提供" k="service_provided" opts={["サービス有","サービス無（入院）","サービス無（外泊）","サービス無（その他）"]} form={form} setForm={setForm}/>
                     <F label="日中支援" k="daytime_support" opts={["--","あり","なし"]} form={form} setForm={setForm}/>
-                    <F label="夜間支援" k="night_support" opts={["初期設定と同じ","体制Ⅰ","体制Ⅱ","なし"]} form={form} setForm={setForm}/>
-                    <F label="自立生活支援加算" k="independence_support" opts={["--","算定あり","算定なし"]} form={form} setForm={setForm}/>
+                    <div><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                      <label style={{fontSize:12,color:"#64748b"}}>夜間支援</label>
+                      <span title="【体制Ⅰ】夜間に専従の夜間支援員が常駐（夜勤）。より手厚い支援が必要な利用者向け。加算単価が高い。&#13;【体制Ⅱ】夜間に夜間支援員が巡回または待機（宿直等）。常駐ではない。加算単価が低い。" style={{cursor:"help",fontSize:13,color:"#f59e0b"}}>💡</span>
+                    </div>
+                    <select className="input" value={form.night_support||""} onChange={e=>setForm(f=>({...f,night_support:e.target.value}))}>
+                      {["初期設定と同じ","体制Ⅰ","体制Ⅱ","なし"].map(v=><option key={v}>{v}</option>)}
+                    </select></div>
+                    <div><div style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}>
+                      <label style={{fontSize:12,color:"#64748b"}}>自立生活支援加算</label>
+                      <span title="一人暮らし等を希望する利用者に対し、地域生活に向けた支援計画を作成・実施した場合に算定。本人同意書と具体的な支援記録が必要。" style={{cursor:"help",fontSize:13,color:"#f59e0b"}}>💡</span>
+                    </div>
+                    <select className="input" value={form.independence_support||""} onChange={e=>setForm(f=>({...f,independence_support:e.target.value}))}>
+                      {["--","算定あり","算定なし"].map(v=><option key={v}>{v}</option>)}
+                    </select></div>
                     <F label="ピアサポート実施加算" k="peer_support" opts={["--","算定あり","算定なし"]} form={form} setForm={setForm}/>
                   </div>
                 </div>
@@ -2861,6 +2892,142 @@ export default function App() {
               <SelfPinForm me={me} loadAll={loadAll}/>
             </div>
           )}
+
+
+          {/* ── 掃除当番表 ── */}
+          {tab==="cleaning"&&isAdmin&&(()=>{
+            const DAYS=["月","火","水","木","金","土","日"];
+            const [cleanData,setCleanData]=React.useState(null);
+            const [loaded,setLoaded]=React.useState(false);
+            React.useEffect(()=>{
+              supabase.from("app_settings").select("value").eq("key","cleaning_schedule").single().then(({data})=>{
+                if(data?.value){try{setCleanData(JSON.parse(data.value));}catch(e){}}
+                else setCleanData({日勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""},夜勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""}});
+                setLoaded(true);
+              });
+            },[]);
+            const save=async(newD)=>{
+              setCleanData(newD);
+              await supabase.from("app_settings").upsert({key:"cleaning_schedule",value:JSON.stringify(newD)},{onConflict:"key"});
+            };
+            if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+            return(
+              <div className="fade-in">
+                <PH title="掃除当番表" sub="日勤：事務所掃除 / 夜勤：GH掃除"/>
+                <div className="card" style={{overflowX:"auto"}}>
+                  <table style={{minWidth:500}}>
+                    <thead><tr>
+                      <th style={{width:80}}>区分</th>
+                      {DAYS.map(d=><th key={d} style={{textAlign:"center"}}>{d}</th>)}
+                    </tr></thead>
+                    <tbody>
+                      {["日勤","夜勤"].map(shift=>(
+                        <tr key={shift}>
+                          <td><span style={{fontWeight:700,fontSize:13,color:shift==="日勤"?"#2563eb":"#7c3aed"}}>{shift}</span>
+                            <div style={{fontSize:10,color:"#94a3b8"}}>{shift==="日勤"?"事務所掃除":"GH掃除"}</div>
+                          </td>
+                          {DAYS.map(d=>(
+                            <td key={d} style={{textAlign:"center",padding:"6px 4px"}}>
+                              <select className="input" style={{fontSize:12,padding:"4px 6px",minWidth:70}} value={cleanData?.[shift]?.[d]||""} onChange={e=>{
+                                const newD={...cleanData,[shift]:{...cleanData[shift],[d]:e.target.value}};
+                                save(newD);
+                              }}>
+                                <option value="">--</option>
+                                {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                              </select>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── 備品管理表 ── */}
+          {tab==="supplies"&&isAdmin&&(()=>{
+            const [items,setItems]=React.useState([]);
+            const [loaded,setLoaded]=React.useState(false);
+            const [newItem,setNewItem]=React.useState({name:"",stock:0,min_stock:0,unit:"個",note:""});
+            const [adding,setAdding]=React.useState(false);
+            React.useEffect(()=>{
+              supabase.from("app_settings").select("value").eq("key","supplies_list").single().then(({data})=>{
+                if(data?.value){try{setItems(JSON.parse(data.value));}catch(e){setItems([]);}}
+                else setItems([]);
+                setLoaded(true);
+              });
+            },[]);
+            const saveItems=async(newItems)=>{
+              setItems(newItems);
+              await supabase.from("app_settings").upsert({key:"supplies_list",value:JSON.stringify(newItems)},{onConflict:"key"});
+            };
+            if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+            const low=items.filter(i=>Number(i.stock)<=Number(i.min_stock)&&Number(i.min_stock)>0);
+            return(
+              <div className="fade-in">
+                <PH title="備品管理表" sub="在庫が最低枚数以下になると赤く表示されます"
+                  onAdd={()=>setAdding(true)} addLabel="備品追加"/>
+                {low.length>0&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",marginBottom:12,color:"#dc2626",fontSize:13,fontWeight:600}}>
+                  ⚠️ 発注が必要な備品: {low.map(i=>i.name).join("、")}
+                </div>}
+                {adding&&(
+                  <div className="card" style={{marginBottom:12,background:"#f0f9ff",border:"1px solid #bae6fd"}}>
+                    <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>備品追加</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>品名</label><input className="input" value={newItem.name} onChange={e=>setNewItem(v=>({...v,name:e.target.value}))} placeholder="例：マスク"/></div>
+                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>単位</label><input className="input" value={newItem.unit} onChange={e=>setNewItem(v=>({...v,unit:e.target.value}))} placeholder="個・箱・枚"/></div>
+                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>現在庫数</label><input className="input" type="number" value={newItem.stock} onChange={e=>setNewItem(v=>({...v,stock:e.target.value}))}/></div>
+                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>最低枚数（発注ライン）</label><input className="input" type="number" value={newItem.min_stock} onChange={e=>setNewItem(v=>({...v,min_stock:e.target.value}))}/></div>
+                    </div>
+                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label><input className="input" value={newItem.note} onChange={e=>setNewItem(v=>({...v,note:e.target.value}))}/></div>
+                    <div style={{display:"flex",gap:8,marginTop:10}}>
+                      <button className="btn btn-primary btn-sm" onClick={()=>{
+                        if(!newItem.name.trim()){alert("品名を入力してください");return;}
+                        saveItems([...items,{...newItem,id:Date.now()}]);
+                        setNewItem({name:"",stock:0,min_stock:0,unit:"個",note:""});
+                        setAdding(false);
+                      }}>追加</button>
+                      <button className="btn btn-secondary btn-sm" onClick={()=>setAdding(false)}>キャンセル</button>
+                    </div>
+                  </div>
+                )}
+                <div className="card" style={{overflowX:"auto"}}>
+                  {items.length===0?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>備品が登録されていません</div>:(
+                    <table>
+                      <thead><tr>
+                        <th>品名</th><th>現在庫</th><th>最低枚数</th><th>単位</th><th>備考</th><th></th>
+                      </tr></thead>
+                      <tbody>
+                        {items.map((item,i)=>{
+                          const isLow=Number(item.min_stock)>0&&Number(item.stock)<=Number(item.min_stock);
+                          return(
+                            <tr key={item.id||i} style={{background:isLow?"#fef2f2":""}}>
+                              <td style={{fontWeight:600,color:isLow?"#dc2626":"#0f172a"}}>{item.name}{isLow&&<span style={{marginLeft:6,fontSize:11,background:"#dc2626",color:"white",borderRadius:4,padding:"1px 5px"}}>要発注</span>}</td>
+                              <td style={{textAlign:"center"}}>
+                                <input type="number" style={{width:60,border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 6px",fontSize:13,textAlign:"center",color:isLow?"#dc2626":"#0f172a",fontWeight:isLow?700:400}} value={item.stock} onChange={e=>{
+                                  const newItems=[...items];newItems[i]={...item,stock:e.target.value};saveItems(newItems);
+                                }}/>
+                              </td>
+                              <td style={{textAlign:"center"}}>
+                                <input type="number" style={{width:60,border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 6px",fontSize:13,textAlign:"center"}} value={item.min_stock} onChange={e=>{
+                                  const newItems=[...items];newItems[i]={...item,min_stock:e.target.value};saveItems(newItems);
+                                }}/>
+                              </td>
+                              <td style={{textAlign:"center",color:"#64748b"}}>{item.unit}</td>
+                              <td style={{color:"#64748b",fontSize:12}}>{item.note}</td>
+                              <td><button className="btn btn-red btn-sm" onClick={()=>{if(window.confirm("削除しますか？"))saveItems(items.filter((_,j)=>j!==i));}}>削除</button></td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── 必須保存書類管理 ── */}
           {tab==="docs"&&isAdmin&&(
