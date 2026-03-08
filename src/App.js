@@ -971,6 +971,31 @@ function BillingTab({claims, users, perfs, srecs, today}) {
   );
 }
 
+function SabikanPinResetForm() {
+  const [newPin, setNewPin] = useState("");
+  const [show, setShow] = useState(false);
+  const [ok, setOk] = useState(false);
+  const reset = async () => {
+    if(newPin.length < 4){alert("新しいPINコードは4文字以上で入力してください");return;}
+    await supabase.from("app_settings").upsert({key:"sabikan_pin",value:newPin},{onConflict:"key"});
+    setOk(true); setNewPin(""); setTimeout(()=>setOk(false),3000);
+  };
+  return(
+    <div>
+      {ok&&<div style={{color:"#059669",fontSize:13,marginBottom:8,fontWeight:600}}>✓ PINコードを変更しました</div>}
+      <div style={{display:"flex",gap:8,alignItems:"flex-end"}}>
+        <div style={{flex:1}}>
+          <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>新しいPINコード（4〜6桁）</label>
+          <input className="input" type={show?"text":"password"} maxLength={6} value={newPin} onChange={e=>setNewPin(e.target.value)} placeholder="新しいPIN"/>
+        </div>
+        <button className="btn btn-secondary btn-sm" onClick={()=>setShow(v=>!v)}>{show?"隠す":"表示"}</button>
+        <button className="btn btn-primary btn-sm" onClick={reset}>変更</button>
+      </div>
+      <div style={{fontSize:11,color:"#94a3b8",marginTop:6}}>変更後はサービス管理責任者へ新しいPINをお知らせください</div>
+    </div>
+  );
+}
+
 function SabikanPinForm() {
   const [cur, setCur] = useState("");
   const [nw, setNw] = useState("");
@@ -3040,10 +3065,10 @@ export default function App() {
         <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>グループホーム管理システム</div>
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:32}}>powered by SOMME合同会社</div>
         <div style={{display:"grid",gap:12}}>
-          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={preloadStaff}><Icon name="staff" size={18}/>スタッフログイン</button>
-          <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={()=>setAuth("admin_pin")}><Icon name="shield" size={18}/>管理者ログイン</button>
-          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:12,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("sabikan_pin")}>📋 サービス管理責任者</button>
           <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:12,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏡 利用者ログイン</button>
+          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={preloadStaff}><Icon name="staff" size={18}/>スタッフログイン</button>
+          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:12,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("sabikan_pin")}>📋 サービス管理責任者ログイン</button>
+          <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={()=>setAuth("admin_pin")}><Icon name="shield" size={18}/>管理者ログイン</button>
         </div>
       </div>
     </div>
@@ -3121,6 +3146,7 @@ export default function App() {
     ]},
     {g:"スタッフ",items:[
       {id:"staff",label:"スタッフ管理",icon:"staff"},
+      {id:"sabikan_mgmt",label:"サービス管理責任者管理",icon:"staff"},
       {id:"att_admin",label:"勤怠管理",icon:"clock"},
       {id:"shift_mgmt",label:"シフト管理表",icon:"calendar"},
       {id:"salary",label:"給与計算・支払管理",icon:"wage"},
@@ -4047,6 +4073,44 @@ export default function App() {
             </div>
           )}
 
+          {/* ── サービス管理責任者管理 ── */}
+          {tab==="sabikan_mgmt"&&isAdmin&&(
+            <div className="fade-in">
+              <PH title="サービス管理責任者管理" sub="サビ管アカウント・PINコード管理"/>
+              <div className="card" style={{maxWidth:480,marginBottom:16}}>
+                <div style={{display:"flex",gap:12,alignItems:"flex-start",marginBottom:16}}>
+                  <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>📋</div>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:15}}>サービス管理責任者</div>
+                    <div style={{fontSize:12,color:"#64748b",marginTop:2}}>個別支援計画・利用者支援管理・アセスメント・モニタリング担当</div>
+                  </div>
+                </div>
+                <div style={{background:"#f0f9ff",borderRadius:10,padding:"12px 14px",marginBottom:14,border:"1px solid #bae6fd"}}>
+                  <div style={{fontSize:12,color:"#0369a1",fontWeight:600,marginBottom:6}}>📌 主な業務</div>
+                  <div style={{fontSize:12,color:"#0c4a6e",lineHeight:2}}>
+                    <div>• 個別支援計画の作成・管理・更新</div>
+                    <div>• 利用者のアセスメント・モニタリング</div>
+                    <div>• 現場スタッフへの指導・助言</div>
+                    <div>• 関係機関（医療・相談支援等）との連携</div>
+                    <div>• サービス提供の法令適合管理</div>
+                  </div>
+                </div>
+                <div style={{borderTop:"1px solid #e2e8f0",paddingTop:14}}>
+                  <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>🔑 PINコード管理（管理者による強制変更）</div>
+                  <SabikanPinResetForm/>
+                </div>
+              </div>
+              <div className="card" style={{maxWidth:480,background:"#fffbeb",border:"1px solid #fde68a"}}>
+                <div style={{fontWeight:600,fontSize:13,marginBottom:8,color:"#92400e"}}>⚠️ ご注意</div>
+                <div style={{fontSize:12,color:"#78350f",lineHeight:1.8}}>
+                  <div>• サービス管理責任者ログインには専用PINコードが必要です</div>
+                  <div>• 支援計画・利用者情報へのアクセス権限があります</div>
+                  <div>• PINコードの管理・変更は管理者が行ってください</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* ── 勤怠管理（管理者） ── */}
           {tab==="att_admin"&&isAdmin&&<AttAdminTab attendance={attendance} today={today} loadAll={loadAll} csv={csv}/>}
 
@@ -4608,8 +4672,8 @@ export default function App() {
             </div>
           )}
 
-                    {/* ── 加算ヒント ── */}
-                    {tab==="hints"&&isAdmin&&<HintsTab/>}
+          {/* ── 加算ヒント ── */}
+          {tab==="hints"&&isAdmin&&<HintsTab/>}
 
           {/* ── ニュース ── */}
           {tab==="news"&&(isAdmin||isSabikan)&&(
