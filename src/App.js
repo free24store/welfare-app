@@ -1349,7 +1349,7 @@ function AttendanceEditModal({rec, onClose, onSave}) {
   );
 }
 
-function ShiftMgmtTab({staffList, isAdmin}) {
+function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
   const today = new Date().toISOString().slice(0,10);
   const [selMonth, setSelMonth] = useState(today.slice(0,7));
   const [shiftData, setShiftData] = useState({});
@@ -1401,10 +1401,13 @@ function ShiftMgmtTab({staffList, isAdmin}) {
     await saveData({...shiftData,[k2]:{...shiftData[k2],...cellForm}});
     setEditCell(null);
   };
-  const toggleComplete=async(staffId,date)=>{
-    const k2=skey(staffId,date); const cur=shiftData[k2]||{};
-    if(!cur.shift) return;
-    await saveData({...shiftData,[k2]:{...cur,complete:!cur.complete}});
+  // 打刻連動：対象スタッフの当日退勤打刻が存在するか確認
+  const hasClockedOut = (staffId, date) => {
+    return attendance.some(a => a.staff_id === staffId && a.date === date && a.clock_out);
+  };
+  // スタッフ用：タップ不可（打刻連動のみ）。完了状態は退勤打刻で自動判定
+  const isComplete = (staffId, date) => {
+    return hasClockedOut(staffId, date);
   };
   const countShifts=(staffId)=>{
     const counts={};
@@ -1428,7 +1431,7 @@ function ShiftMgmtTab({staffList, isAdmin}) {
         {SHIFT_TYPES.filter(s=>s.label).map(s=>(
           <span key={s.label} style={{fontSize:11,padding:"2px 8px",borderRadius:6,background:s.bg,color:s.color,fontWeight:700,border:"1px solid "+s.color+"33"}}>{s.short} {s.label}</span>
         ))}
-        <span style={{fontSize:11,padding:"2px 8px",borderRadius:6,background:"#f0fdf4",color:"#059669",border:"1px solid #059669"}}>✓ 完了</span>
+        <span style={{fontSize:11,padding:"2px 8px",borderRadius:6,background:"#f0fdf4",color:"#059669",border:"1px solid #059669"}}>✓ 退勤打刻済</span>
       </div>
       {viewMode==="table"&&(
         <div style={{overflowX:"auto"}}>
@@ -1460,17 +1463,18 @@ function ShiftMgmtTab({staffList, isAdmin}) {
                       const st=SHIFT_TYPES.find(t=>t.label===c.shift)||SHIFT_TYPES[8];
                       return(
                         <td key={s.id} style={{padding:"2px",textAlign:"center"}}>
-                          <div onClick={()=>isAdmin?openEdit(s.id,d):(c.shift&&!["公休","有休","欠勤"].includes(c.shift)&&toggleComplete(s.id,d))}
-                            style={{display:"inline-flex",flexDirection:"column",alignItems:"center",justifyContent:"center",width:46,minHeight:34,borderRadius:6,cursor:"pointer",background:c.complete?"#f0fdf4":st.bg,border:"1px solid "+(c.complete?"#059669":st.color||"#e2e8f0"),position:"relative"}}
-                            title={c.shift?(c.start&&c.end?c.shift+" "+c.start+"〜"+c.end:c.shift):""}>
+                          {(()=>{const done=isComplete(s.id,d);return(
+                          <div onClick={()=>isAdmin?openEdit(s.id,d):undefined}
+                            style={{display:"inline-flex",flexDirection:"column",alignItems:"center",justifyContent:"center",width:46,minHeight:34,borderRadius:6,cursor:isAdmin?"pointer":"default",background:done?"#f0fdf4":st.bg,border:"1px solid "+(done?"#059669":st.color||"#e2e8f0"),position:"relative"}}
+                            title={c.shift?(c.start&&c.end?c.shift+" "+c.start+"〜"+c.end:c.shift)+(done?" ✓退勤済":""):""}>
                             {c.shift?(
                               <>
-                                <span style={{fontSize:12,fontWeight:700,color:c.complete?"#059669":st.color,lineHeight:1}}>{st.short}</span>
+                                <span style={{fontSize:12,fontWeight:700,color:done?"#059669":st.color,lineHeight:1}}>{st.short}</span>
                                 {c.start&&c.end&&!["公休","有休","欠勤"].includes(c.shift)&&<span style={{fontSize:8,color:"#64748b"}}>{c.start}</span>}
-                                {c.complete&&<span style={{position:"absolute",top:1,right:2,fontSize:9,color:"#059669"}}>✓</span>}
+                                {done&&<span style={{position:"absolute",top:1,right:2,fontSize:9,color:"#059669"}}>✓</span>}
                               </>
                             ):(isAdmin&&<span style={{fontSize:16,color:"#e2e8f0"}}>+</span>)}
-                          </div>
+                          </div>);})()}
                         </td>
                       );
                     })}
@@ -1514,12 +1518,13 @@ function ShiftMgmtTab({staffList, isAdmin}) {
                     const c=shiftData[skey(s.id,d)]||{};
                     const st=SHIFT_TYPES.find(t=>t.label===c.shift)||SHIFT_TYPES[8];
                     return(
-                      <div key={d} onClick={()=>isAdmin?openEdit(s.id,d):(c.shift&&!["公休","有休","欠勤"].includes(c.shift)&&toggleComplete(s.id,d))}
-                        style={{width:26,height:26,borderRadius:4,background:c.complete?"#f0fdf4":st.bg,border:"1px solid "+(c.complete?"#059669":st.color||"#e2e8f0"),display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,fontWeight:700,color:c.complete?"#059669":st.color,position:"relative"}}
-                        title={d.slice(5)+(c.shift?" "+c.shift:"")}>
+                      {(()=>{const done=isComplete(s.id,d);return(
+                      <div key={d} onClick={()=>isAdmin?openEdit(s.id,d):undefined}
+                        style={{width:26,height:26,borderRadius:4,background:done?"#f0fdf4":st.bg,border:"1px solid "+(done?"#059669":st.color||"#e2e8f0"),display:"flex",alignItems:"center",justifyContent:"center",cursor:isAdmin?"pointer":"default",fontSize:10,fontWeight:700,color:done?"#059669":st.color,position:"relative"}}
+                        title={d.slice(5)+(c.shift?" "+c.shift:"")+(done?" ✓退勤済":"")}>
                         {c.shift?st.short:d.slice(8)}
-                        {c.complete&&<span style={{position:"absolute",top:-3,right:-3,fontSize:7,background:"#059669",color:"white",borderRadius:"50%",width:9,height:9,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</span>}
-                      </div>
+                        {done&&<span style={{position:"absolute",top:-3,right:-3,fontSize:7,background:"#059669",color:"white",borderRadius:"50%",width:9,height:9,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</span>}
+                      </div>);})()}
                     );
                   })}
                 </div>
@@ -3506,7 +3511,7 @@ export default function App() {
           {tab==="att_admin"&&isAdmin&&<AttAdminTab attendance={attendance} today={today} loadAll={loadAll} csv={csv}/>}
 
           {/* ── シフト管理表 ── */}
-          {tab==="shift_mgmt"&&<div className="fade-in"><ShiftMgmtTab staffList={staffList} isAdmin={isAdmin}/></div>}
+          {tab==="shift_mgmt"&&<div className="fade-in"><ShiftMgmtTab staffList={staffList} isAdmin={isAdmin} attendance={attendance} me={me}/></div>}
 
           {/* ── シフト申請確認（管理者） ── */}
           {tab==="att_admin"&&isAdmin&&shifts.length>0&&(
