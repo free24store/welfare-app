@@ -2223,7 +2223,7 @@ function UserPortalScreen({user, onBack}) {
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#f0fdf4",display:"flex",flexDirection:"column"}}>
       <style>{CSS}</style>
       {/* Header */}
-      <header style={{background:"linear-gradient(135deg,#059669,#0d9488)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+      <header style={{background:"linear-gradient(135deg,#059669,#0d9488)",padding:"14px 20px",paddingTop:"calc(14px + env(safe-area-inset-top))",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{fontSize:22}}>🏡</div>
           <div>
@@ -2969,6 +2969,8 @@ export default function App() {
   const [adminPin, setAdminPin] = useState("");
   const [staffPin, setStaffPin] = useState("");
   const [sabikanPin, setSabikanPin] = useState("");
+  const [sabikanList, setSabikanList] = useState([]);
+  const [selSabikan, setSelSabikan] = useState(null);
   const [pinErr, setPinErr] = useState("");
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
@@ -3063,6 +3065,11 @@ export default function App() {
     const {data} = await supabase.from("staff_members").select("*").order("id");
     setStaffList(data||[]); setAuth("staff_pin");
   };
+  const preloadSabikan = async () => {
+    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_members").single();
+    try{ setSabikanList(JSON.parse(data?.value||"[]")); }catch(e){ setSabikanList([]); }
+    setAuth("sabikan_pin");
+  };
   const loginStaff = () => {
     setPinErr("");
     const f = staffList.find(s=>s.pin===staffPin);
@@ -3079,10 +3086,10 @@ export default function App() {
     setPinErr("");
     const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_pin").single();
     const pin = data?.value || "5678";
-    if(pin===sabikanPin){setIsSabikan(true);setIsAdmin(false);setMe(null);setAuth("app");setTab("plans");}
+    if(pin===sabikanPin){setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");}
     else setPinErr("PINコードが正しくありません");
   };
-  const logout = () => {setAuth("select");setIsAdmin(false);setIsSabikan(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");};
+  const logout = () => {setAuth("select");setIsAdmin(false);setIsSabikan(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");setSelSabikan(null);};
 
   const openModal = (name,init={}) => {setForm(init);setModal(name);setEditId(null);};
   const openEdit = (name,row) => {setForm({...row});setModal(name);setEditId(row.id);};
@@ -3147,7 +3154,7 @@ export default function App() {
         <div style={{display:"grid",gap:12}}>
           <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏡 利用者ログイン</button>
           <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={preloadStaff}><Icon name="staff" size={18}/>スタッフログイン</button>
-          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("sabikan_pin")}>📋 サービス管理責任者ログイン</button>
+          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={preloadSabikan}>📋 サービス管理責任者ログイン</button>
           <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={()=>setAuth("admin_pin")}><Icon name="shield" size={18}/>管理者ログイン</button>
         </div>
       </div>
@@ -3189,13 +3196,15 @@ export default function App() {
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#0369a1,#0c4a6e)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <style>{CSS}</style>
       <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
-        <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:24}}>📋</div>
-        <div style={{fontWeight:700,fontSize:18,marginBottom:4}}>サービス管理責任者</div>
-        <div style={{fontSize:12,color:"#94a3b8",marginBottom:16}}>個別支援計画・利用者支援管理</div>
-        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={sabikanPin} onChange={e=>setSabikanPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginSabikan()}/>
+        <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>サービス管理責任者ログイン</div>
+        <select className="input" style={{marginBottom:10,textAlign:"center"}} onChange={e=>{const s=sabikanList.find(sb=>String(sb.id)===e.target.value);setSelSabikan(s||null);}}>
+          <option value="">担当者を選択...</option>
+          {sabikanList.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={sabikanPin} onChange={e=>setSabikanPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginSabikan()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
-        <button style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8,background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"white",border:"none",borderRadius:12,cursor:"pointer",fontSize:15,fontWeight:600,display:"flex",alignItems:"center",gap:8}} onClick={loginSabikan}><Icon name="check" size={15}/>ログイン</button>
-        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setSabikanPin("");setPinErr("");}}>← 戻る</button>
+        <button style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8,background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontSize:15,fontWeight:600,display:"flex",alignItems:"center",gap:8}} onClick={loginSabikan}><Icon name="check" size={15}/>ログイン</button>
+        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setSabikanPin("");setPinErr("");setSelSabikan(null);}}>← 戻る</button>
       </div>
     </div>
   );
@@ -3305,7 +3314,7 @@ export default function App() {
   return (
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",background:"#f0f4f8",height:"100dvh",display:"flex",flexDirection:"column"}}>
       <style>{CSS}</style>
-      <header style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 14px",height:54,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,zIndex:50}}>
+      <header style={{background:"white",borderBottom:"1px solid #e2e8f0",padding:"0 14px",paddingTop:"env(safe-area-inset-top)",height:"calc(54px + env(safe-area-inset-top))",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           {isMobile && (
             <button onClick={()=>setNavOpen(true)} style={{background:"none",border:"none",cursor:"pointer",padding:"6px",display:"flex",flexDirection:"column",gap:4,alignItems:"center",justifyContent:"center",borderRadius:8}}>
