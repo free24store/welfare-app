@@ -1249,6 +1249,334 @@ function TodoTab({staffList, today, me, isAdmin}) {
   );
 }
 
+function AttAdminTab({attendance, today, loadAll, csv}) {
+  const [attEditRec, setAttEditRec] = useState(null);
+  const [attMonth, setAttMonth] = useState(today.slice(0,7));
+  const filtered = attendance.filter(a=>a.date&&a.date.startsWith(attMonth));
+  return(
+    <div className="fade-in">
+      {attEditRec&&<AttendanceEditModal rec={attEditRec} onClose={()=>setAttEditRec(null)} onSave={()=>{setAttEditRec(null);loadAll();}}/>}
+      <PH title="勤怠管理" sub="全スタッフの勤怠記録"
+        extra={<button className="btn btn-secondary btn-sm" onClick={()=>csv(filtered,"勤怠記録")}><Icon name="download" size={13}/>CSV</button>}
+      />
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
+        <input className="input" type="month" style={{maxWidth:160}} value={attMonth} onChange={e=>setAttMonth(e.target.value)}/>
+        <span style={{fontSize:12,color:"#94a3b8"}}>{filtered.length}件</span>
+      </div>
+      <div className="card" style={{overflowX:"auto"}}>
+        <table>
+          <thead><tr><th>日付</th><th>スタッフ</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>休憩</th><th>備考</th><th>編集</th></tr></thead>
+          <tbody>
+            {filtered.map((a,i)=>{
+              const ci=a.clock_in?new Date(a.clock_in):null;
+              const co=a.clock_out?new Date(a.clock_out):null;
+              const mins=ci&&co?Math.round((co-ci)/60000)-(a.break_minutes||0):null;
+              return(
+                <tr key={i} className="row-hover">
+                  <td className="mono" style={{fontSize:12}}>{a.date}</td>
+                  <td style={{fontWeight:600}}>{a.staff_name}</td>
+                  <td className="mono" style={{fontSize:12}}>{ci?ci.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}):"-"}</td>
+                  <td className="mono" style={{fontSize:12,color:co?"#374151":"#f59e0b"}}>{co?co.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}):"勤務中"}</td>
+                  <td className="mono" style={{fontSize:12,fontWeight:600,color:"#2563eb"}}>{mins!=null?Math.floor(mins/60)+"h"+mins%60+"m":"-"}</td>
+                  <td className="mono" style={{fontSize:12,color:"#94a3b8"}}>{a.break_minutes?a.break_minutes+"分":"-"}</td>
+                  <td style={{fontSize:12}}>{a.note}{a.edited_by&&<span className="tag" style={{background:"#fef3c7",color:"#d97706",marginLeft:4}}>編集済</span>}</td>
+                  <td><button className="btn btn-secondary btn-sm" onClick={()=>setAttEditRec(a)}><Icon name="edit" size={12}/>編集</button></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+        {filtered.length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この月の打刻記録がありません</div>}
+      </div>
+    </div>
+  );
+}
+
+function AttendanceEditModal({rec, onClose, onSave}) {
+  const toLocalTime = (iso) => {
+    if(!iso) return "";
+    const d = new Date(iso);
+    return d.getHours().toString().padStart(2,"0")+":"+d.getMinutes().toString().padStart(2,"0");
+  };
+  const [date, setDate] = useState(rec.date||"");
+  const [inTime, setInTime] = useState(toLocalTime(rec.clock_in));
+  const [outTime, setOutTime] = useState(toLocalTime(rec.clock_out));
+  const [breakMin, setBreakMin] = useState(rec.break_minutes||0);
+  const [note, setNote] = useState(rec.note||"");
+  const save = async () => {
+    const buildISO = (dateStr, timeStr) => {
+      if(!dateStr||!timeStr) return null;
+      return new Date(dateStr+"T"+timeStr+":00").toISOString();
+    };
+    await supabase.from("attendance").update({
+      date, clock_in:buildISO(date,inTime), clock_out:outTime?buildISO(date,outTime):null,
+      break_minutes:Number(breakMin), note, edited_by:"管理者",
+    }).eq("id",rec.id);
+    onSave();
+  };
+  return(
+    <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div style={{background:"white",borderRadius:16,padding:24,width:"100%",maxWidth:400,boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+        <div style={{fontWeight:700,fontSize:16,marginBottom:16}}>勤怠記録の編集</div>
+        <div style={{display:"grid",gap:10,marginBottom:16}}>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>スタッフ</label>
+            <div style={{padding:"8px 12px",background:"#f8fafc",borderRadius:8,fontSize:13,fontWeight:600}}>{rec.staff_name}</div>
+          </div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>日付</label>
+            <input className="input" type="date" value={date} onChange={e=>setDate(e.target.value)}/>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>出勤時刻</label>
+              <input className="input" type="time" value={inTime} onChange={e=>setInTime(e.target.value)}/>
+            </div>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>退勤時刻</label>
+              <input className="input" type="time" value={outTime} onChange={e=>setOutTime(e.target.value)}/>
+            </div>
+          </div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>休憩時間（分）</label>
+            <input className="input" type="number" value={breakMin} onChange={e=>setBreakMin(e.target.value)}/>
+          </div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
+            <input className="input" value={note} onChange={e=>setNote(e.target.value)}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:8}}>
+          <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={save}>保存</button>
+          <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={onClose}>キャンセル</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ShiftMgmtTab({staffList, isAdmin}) {
+  const today = new Date().toISOString().slice(0,10);
+  const [selMonth, setSelMonth] = useState(today.slice(0,7));
+  const [shiftData, setShiftData] = useState({});
+  const [loaded, setLoaded] = useState(false);
+  const [editCell, setEditCell] = useState(null);
+  const [cellForm, setCellForm] = useState({});
+  const [viewMode, setViewMode] = useState("table");
+  const SHIFT_TYPES = [
+    {label:"日勤",short:"日",color:"#2563eb",bg:"#eff6ff",start:"09:00",end:"18:00"},
+    {label:"夜勤",short:"夜",color:"#7c3aed",bg:"#f5f3ff",start:"17:00",end:"09:00"},
+    {label:"早番",short:"早",color:"#059669",bg:"#f0fdf4",start:"07:00",end:"16:00"},
+    {label:"遅番",short:"遅",color:"#d97706",bg:"#fffbeb",start:"11:00",end:"20:00"},
+    {label:"公休",short:"休",color:"#94a3b8",bg:"#f8fafc",start:"",end:""},
+    {label:"有休",short:"有",color:"#10b981",bg:"#ecfdf5",start:"",end:""},
+    {label:"欠勤",short:"欠",color:"#ef4444",bg:"#fef2f2",start:"",end:""},
+    {label:"研修",short:"研",color:"#f59e0b",bg:"#fefce8",start:"",end:""},
+    {label:"",short:"",color:"#e2e8f0",bg:"white",start:"",end:""},
+  ];
+  const ROLES = ["サービス管理責任者","世話人","生活支援員","夜間支援員","管理者","その他"];
+  const WDAYS = ["日","月","火","水","木","金","土"];
+  const getDays = (ym) => {
+    const [y,m] = ym.split("-").map(Number);
+    const days = []; const d = new Date(y,m-1,1);
+    while(d.getMonth()===m-1){ days.push(new Date(d).toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    return days;
+  };
+  const days = getDays(selMonth);
+  const skey = (staffId,date) => staffId+"_"+date;
+  useEffect(()=>{
+    const k="shift_mgmt_"+selMonth;
+    supabase.from("app_settings").select("value").eq("key",k).single().then(({data})=>{
+      if(data?.value){try{setShiftData(JSON.parse(data.value));}catch(e){setShiftData({});}}
+      else setShiftData({});
+      setLoaded(true);
+    });
+  },[selMonth]);
+  const saveData = async(newD)=>{
+    setShiftData(newD);
+    await supabase.from("app_settings").upsert({key:"shift_mgmt_"+selMonth,value:JSON.stringify(newD)},{onConflict:"key"});
+  };
+  const openEdit = (staffId,date)=>{
+    const c=shiftData[skey(staffId,date)]||{};
+    const st=SHIFT_TYPES.find(s=>s.label===c.shift)||SHIFT_TYPES[8];
+    setCellForm({shift:c.shift||"",start:c.start||st.start,end:c.end||st.end,role:c.role||"",note:c.note||""});
+    setEditCell({staffId,date});
+  };
+  const saveCell=async()=>{
+    const k2=skey(editCell.staffId,editCell.date);
+    await saveData({...shiftData,[k2]:{...shiftData[k2],...cellForm}});
+    setEditCell(null);
+  };
+  const toggleComplete=async(staffId,date)=>{
+    const k2=skey(staffId,date); const cur=shiftData[k2]||{};
+    if(!cur.shift) return;
+    await saveData({...shiftData,[k2]:{...cur,complete:!cur.complete}});
+  };
+  const countShifts=(staffId)=>{
+    const counts={};
+    SHIFT_TYPES.filter(s=>s.label).forEach(s=>{counts[s.label]=0;});
+    days.forEach(d=>{const c=shiftData[skey(staffId,d)];if(c?.shift)counts[c.shift]=(counts[c.shift]||0)+1;});
+    return counts;
+  };
+  const weekendBg=(dateStr)=>{ const wd=new Date(dateStr).getDay(); return wd===0?"#fef2f2":wd===6?"#eff6ff":""; };
+  if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+  return(
+    <div className="fade-in">
+      <PH title="シフト管理表（勤務体制一覧）" sub="様式4準拠 — 従業者の勤務体制及び勤務形態一覧表"/>
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
+        <input className="input" type="month" style={{maxWidth:160}} value={selMonth} onChange={e=>setSelMonth(e.target.value)}/>
+        <div style={{display:"flex",gap:6}}>
+          <button className="btn btn-sm" style={{background:viewMode==="table"?"#2563eb":"#f1f5f9",color:viewMode==="table"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("table")}>📊 表形式</button>
+          <button className="btn btn-sm" style={{background:viewMode==="list"?"#2563eb":"#f1f5f9",color:viewMode==="list"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("list")}>📋 スタッフ別</button>
+        </div>
+      </div>
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+        {SHIFT_TYPES.filter(s=>s.label).map(s=>(
+          <span key={s.label} style={{fontSize:11,padding:"2px 8px",borderRadius:6,background:s.bg,color:s.color,fontWeight:700,border:"1px solid "+s.color+"33"}}>{s.short} {s.label}</span>
+        ))}
+        <span style={{fontSize:11,padding:"2px 8px",borderRadius:6,background:"#f0fdf4",color:"#059669",border:"1px solid #059669"}}>✓ 完了</span>
+      </div>
+      {viewMode==="table"&&(
+        <div style={{overflowX:"auto"}}>
+          <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
+            <thead>
+              <tr style={{background:"#1e3a8a",color:"white"}}>
+                <th style={{padding:"8px 6px",textAlign:"left",width:58,position:"sticky",left:0,background:"#1e3a8a",zIndex:10}}>日付</th>
+                <th style={{padding:"8px 4px",width:28,position:"sticky",left:58,background:"#1e3a8a",zIndex:10}}>曜</th>
+                {staffList.map(s=>(
+                  <th key={s.id} style={{padding:"6px 2px",textAlign:"center",width:52}}>
+                    <div style={{fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
+                    <div style={{fontSize:9,opacity:.7}}>{(s.role||"").slice(0,4)}</div>
+                  </th>
+                ))}
+                <th style={{padding:"8px 4px",width:50,textAlign:"center"}}>配置数</th>
+              </tr>
+            </thead>
+            <tbody>
+              {days.map(d=>{
+                const wd=new Date(d).getDay();
+                const bg=weekendBg(d);
+                const workCount=staffList.filter(s=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+                return(
+                  <tr key={d} style={{background:bg||"white",borderBottom:"1px solid #e2e8f0"}}>
+                    <td style={{padding:"3px 6px",fontWeight:600,fontSize:11,position:"sticky",left:0,background:bg||"white",zIndex:5}}>{d.slice(5)}</td>
+                    <td style={{padding:"3px 2px",textAlign:"center",color:wd===0?"#ef4444":wd===6?"#2563eb":"#475569",fontWeight:600,fontSize:11,position:"sticky",left:58,background:bg||"white",zIndex:5}}>{WDAYS[wd]}</td>
+                    {staffList.map(s=>{
+                      const c=shiftData[skey(s.id,d)]||{};
+                      const st=SHIFT_TYPES.find(t=>t.label===c.shift)||SHIFT_TYPES[8];
+                      return(
+                        <td key={s.id} style={{padding:"2px",textAlign:"center"}}>
+                          <div onClick={()=>isAdmin?openEdit(s.id,d):(c.shift&&!["公休","有休","欠勤"].includes(c.shift)&&toggleComplete(s.id,d))}
+                            style={{display:"inline-flex",flexDirection:"column",alignItems:"center",justifyContent:"center",width:46,minHeight:34,borderRadius:6,cursor:"pointer",background:c.complete?"#f0fdf4":st.bg,border:"1px solid "+(c.complete?"#059669":st.color||"#e2e8f0"),position:"relative"}}
+                            title={c.shift?(c.start&&c.end?c.shift+" "+c.start+"〜"+c.end:c.shift):""}>
+                            {c.shift?(
+                              <>
+                                <span style={{fontSize:12,fontWeight:700,color:c.complete?"#059669":st.color,lineHeight:1}}>{st.short}</span>
+                                {c.start&&c.end&&!["公休","有休","欠勤"].includes(c.shift)&&<span style={{fontSize:8,color:"#64748b"}}>{c.start}</span>}
+                                {c.complete&&<span style={{position:"absolute",top:1,right:2,fontSize:9,color:"#059669"}}>✓</span>}
+                              </>
+                            ):(isAdmin&&<span style={{fontSize:16,color:"#e2e8f0"}}>+</span>)}
+                          </div>
+                        </td>
+                      );
+                    })}
+                    <td style={{textAlign:"center",fontWeight:700,fontSize:12,color:workCount>0?"#059669":"#94a3b8"}}>{workCount}名</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr style={{background:"#f8fafc",borderTop:"2px solid #e2e8f0"}}>
+                <td colSpan={2} style={{padding:"6px",fontWeight:700,fontSize:11,position:"sticky",left:0,background:"#f8fafc",zIndex:5}}>月計</td>
+                {staffList.map(s=>{
+                  const counts=countShifts(s.id);
+                  const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+                  return(
+                    <td key={s.id} style={{textAlign:"center",padding:"4px 2px"}}>
+                      <div style={{fontWeight:700,fontSize:12,color:"#2563eb"}}>{workDays}日</div>
+                      <div style={{fontSize:9,color:"#94a3b8"}}>休{(counts["公休"]||0)+(counts["有休"]||0)}日</div>
+                    </td>
+                  );
+                })}
+                <td/>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      )}
+      {viewMode==="list"&&(
+        <div style={{display:"grid",gap:12}}>
+          {staffList.map(s=>{
+            const counts=countShifts(s.id);
+            const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+            return(
+              <div key={s.id} className="card">
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{fontSize:12,color:"#94a3b8"}}>{s.role}</div></div>
+                  <div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:16,color:"#2563eb"}}>{workDays}日</div><div style={{fontSize:11,color:"#94a3b8"}}>勤務予定</div></div>
+                </div>
+                <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                  {days.map(d=>{
+                    const c=shiftData[skey(s.id,d)]||{};
+                    const st=SHIFT_TYPES.find(t=>t.label===c.shift)||SHIFT_TYPES[8];
+                    return(
+                      <div key={d} onClick={()=>isAdmin?openEdit(s.id,d):(c.shift&&!["公休","有休","欠勤"].includes(c.shift)&&toggleComplete(s.id,d))}
+                        style={{width:26,height:26,borderRadius:4,background:c.complete?"#f0fdf4":st.bg,border:"1px solid "+(c.complete?"#059669":st.color||"#e2e8f0"),display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:10,fontWeight:700,color:c.complete?"#059669":st.color,position:"relative"}}
+                        title={d.slice(5)+(c.shift?" "+c.shift:"")}>
+                        {c.shift?st.short:d.slice(8)}
+                        {c.complete&&<span style={{position:"absolute",top:-3,right:-3,fontSize:7,background:"#059669",color:"white",borderRadius:"50%",width:9,height:9,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+                  {SHIFT_TYPES.filter(s2=>s2.label&&counts[s2.label]>0).map(s2=>(
+                    <span key={s2.label} style={{fontSize:11,color:s2.color,background:s2.bg,borderRadius:4,padding:"1px 6px"}}>{s2.label} {counts[s2.label]}日</span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {editCell&&isAdmin&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(15,23,42,.6)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+          <div style={{background:"white",borderRadius:16,padding:24,width:"100%",maxWidth:360,boxShadow:"0 20px 60px rgba(0,0,0,.3)"}}>
+            <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>シフト編集</div>
+            <div style={{fontSize:12,color:"#94a3b8",marginBottom:14}}>{staffList.find(s=>s.id===editCell.staffId)?.name} — {editCell.date}</div>
+            <div style={{display:"grid",gap:10}}>
+              <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:6}}>シフト区分</label>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                  {SHIFT_TYPES.filter(s=>s.label).map(s=>(
+                    <button key={s.label} onClick={()=>{const def=SHIFT_TYPES.find(t=>t.label===s.label)||{};setCellForm(f=>({...f,shift:s.label,start:def.start||f.start,end:def.end||f.end}));}}
+                      style={{padding:"8px 2px",borderRadius:8,border:"2px solid "+(cellForm.shift===s.label?s.color:"#e2e8f0"),background:cellForm.shift===s.label?s.bg:"white",color:s.color,fontWeight:700,fontSize:11,cursor:"pointer"}}>
+                      {s.short}<br/><span style={{fontSize:9,fontWeight:400}}>{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {cellForm.shift&&!["公休","有休","欠勤"].includes(cellForm.shift)&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>開始</label><input className="input" type="time" value={cellForm.start||""} onChange={e=>setCellForm(f=>({...f,start:e.target.value}))}/></div>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>終了</label><input className="input" type="time" value={cellForm.end||""} onChange={e=>setCellForm(f=>({...f,end:e.target.value}))}/></div>
+                </div>
+              )}
+              <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>職種・役割</label>
+                <select className="input" value={cellForm.role||""} onChange={e=>setCellForm(f=>({...f,role:e.target.value}))}>
+                  <option value="">選択...</option>
+                  {ROLES.map(r=><option key={r}>{r}</option>)}
+                </select>
+              </div>
+              <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
+                <input className="input" value={cellForm.note||""} onChange={e=>setCellForm(f=>({...f,note:e.target.value}))} placeholder="特記事項"/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:14}}>
+              <button className="btn btn-primary btn-sm" style={{flex:1,justifyContent:"center"}} onClick={saveCell}>保存</button>
+              <button className="btn btn-red btn-sm" onClick={async()=>{const k2=skey(editCell.staffId,editCell.date);const newD={...shiftData};delete newD[k2];await saveData(newD);setEditCell(null);}}>削除</button>
+              <button className="btn btn-secondary btn-sm" onClick={()=>setEditCell(null)}>閉じる</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function CleaningTab({staffList}) {
   const today = new Date().toISOString().slice(0,10);
   const [records, setRecords] = useState([]); // [{date, shift, staff, done, note}]
@@ -2369,7 +2697,6 @@ export default function App() {
         <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#7c3aed,#4c1d95)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><Icon name="shield" size={22}/></div>
         <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>管理者ログイン</div>
         <input className="input" type="password" maxLength={6} placeholder="管理者PIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginAdmin()}/>
-        <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>デフォルト: 1234</div>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8}} onClick={loginAdmin}><Icon name="check" size={15}/>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setAdminPin("");setPinErr("");}}>← 戻る</button>
@@ -2403,8 +2730,8 @@ export default function App() {
     {g:"スタッフ",items:[
       {id:"staff",label:"スタッフ管理",icon:"staff"},
       {id:"att_admin",label:"勤怠管理",icon:"clock"},
+      {id:"shift_mgmt",label:"シフト管理表",icon:"calendar"},
       {id:"salary",label:"給与計算・支払管理",icon:"wage"},
-      {id:"password",label:"パスワード変更",icon:"shield"},
     ]},
     {g:"送迎・経理",items:[
       {id:"transport",label:"送迎管理",icon:"car"},
@@ -2426,14 +2753,17 @@ export default function App() {
       {id:"hints",label:"加算ヒント",icon:"hint"},
       {id:"news",label:"最新ニュース",icon:"news"},
     ]},
+    {g:"設定",items:[
+      {id:"password",label:"パスワード変更",icon:"shield"},
+    ]},
   ];
   const staffTabs = [
     {g:"業務",items:[
       {id:"todo",label:"TODO・ルーティン",icon:"check"},
       {id:"attendance",label:"勤怠打刻",icon:"clock"},
+      {id:"shift_mgmt",label:"シフト確認",icon:"calendar"},
       {id:"my_salary",label:"給料・シフト確認",icon:"wage"},
       {id:"shift_req",label:"シフト希望・訂正",icon:"calendar"},
-      {id:"staff_password",label:"パスワード変更",icon:"shield"},
       {id:"srecs",label:"支援記録入力",icon:"book"},
       {id:"journal",label:"業務日誌確認",icon:"calendar"},
       {id:"transport",label:"送迎記録",icon:"car"},
@@ -2441,6 +2771,9 @@ export default function App() {
     {g:"連絡",items:[
       {id:"msgs",label:"利用者メッセージ",icon:"message",badge:unread},
       {id:"scheds",label:"予定確認",icon:"calendar"},
+    ]},
+    {g:"設定",items:[
+      {id:"staff_password",label:"パスワード変更",icon:"shield"},
     ]},
   ];
   const tabs = isAdmin ? adminTabs : staffTabs;
@@ -3170,37 +3503,10 @@ export default function App() {
           )}
 
           {/* ── 勤怠管理（管理者） ── */}
-          {tab==="att_admin"&&isAdmin&&(
-            <div className="fade-in">
-              <PH title="勤怠管理" sub="全スタッフの勤怠記録"
-                extra={<button className="btn btn-secondary btn-sm" onClick={()=>csv(attendance,"勤怠記録")}><Icon name="download" size={13}/>CSV</button>}
-              />
-              <div className="card">
-                <table>
-                  <thead><tr><th>日付</th><th>スタッフ</th><th>出勤</th><th>退勤</th><th>勤務時間</th><th>備考</th><th>編集</th></tr></thead>
-                  <tbody>
-                    {attendance.slice(0,50).map((a,i)=>{
-                      const ci=a.clock_in?new Date(a.clock_in):null;
-                      const co=a.clock_out?new Date(a.clock_out):null;
-                      const mins=ci&&co?Math.round((co-ci)/60000)-(a.break_minutes||0):null;
-                      return(
-                        <tr key={i} className="row-hover">
-                          <td className="mono" style={{fontSize:12}}>{a.date}</td>
-                          <td style={{fontWeight:600}}>{a.staff_name}</td>
-                          <td className="mono" style={{fontSize:12}}>{ci?ci.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}):"-"}</td>
-                          <td className="mono" style={{fontSize:12,color:co?"#374151":"#f59e0b"}}>{co?co.toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}):"勤務中"}</td>
-                          <td className="mono" style={{fontSize:12,fontWeight:600}}>{mins?`${Math.floor(mins/60)}h${mins%60}m`:"-"}</td>
-                          <td style={{fontSize:12}}>{a.note}{a.edited_by&&<span className="tag" style={{background:"#fef3c7",color:"#d97706",marginLeft:4}}>編集済</span>}</td>
-                          <td><button className="btn btn-secondary btn-sm" onClick={()=>{const n=window.prompt("備考",a.note||"");if(n!==null)supabase.from("attendance").update({note:n,edited_by:"管理者"}).eq("id",a.id).then(()=>loadAll());}}><Icon name="edit" size={12}/></button></td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-                {attendance.length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>打刻記録がありません</div>}
-              </div>
-            </div>
-          )}
+          {tab==="att_admin"&&isAdmin&&<AttAdminTab attendance={attendance} today={today} loadAll={loadAll} csv={csv}/>}
+
+          {/* ── シフト管理表 ── */}
+          {tab==="shift_mgmt"&&<div className="fade-in"><ShiftMgmtTab staffList={staffList} isAdmin={isAdmin}/></div>}
 
           {/* ── シフト申請確認（管理者） ── */}
           {tab==="att_admin"&&isAdmin&&shifts.length>0&&(
