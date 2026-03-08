@@ -1575,7 +1575,7 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
   const getDays = (ym) => {
     const [y,m] = ym.split("-").map(Number);
     const days = []; const d = new Date(y,m-1,1);
-    while(d.getMonth()===m-1){ days.push(new Date(d).toISOString().slice(0,10)); d.setDate(d.getDate()+1); }
+    while(d.getMonth()===m-1){ days.push(y+"-"+String(m).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")); d.setDate(d.getDate()+1); }
     return days;
   };
   const days = getDays(selMonth);
@@ -1636,14 +1636,14 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
         <span style={{fontSize:11,padding:"2px 8px",borderRadius:6,background:"#f0fdf4",color:"#059669",border:"1px solid #059669"}}>✓ 退勤打刻済</span>
       </div>
       {viewMode==="table"&&(
-        <div style={{overflowX:"auto"}}>
+        <div style={{overflowX:"auto",overflowY:"auto",maxHeight:"calc(100vh - 260px)"}}>
           <table style={{borderCollapse:"collapse",fontSize:11,tableLayout:"fixed"}}>
             <thead>
               <tr style={{background:"#1e3a8a",color:"white"}}>
-                <th style={{padding:"8px 6px",textAlign:"left",width:58,position:"sticky",left:0,background:"#1e3a8a",zIndex:10}}>日付</th>
-                <th style={{padding:"8px 4px",width:28,position:"sticky",left:58,background:"#1e3a8a",zIndex:10}}>曜</th>
+                <th style={{padding:"8px 6px",textAlign:"left",width:58,position:"sticky",left:0,top:0,background:"#1e3a8a",zIndex:20}}>日付</th>
+                <th style={{padding:"8px 4px",width:28,position:"sticky",left:58,top:0,background:"#1e3a8a",zIndex:20}}>曜</th>
                 {staffList.map(s=>(
-                  <th key={s.id} style={{padding:"6px 2px",textAlign:"center",width:52}}>
+                  <th key={s.id} style={{padding:"6px 2px",textAlign:"center",width:52,position:"sticky",top:0,background:"#1e3a8a",zIndex:10}}>
                     <div style={{fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{s.name}</div>
                     <div style={{fontSize:9,opacity:.7}}>{(s.role||"").slice(0,4)}</div>
                   </th>
@@ -1761,12 +1761,6 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>休憩（分）</label><input className="input" type="number" min={0} max={240} value={cellForm.break_minutes!==undefined?cellForm.break_minutes:""} onChange={e=>setCellForm(f=>({...f,break_minutes:e.target.value===""?"":parseInt(e.target.value)||0}))}/></div>
                 </div>
               )}
-              <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>職種・役割</label>
-                <select className="input" value={cellForm.role||""} onChange={e=>setCellForm(f=>({...f,role:e.target.value}))}>
-                  <option value="">選択...</option>
-                  {ROLES.map(r=><option key={r}>{r}</option>)}
-                </select>
-              </div>
               <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
                 <input className="input" value={cellForm.note||""} onChange={e=>setCellForm(f=>({...f,note:e.target.value}))} placeholder="特記事項"/>
               </div>
