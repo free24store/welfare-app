@@ -1648,7 +1648,7 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
                     <div style={{fontSize:9,opacity:.7}}>{(s.role||"").slice(0,4)}</div>
                   </th>
                 ))}
-                <th style={{padding:"8px 4px",width:50,textAlign:"center"}}>配置数</th>
+                <th style={{padding:"8px 4px",width:50,textAlign:"center",position:"sticky",right:0,top:0,background:"#1e3a8a",zIndex:20}}>配置数</th>
               </tr>
             </thead>
             <tbody>
@@ -1680,7 +1680,7 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
                         </td>
                       );
                     })}
-                    <td style={{textAlign:"center",fontWeight:700,fontSize:12,color:workCount>0?"#059669":"#94a3b8"}}>{workCount}名</td>
+                    <td style={{textAlign:"center",fontWeight:700,fontSize:12,color:workCount>0?"#059669":"#94a3b8",position:"sticky",right:0,background:bg||"white",zIndex:5}}>{workCount}名</td>
                   </tr>
                 );
               })}
