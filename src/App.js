@@ -3152,10 +3152,10 @@ export default function App() {
         <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>グループホーム管理システム</div>
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:32}}>powered by SOMME合同会社</div>
         <div style={{display:"grid",gap:12}}>
-          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏡 利用者ログイン</button>
-          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={preloadStaff}><Icon name="staff" size={18}/>スタッフログイン</button>
-          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={preloadSabikan}>📋 サービス管理責任者ログイン</button>
-          <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={()=>setAuth("admin_pin")}><Icon name="shield" size={18}/>管理者ログイン</button>
+          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏠 利用者ログイン</button>
+          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={preloadStaff}>☘️ スタッフログイン</button>
+          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#0369a1,#0e7490)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={preloadSabikan}>📚 サービス管理責任者ログイン</button>
+          <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={()=>setAuth("admin_pin")}>🔑 管理者ログイン</button>
         </div>
       </div>
     </div>
