@@ -1664,12 +1664,15 @@ function HintsTab() {
 
 function UserLoginScreen({onBack, onLogin}) {
   const [users, setUsers] = useState([]);
+  const [selId, setSelId] = useState("");
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
-  useEffect(()=>{ supabase.from("users").select("id,name,access_code,room,unit,status").then(({data})=>setUsers(data||[])); },[]);
+  useEffect(()=>{ supabase.from("users").select("id,name,access_code,room,unit,status").eq("status","在籍").then(({data})=>setUsers(data||[])); },[]);
   const login = () => {
-    const u = users.find(x=>x.access_code&&x.access_code===code.trim());
-    if(!u){ setErr("アクセスコードが違います"); return; }
+    const u = selId ? users.find(x=>x.id===parseInt(selId)) : null;
+    if(!u){ setErr("名前を選択してください"); return; }
+    if(!u.access_code){ setErr("アクセスコードが設定されていません。スタッフにお問い合わせください"); return; }
+    if(u.access_code !== code.trim()){ setErr("アクセスコードが違います"); return; }
     onLogin(u);
   };
   return(
@@ -1678,10 +1681,20 @@ function UserLoginScreen({onBack, onLogin}) {
       <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
         <div style={{width:64,height:64,borderRadius:18,background:"linear-gradient(135deg,#059669,#0d9488)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,margin:"0 auto 16px"}}>🏡</div>
         <div style={{fontWeight:800,fontSize:17,color:"#0f172a",marginBottom:4}}>利用者ポータル</div>
-        <div style={{fontSize:13,color:"#94a3b8",marginBottom:28}}>アクセスコードでログイン</div>
-        <input className="input" type="password" maxLength={8} placeholder="アクセスコード" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={code} onChange={e=>setCode(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/>
-        {err&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{err}</div>}
-        <button style={{width:"100%",padding:"13px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700,marginBottom:10}} onClick={login}>ログイン</button>
+        <div style={{fontSize:13,color:"#94a3b8",marginBottom:24}}>名前を選んでログイン</div>
+        <div style={{textAlign:"left",marginBottom:10}}>
+          <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:4}}>お名前</label>
+          <select className="input" style={{fontSize:15}} value={selId} onChange={e=>{setSelId(e.target.value);setErr("");}}>
+            <option value="">名前を選択してください</option>
+            {users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+          </select>
+        </div>
+        <div style={{textAlign:"left",marginBottom:10}}>
+          <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:4}}>アクセスコード</label>
+          <input className="input" type="password" maxLength={8} placeholder="コードを入力" style={{textAlign:"center",fontSize:22,letterSpacing:8}} value={code} onChange={e=>{setCode(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&login()}/>
+        </div>
+        {err&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8,textAlign:"left"}}>{err}</div>}
+        <button style={{width:"100%",padding:"13px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700,marginBottom:10,marginTop:6}} onClick={login}>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={onBack}>← 戻る</button>
       </div>
     </div>
