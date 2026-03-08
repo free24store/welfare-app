@@ -1062,6 +1062,193 @@ function SelfPinForm({me,loadAll}) {
   );
 }
 
+function TodoTab({staffList, today, me, isAdmin}) {
+  const [todos, setTodos] = useState([]);       // マスターTODOリスト
+  const [records, setRecords] = useState([]);   // 日付別チェック記録
+  const [loaded, setLoaded] = useState(false);
+  const [selDate, setSelDate] = useState(today);
+  const [viewMode, setViewMode] = useState("check"); // "check"|"manage"|"history"
+  const [newTodo, setNewTodo] = useState({title:"",category:"業務",assignee:"全員",note:""});
+  const [adding, setAdding] = useState(false);
+  const [histMonth, setHistMonth] = useState(today.slice(0,7));
+
+  const CATS = ["業務","清掃","服薬確認","安全確認","書類","ルーティン","その他"];
+  const DEFAULT_TODOS = [
+    {id:"d1",title:"利用者の健康確認（体温・体調）",category:"安全確認",assignee:"全員",note:""},
+    {id:"d2",title:"服薬確認・記録",category:"服薬確認",assignee:"全員",note:""},
+    {id:"d3",title:"支援記録の入力",category:"書類",assignee:"全員",note:""},
+    {id:"d4",title:"申し送り事項の確認",category:"業務",assignee:"全員",note:""},
+    {id:"d5",title:"居室・共用部の清掃確認",category:"清掃",assignee:"全員",note:""},
+    {id:"d6",title:"冷蔵庫・食品の確認",category:"ルーティン",assignee:"全員",note:""},
+    {id:"d7",title:"鍵・施錠確認",category:"安全確認",assignee:"全員",note:""},
+  ];
+
+  useEffect(()=>{
+    Promise.all([
+      supabase.from("app_settings").select("value").eq("key","todo_master").single(),
+      supabase.from("app_settings").select("value").eq("key","todo_records").single(),
+    ]).then(([t,r])=>{
+      if(t.data?.value){try{setTodos(JSON.parse(t.data.value));}catch(e){setTodos(DEFAULT_TODOS);}}
+      else setTodos(DEFAULT_TODOS);
+      if(r.data?.value){try{setRecords(JSON.parse(r.data.value));}catch(e){setRecords([]);}}
+      else setRecords([]);
+      setLoaded(true);
+    });
+  },[]);
+
+  const saveTodos = async(newT)=>{ setTodos(newT); await supabase.from("app_settings").upsert({key:"todo_master",value:JSON.stringify(newT)},{onConflict:"key"}); };
+  const saveRecords = async(newR)=>{ setRecords(newR); await supabase.from("app_settings").upsert({key:"todo_records",value:JSON.stringify(newR)},{onConflict:"key"}); };
+
+  const getCheck = (date, todoId) => records.find(r=>r.date===date&&r.todoId===todoId);
+  const toggleCheck = (todoId, staffName) => {
+    const existing = getCheck(selDate, todoId);
+    let newR;
+    if(existing) newR = records.map(r=>r.date===selDate&&r.todoId===todoId ? {...r,done:!r.done,staff:staffName,time:new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})} : r);
+    else newR = [...records, {date:selDate,todoId,done:true,staff:staffName,time:new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})}];
+    saveRecords(newR);
+  };
+
+  if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+
+  const todayTodos = todos;
+  const checkedCount = todayTodos.filter(t=>getCheck(selDate,t.id)?.done).length;
+  const pct = todayTodos.length>0 ? Math.round(checkedCount/todayTodos.length*100) : 0;
+
+  // History
+  const histDates = [...new Set(records.filter(r=>r.date.startsWith(histMonth)&&r.done).map(r=>r.date))].sort((a,b)=>b.localeCompare(a));
+
+  return(
+    <div>
+      <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
+        {[["check","✅ チェック"],["manage","⚙️ TODO管理"],["history","📋 履歴"]].map(([v,l])=>(
+          <button key={v} className="btn btn-sm" style={{background:viewMode===v?"#2563eb":"#f1f5f9",color:viewMode===v?"white":"#475569",border:"none"}} onClick={()=>setViewMode(v)}>{l}</button>
+        ))}
+      </div>
+
+      {viewMode==="check"&&(
+        <>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
+            <input className="input" type="date" style={{flex:1,maxWidth:170}} value={selDate} onChange={e=>setSelDate(e.target.value)}/>
+            <div style={{fontSize:12,color:"#64748b"}}>{checkedCount}/{todayTodos.length} 完了</div>
+          </div>
+          <div style={{background:"#f1f5f9",borderRadius:8,height:8,marginBottom:14,overflow:"hidden"}}>
+            <div style={{height:"100%",background:pct===100?"#059669":"#2563eb",width:pct+"%",borderRadius:8,transition:"width .3s"}}/>
+          </div>
+          {CATS.filter(cat=>todos.some(t=>t.category===cat)).map(cat=>{
+            const catTodos = todos.filter(t=>t.category===cat);
+            return(
+              <div key={cat} style={{marginBottom:14}}>
+                <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",letterSpacing:"0.05em",marginBottom:6}}>{cat.toUpperCase()}</div>
+                <div style={{display:"grid",gap:6}}>
+                  {catTodos.map(todo=>{
+                    const rec = getCheck(selDate, todo.id);
+                    const done = rec?.done||false;
+                    return(
+                      <div key={todo.id} onClick={()=>toggleCheck(todo.id, me?.name||"管理者")}
+                        style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:done?"#f0fdf4":"white",border:`1px solid ${done?"#bbf7d0":"#e2e8f0"}`,cursor:"pointer",transition:"all .15s"}}>
+                        <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${done?"#059669":"#cbd5e1"}`,background:done?"#059669":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                          {done&&<span style={{color:"white",fontSize:12,fontWeight:700}}>✓</span>}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:13,fontWeight:500,color:done?"#059669":"#0f172a",textDecoration:done?"line-through":"none"}}>{todo.title}</div>
+                          {todo.assignee!=="全員"&&<div style={{fontSize:11,color:"#94a3b8"}}>{todo.assignee}</div>}
+                          {todo.note&&<div style={{fontSize:11,color:"#94a3b8"}}>{todo.note}</div>}
+                        </div>
+                        {done&&<div style={{fontSize:10,color:"#059669",flexShrink:0,textAlign:"right"}}>{rec.staff}<br/>{rec.time}</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </>
+      )}
+
+      {viewMode==="manage"&&isAdmin&&(
+        <>
+          <button className="btn btn-primary btn-sm" style={{marginBottom:12}} onClick={()=>setAdding(true)}>＋ TODO追加</button>
+          {adding&&(
+            <div className="card" style={{marginBottom:12,background:"#f0f9ff",border:"1px solid #bae6fd"}}>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>新規TODO</div>
+              <div style={{display:"grid",gap:8}}>
+                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>タイトル</label><input className="input" value={newTodo.title} onChange={e=>setNewTodo(v=>({...v,title:e.target.value}))} placeholder="例：服薬確認"/></div>
+                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>カテゴリ</label>
+                  <select className="input" value={newTodo.category} onChange={e=>setNewTodo(v=>({...v,category:e.target.value}))}>
+                    {CATS.map(c=><option key={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当</label>
+                  <select className="input" value={newTodo.assignee} onChange={e=>setNewTodo(v=>({...v,assignee:e.target.value}))}>
+                    <option>全員</option>
+                    {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
+                </div>
+                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label><input className="input" value={newTodo.note} onChange={e=>setNewTodo(v=>({...v,note:e.target.value}))}/></div>
+              </div>
+              <div style={{display:"flex",gap:8,marginTop:10}}>
+                <button className="btn btn-primary btn-sm" onClick={()=>{
+                  if(!newTodo.title.trim()){alert("タイトルを入力してください");return;}
+                  saveTodos([...todos,{...newTodo,id:"c"+Date.now()}]);
+                  setNewTodo({title:"",category:"業務",assignee:"全員",note:""});
+                  setAdding(false);
+                }}>追加</button>
+                <button className="btn btn-secondary btn-sm" onClick={()=>setAdding(false)}>キャンセル</button>
+              </div>
+            </div>
+          )}
+          <div style={{display:"grid",gap:8}}>
+            {todos.map((todo,i)=>(
+              <div key={todo.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"white",borderRadius:10,border:"1px solid #e2e8f0"}}>
+                <div style={{flex:1,minWidth:0}}>
+                  <div style={{fontSize:13,fontWeight:600}}>{todo.title}</div>
+                  <div style={{fontSize:11,color:"#94a3b8"}}>{todo.category} · {todo.assignee}</div>
+                  {todo.note&&<div style={{fontSize:11,color:"#94a3b8"}}>{todo.note}</div>}
+                </div>
+                <button className="btn btn-red btn-sm" onClick={()=>{if(window.confirm("削除しますか？"))saveTodos(todos.filter((_,j)=>j!==i));}}>削除</button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {viewMode==="history"&&(
+        <>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
+            <input className="input" type="month" style={{flex:1,maxWidth:170}} value={histMonth} onChange={e=>setHistMonth(e.target.value)}/>
+          </div>
+          {histDates.length===0
+            ?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この月の記録はありません</div>
+            :histDates.map(date=>{
+              const dayRecs = records.filter(r=>r.date===date&&r.done);
+              const dayPct = Math.round(dayRecs.length/todos.length*100);
+              return(
+                <div key={date} className="card" style={{marginBottom:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <div style={{fontWeight:700,fontSize:13}}>{date}</div>
+                    <span style={{fontSize:12,background:dayPct===100?"#ecfdf5":"#fef3c7",color:dayPct===100?"#059669":"#d97706",borderRadius:6,padding:"2px 8px"}}>{dayRecs.length}/{todos.length} ({dayPct}%)</span>
+                  </div>
+                  <div style={{display:"grid",gap:4}}>
+                    {todos.map(todo=>{
+                      const rec = records.find(r=>r.date===date&&r.todoId===todo.id&&r.done);
+                      return(
+                        <div key={todo.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"3px 0",borderBottom:"1px solid #f8fafc"}}>
+                          <span style={{color:rec?"#059669":"#94a3b8"}}>{rec?"✅":"⬜"} {todo.title}</span>
+                          {rec&&<span style={{fontSize:11,color:"#94a3b8"}}>{rec.staff} {rec.time}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })
+          }
+        </>
+      )}
+    </div>
+  );
+}
+
 function CleaningTab({staffList}) {
   const today = new Date().toISOString().slice(0,10);
   const [records, setRecords] = useState([]); // [{date, shift, staff, done, note}]
@@ -1475,6 +1662,353 @@ function HintsTab() {
   );
 }
 
+function UserLoginScreen({onBack, onLogin}) {
+  const [users, setUsers] = useState([]);
+  const [code, setCode] = useState("");
+  const [err, setErr] = useState("");
+  useEffect(()=>{ supabase.from("users").select("id,name,access_code,room,unit,status").then(({data})=>setUsers(data||[])); },[]);
+  const login = () => {
+    const u = users.find(x=>x.access_code&&x.access_code===code.trim());
+    if(!u){ setErr("アクセスコードが違います"); return; }
+    onLogin(u);
+  };
+  return(
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#064e3b,#0f172a)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{CSS}</style>
+      <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
+        <div style={{width:64,height:64,borderRadius:18,background:"linear-gradient(135deg,#059669,#0d9488)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:30,margin:"0 auto 16px"}}>🏡</div>
+        <div style={{fontWeight:800,fontSize:17,color:"#0f172a",marginBottom:4}}>利用者ポータル</div>
+        <div style={{fontSize:13,color:"#94a3b8",marginBottom:28}}>アクセスコードでログイン</div>
+        <input className="input" type="password" maxLength={8} placeholder="アクセスコード" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={code} onChange={e=>setCode(e.target.value)} onKeyDown={e=>e.key==="Enter"&&login()}/>
+        {err&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{err}</div>}
+        <button style={{width:"100%",padding:"13px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700,marginBottom:10}} onClick={login}>ログイン</button>
+        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={onBack}>← 戻る</button>
+      </div>
+    </div>
+  );
+}
+
+function UserPortalScreen({user, onBack}) {
+  const [notices, setNotices] = useState([]);
+  const [myMsgs, setMyMsgs] = useState([]);
+  const [staffReplies, setStaffReplies] = useState([]);
+  const [tab, setTab] = useState("home");
+  const [msgText, setMsgText] = useState("");
+  const [msgCat, setMsgCat] = useState("体調報告");
+  const [sent, setSent] = useState(false);
+  const [plans, setPlans] = useState([]);
+  const [health, setHealth] = useState([]);
+  const today = new Date().toISOString().slice(0,10);
+
+  useEffect(()=>{
+    Promise.all([
+      supabase.from("app_settings").select("value").eq("key","user_notices").single(),
+      supabase.from("user_messages").select("*").eq("user_id",user.id).order("created_at",{ascending:false}),
+      supabase.from("support_plans").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(3),
+      supabase.from("health_records").select("*").eq("user_id",user.id).order("date",{ascending:false}).limit(7),
+    ]).then(([n,m,p,h])=>{
+      if(n.data?.value){try{setNotices(JSON.parse(n.data.value));}catch(e){setNotices([]);}}
+      setMyMsgs(m.data||[]);
+      setPlans(p.data||[]);
+      setHealth(h.data||[]);
+    });
+  },[user.id]);
+
+  const sendMsg = async() => {
+    if(!msgText.trim()){alert("メッセージを入力してください");return;}
+    await supabase.from("user_messages").insert({user_id:user.id,user_name:user.name,access_code:user.access_code,message:msgText,category:msgCat,is_read:false});
+    setSent(true); setMsgText("");
+    const {data} = await supabase.from("user_messages").select("*").eq("user_id",user.id).order("created_at",{ascending:false});
+    setMyMsgs(data||[]);
+  };
+
+  const unreadReplies = myMsgs.filter(m=>m.staff_reply&&!m.reply_read).length;
+
+  const PORTAL_TABS = [
+    {id:"home",icon:"🏠",label:"ホーム"},
+    {id:"notice",icon:"📢",label:"お知らせ"},
+    {id:"message",icon:"💬",label:"メッセージ"},
+    {id:"health",icon:"❤️",label:"健康記録"},
+    {id:"plan",icon:"📋",label:"支援計画"},
+  ];
+
+  return(
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#f0fdf4",display:"flex",flexDirection:"column"}}>
+      <style>{CSS}</style>
+      {/* Header */}
+      <header style={{background:"linear-gradient(135deg,#059669,#0d9488)",padding:"14px 20px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{fontSize:22}}>🏡</div>
+          <div>
+            <div style={{fontWeight:800,fontSize:15,color:"white"}}>{user.name} さん</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,.7)"}}>{user.unit} {user.room}号室</div>
+          </div>
+        </div>
+        <button style={{background:"rgba(255,255,255,.2)",border:"none",color:"white",borderRadius:8,padding:"6px 12px",fontSize:12,cursor:"pointer"}} onClick={onBack}>ログアウト</button>
+      </header>
+
+      {/* Tab nav */}
+      <div style={{background:"white",borderBottom:"1px solid #d1fae5",display:"flex",overflowX:"auto",flexShrink:0}}>
+        {PORTAL_TABS.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{flex:"0 0 auto",padding:"10px 16px",border:"none",background:"none",borderBottom:tab===t.id?"3px solid #059669":"3px solid transparent",color:tab===t.id?"#059669":"#64748b",fontWeight:tab===t.id?700:400,fontSize:12,cursor:"pointer",display:"flex",flexDirection:"column",alignItems:"center",gap:2}}>
+            <span style={{fontSize:18}}>{t.icon}</span><span>{t.label}</span>
+          </button>
+        ))}
+      </div>
+
+      <div style={{flex:1,overflowY:"auto",padding:"16px"}}>
+
+        {/* ホーム */}
+        {tab==="home"&&(
+          <div className="fade-in">
+            <div style={{background:"linear-gradient(135deg,#059669,#0d9488)",borderRadius:16,padding:"20px",color:"white",marginBottom:16,textAlign:"center"}}>
+              <div style={{fontSize:14,marginBottom:4}}>{today}</div>
+              <div style={{fontSize:22,fontWeight:800}}>こんにちは、{user.name}さん 👋</div>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+              {[
+                {icon:"📢",label:"お知らせ",count:notices.length,color:"#f59e0b",onClick:()=>setTab("notice")},
+                {icon:"💬",label:"未読返信",count:unreadReplies,color:"#2563eb",onClick:()=>setTab("message")},
+                {icon:"❤️",label:"健康記録",count:health.length+"件",color:"#ef4444",onClick:()=>setTab("health")},
+                {icon:"📋",label:"支援計画",count:plans.length+"件",color:"#7c3aed",onClick:()=>setTab("plan")},
+              ].map((c,i)=>(
+                <div key={i} onClick={c.onClick} style={{background:"white",borderRadius:14,padding:"16px 12px",textAlign:"center",boxShadow:"0 1px 4px rgba(0,0,0,.06)",cursor:"pointer",borderTop:`4px solid ${c.color}`}}>
+                  <div style={{fontSize:24,marginBottom:4}}>{c.icon}</div>
+                  <div style={{fontSize:11,color:"#64748b"}}>{c.label}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:c.color}}>{c.count}</div>
+                </div>
+              ))}
+            </div>
+            {/* 最新お知らせプレビュー */}
+            {notices.length>0&&(
+              <div style={{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:10}}>
+                <div style={{fontWeight:700,fontSize:13,marginBottom:8,color:"#059669"}}>📢 最新のお知らせ</div>
+                {notices.slice(0,2).map((n,i)=>(
+                  <div key={i} style={{borderLeft:"3px solid #059669",paddingLeft:10,marginBottom:8}}>
+                    <div style={{fontSize:13,fontWeight:600}}>{n.title}</div>
+                    <div style={{fontSize:11,color:"#94a3b8"}}>{n.date}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {/* メッセージ送信ボタン */}
+            <button style={{width:"100%",padding:"14px",background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"white",border:"none",borderRadius:12,fontSize:14,fontWeight:700,cursor:"pointer"}} onClick={()=>setTab("message")}>💬 スタッフにメッセージを送る</button>
+          </div>
+        )}
+
+        {/* お知らせ */}
+        {tab==="notice"&&(
+          <div className="fade-in">
+            <div style={{fontWeight:800,fontSize:17,marginBottom:14}}>📢 運営からのお知らせ</div>
+            {notices.length===0
+              ?<div style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}>現在お知らせはありません</div>
+              :notices.map((n,i)=>(
+                <div key={i} style={{background:"white",borderRadius:14,padding:"16px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                  {n.important&&<span style={{background:"#ef4444",color:"white",fontSize:10,fontWeight:700,borderRadius:4,padding:"2px 6px",marginBottom:6,display:"inline-block"}}>重要</span>}
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:4}}>{n.title}</div>
+                  <div style={{fontSize:11,color:"#94a3b8",marginBottom:8}}>{n.date}</div>
+                  <div style={{fontSize:13,lineHeight:1.8,whiteSpace:"pre-wrap"}}>{n.body}</div>
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+        {/* メッセージ */}
+        {tab==="message"&&(
+          <div className="fade-in">
+            <div style={{fontWeight:800,fontSize:17,marginBottom:14}}>💬 スタッフへのメッセージ</div>
+            {sent&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:10,padding:"10px 14px",marginBottom:12,color:"#059669",fontSize:13,fontWeight:600}}>✅ 送信しました！スタッフが確認します。</div>}
+            <div style={{background:"white",borderRadius:14,padding:"16px",marginBottom:16}}>
+              <div style={{fontWeight:700,fontSize:13,marginBottom:10}}>新しいメッセージ</div>
+              <div style={{marginBottom:8}}>
+                <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>種類</label>
+                <select className="input" value={msgCat} onChange={e=>setMsgCat(e.target.value)}>
+                  {["体調報告","外出連絡","相談・お願い","緊急連絡","うれしかったこと","困っていること","その他"].map(v=><option key={v}>{v}</option>)}
+                </select>
+              </div>
+              <div style={{marginBottom:10}}>
+                <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>メッセージ</label>
+                <textarea className="textarea" style={{minHeight:100}} value={msgText} onChange={e=>setMsgText(e.target.value)} placeholder="スタッフへ伝えたいことを書いてください"/>
+              </div>
+              <button style={{width:"100%",padding:"12px",background:"linear-gradient(135deg,#2563eb,#0ea5e9)",color:"white",border:"none",borderRadius:10,fontSize:14,fontWeight:700,cursor:"pointer"}} onClick={()=>{sendMsg();setSent(false);}}>送信する 📤</button>
+            </div>
+            <div style={{fontWeight:700,fontSize:13,marginBottom:8,color:"#475569"}}>過去のメッセージ</div>
+            {myMsgs.length===0
+              ?<div style={{textAlign:"center",padding:"20px",color:"#94a3b8"}}>まだメッセージはありません</div>
+              :myMsgs.map((m,i)=>(
+                <div key={i} style={{background:"white",borderRadius:12,padding:"12px 14px",marginBottom:8,boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                    <span style={{fontSize:11,background:"#eff6ff",color:"#2563eb",borderRadius:4,padding:"2px 6px",fontWeight:600}}>{m.category}</span>
+                    <span style={{fontSize:11,color:"#94a3b8"}}>{m.created_at?.slice(0,10)}</span>
+                  </div>
+                  <div style={{fontSize:13,marginBottom:m.staff_reply?8:0}}>{m.message}</div>
+                  {m.staff_reply&&(
+                    <div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 10px",borderLeft:"3px solid #059669"}}>
+                      <div style={{fontSize:11,color:"#059669",fontWeight:700,marginBottom:3}}>💬 スタッフより</div>
+                      <div style={{fontSize:13}}>{m.staff_reply}</div>
+                    </div>
+                  )}
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+        {/* 健康記録 */}
+        {tab==="health"&&(
+          <div className="fade-in">
+            <div style={{fontWeight:800,fontSize:17,marginBottom:14}}>❤️ 健康記録</div>
+            {health.length===0
+              ?<div style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}>記録がありません</div>
+              :health.map((h,i)=>(
+                <div key={i} style={{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                  <div style={{fontWeight:700,fontSize:13,color:"#059669",marginBottom:8}}>{h.date}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:8}}>
+                    {h.temperature&&<div style={{textAlign:"center",background:"#fef3c7",borderRadius:8,padding:"8px"}}><div style={{fontSize:10,color:"#92400e"}}>体温</div><div style={{fontWeight:700,fontSize:15}}>{h.temperature}℃</div></div>}
+                    {h.bp_high&&<div style={{textAlign:"center",background:"#eff6ff",borderRadius:8,padding:"8px"}}><div style={{fontSize:10,color:"#1e40af"}}>血圧</div><div style={{fontWeight:700,fontSize:14}}>{h.bp_high}/{h.bp_low}</div></div>}
+                    {h.pulse&&<div style={{textAlign:"center",background:"#fdf2f8",borderRadius:8,padding:"8px"}}><div style={{fontSize:10,color:"#9d174d"}}>脈拍</div><div style={{fontWeight:700,fontSize:15}}>{h.pulse}</div></div>}
+                    {h.weight&&<div style={{textAlign:"center",background:"#f0fdf4",borderRadius:8,padding:"8px"}}><div style={{fontSize:10,color:"#14532d"}}>体重</div><div style={{fontWeight:700,fontSize:15}}>{h.weight}kg</div></div>}
+                  </div>
+                  {h.other_note&&<div style={{fontSize:12,color:"#64748b",marginTop:8}}>{h.other_note}</div>}
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+        {/* 支援計画 */}
+        {tab==="plan"&&(
+          <div className="fade-in">
+            <div style={{fontWeight:800,fontSize:17,marginBottom:14}}>📋 支援計画</div>
+            {plans.length===0
+              ?<div style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}>支援計画がありません</div>
+              :plans.map((p,i)=>(
+                <div key={i} style={{background:"white",borderRadius:14,padding:"14px 16px",marginBottom:10,boxShadow:"0 1px 4px rgba(0,0,0,.06)"}}>
+                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                    <span style={{fontWeight:700,fontSize:14}}>{p.plan_date||p.created_at?.slice(0,10)}</span>
+                    <span style={{fontSize:11,background:"#eff6ff",color:"#2563eb",borderRadius:4,padding:"2px 6px"}}>{p.status||"作成済"}</span>
+                  </div>
+                  {p.long_term_goal&&<div style={{marginBottom:6}}><span style={{fontSize:11,color:"#94a3b8"}}>長期目標：</span><span style={{fontSize:13}}>{p.long_term_goal}</span></div>}
+                  {p.short_term_goal&&<div style={{marginBottom:6}}><span style={{fontSize:11,color:"#94a3b8"}}>短期目標：</span><span style={{fontSize:13}}>{p.short_term_goal}</span></div>}
+                  {p.note&&<div style={{fontSize:12,color:"#64748b",marginTop:4}}>{p.note}</div>}
+                </div>
+              ))
+            }
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+// ── 管理者：お知らせ管理（利用者ポータル用） ──
+function MsgCard({m, isAdmin, loadAll, del}) {
+  const [replyText, setReplyText] = useState("");
+  const [replying, setReplying] = useState(false);
+  return(
+    <div className="card" style={{borderLeft:`4px solid ${m.is_read?"#e2e8f0":"#2563eb"}`}}>
+      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <div style={{fontWeight:700,fontSize:14}}>{m.user_name}</div>
+          <span className="tag" style={{background:m.category==="緊急連絡"?"#fee2e2":"#ecfdf5",color:m.category==="緊急連絡"?"#ef4444":"#059669"}}>{m.category}</span>
+          {!m.is_read&&<span className="tag" style={{background:"#2563eb",color:"white"}}>未読</span>}
+        </div>
+        <div style={{display:"flex",gap:6,alignItems:"center",flexShrink:0}}>
+          <span className="mono" style={{fontSize:11,color:"#94a3b8"}}>{new Date(m.created_at).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
+          {!m.is_read&&<button className="btn btn-green btn-sm" onClick={async()=>{await supabase.from("user_messages").update({is_read:true}).eq("id",m.id);loadAll();}}>既読</button>}
+          {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>setReplying(v=>!v)}><Icon name="message" size={12}/>返信</button>}
+          {isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>del("user_messages",m.id)}><Icon name="trash" size={12}/></button>}
+        </div>
+      </div>
+      <div style={{fontSize:13,background:"#f8fafc",borderRadius:8,padding:"10px 12px",lineHeight:1.7,marginBottom:m.staff_reply||replying?8:0}}>{m.message}</div>
+      {m.staff_reply&&<div style={{background:"#f0fdf4",borderRadius:8,padding:"8px 12px",borderLeft:"3px solid #059669",marginBottom:replying?8:0}}><div style={{fontSize:11,color:"#059669",fontWeight:700,marginBottom:2}}>💬 返信済み</div><div style={{fontSize:13}}>{m.staff_reply}</div></div>}
+      {replying&&(
+        <div style={{display:"flex",gap:6}}>
+          <input className="input" style={{flex:1,fontSize:13}} placeholder="返信を入力..." value={replyText} onChange={e=>setReplyText(e.target.value)}/>
+          <button className="btn btn-primary btn-sm" onClick={async()=>{
+            if(!replyText.trim()) return;
+            await supabase.from("user_messages").update({staff_reply:replyText,reply_read:false,is_read:true}).eq("id",m.id);
+            setReplying(false); loadAll();
+          }}>送信</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function MsgList({msgs, isAdmin, loadAll, del}) {
+  return(
+    <div style={{display:"grid",gap:10}}>
+      {msgs.map((m,i)=><MsgCard key={m.id||i} m={m} isAdmin={isAdmin} loadAll={loadAll} del={del}/>)}
+    </div>
+  );
+}
+
+function NoticeManagerTab() {
+  const [notices, setNotices] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState({title:"",body:"",date:new Date().toISOString().slice(0,10),important:false});
+
+  useEffect(()=>{
+    supabase.from("app_settings").select("value").eq("key","user_notices").single().then(({data})=>{
+      if(data?.value){try{setNotices(JSON.parse(data.value));}catch(e){setNotices([]);}}
+      setLoaded(true);
+    });
+  },[]);
+
+  const save = async(newN)=>{ setNotices(newN); await supabase.from("app_settings").upsert({key:"user_notices",value:JSON.stringify(newN)},{onConflict:"key"}); };
+
+  if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+
+  return(
+    <div className="fade-in">
+      <PH title="利用者向けお知らせ管理" sub="利用者ポータルに表示されます" onAdd={()=>setAdding(true)} addLabel="お知らせ追加"/>
+      {adding&&(
+        <div className="card" style={{marginBottom:12,background:"#f0fdf4",border:"1px solid #bbf7d0"}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>新規お知らせ</div>
+          <div style={{display:"grid",gap:8}}>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>タイトル</label><input className="input" value={form.title} onChange={e=>setForm(v=>({...v,title:e.target.value}))}/></div>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>日付</label><input className="input" type="date" value={form.date} onChange={e=>setForm(v=>({...v,date:e.target.value}))}/></div>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>内容</label><textarea className="textarea" value={form.body} onChange={e=>setForm(v=>({...v,body:e.target.value}))}/></div>
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer"}}>
+              <input type="checkbox" checked={form.important} onChange={e=>setForm(v=>({...v,important:e.target.checked}))}/>
+              <span style={{fontSize:13,fontWeight:600,color:"#ef4444"}}>重要なお知らせ</span>
+            </label>
+          </div>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button className="btn btn-primary btn-sm" onClick={()=>{
+              if(!form.title.trim()){alert("タイトルを入力してください");return;}
+              save([{...form,id:Date.now()},...notices]);
+              setForm({title:"",body:"",date:new Date().toISOString().slice(0,10),important:false});
+              setAdding(false);
+            }}>投稿</button>
+            <button className="btn btn-secondary btn-sm" onClick={()=>setAdding(false)}>キャンセル</button>
+          </div>
+        </div>
+      )}
+      {notices.length===0
+        ?<div className="card" style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>お知らせがありません</div>
+        :notices.map((n,i)=>(
+          <div key={n.id||i} className="card" style={{marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+              <div style={{flex:1}}>
+                {n.important&&<span style={{background:"#ef4444",color:"white",fontSize:10,fontWeight:700,borderRadius:4,padding:"2px 6px",marginBottom:4,display:"inline-block"}}>重要</span>}
+                <div style={{fontWeight:700,fontSize:14}}>{n.title}</div>
+                <div style={{fontSize:11,color:"#94a3b8",marginBottom:4}}>{n.date}</div>
+                <div style={{fontSize:13,color:"#475569",whiteSpace:"pre-wrap"}}>{n.body}</div>
+              </div>
+              <button className="btn btn-red btn-sm" style={{marginLeft:8,flexShrink:0}} onClick={()=>{if(window.confirm("削除しますか？"))save(notices.filter((_,j)=>j!==i));}}>削除</button>
+            </div>
+          </div>
+        ))
+      }
+    </div>
+  );
+}
+
 function UserMsgScreen({onBack}) {
   const [code,setCode]=useState("");
   const [msg,setMsg]=useState("");
@@ -1792,7 +2326,7 @@ export default function App() {
         <div style={{display:"grid",gap:12}}>
           <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={preloadStaff}><Icon name="staff" size={18}/>スタッフログイン</button>
           <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15}} onClick={()=>setAuth("admin_pin")}><Icon name="shield" size={18}/>管理者ログイン</button>
-          <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center",padding:"12px"}} onClick={()=>setAuth("user_msg")}><Icon name="message" size={16}/>利用者メッセージ送信</button>
+          <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:12,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏡 利用者ログイン</button>
         </div>
       </div>
     </div>
@@ -1830,8 +2364,11 @@ export default function App() {
     </div>
   );
 
-  if(auth==="user_msg") {
-    return <UserMsgScreen onBack={()=>setAuth("select")}/>;
+  if(auth==="user_login") {
+    return <UserLoginScreen onBack={()=>setAuth("select")} onLogin={(u)=>{setAuth("user_portal");setMe(u);}} />;
+  }
+  if(auth==="user_portal") {
+    return <UserPortalScreen user={me} onBack={()=>{setAuth("select");setMe(null);}} />;
   }
 
   if(loading) return <div style={{fontFamily:"'Noto Sans JP',sans-serif",display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",color:"#94a3b8",fontSize:14}}><style>{CSS}</style>⏳ 読み込み中...</div>;
@@ -1865,6 +2402,9 @@ export default function App() {
       {id:"scheds",label:"予定管理",icon:"calendar"},
       {id:"msgs",label:"利用者メッセージ",icon:"message",badge:unread},
     ]},
+    {g:"利用者ポータル管理",items:[
+      {id:"notices",label:"お知らせ管理",icon:"news"},
+    ]},
     {g:"情報管理",items:[
       {id:"docs",label:"必須保存書類管理",icon:"file"},
       {id:"files",label:"ファイル・会議報告書",icon:"file"},
@@ -1876,6 +2416,7 @@ export default function App() {
   ];
   const staffTabs = [
     {g:"業務",items:[
+      {id:"todo",label:"TODO・ルーティン",icon:"check"},
       {id:"attendance",label:"勤怠打刻",icon:"clock"},
       {id:"my_salary",label:"給料・シフト確認",icon:"wage"},
       {id:"shift_req",label:"シフト希望・訂正",icon:"calendar"},
@@ -1974,7 +2515,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16,marginBottom:16}}>
                 <div className="card">
                   <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>⚠️ 要対応事項</div>
                   {[
@@ -2001,6 +2542,10 @@ export default function App() {
                     );
                   })}
                 </div>
+              </div>
+              <div className="card">
+                <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>☑️ 本日のTODO・ルーティン</div>
+                <TodoTab staffList={staffList} today={today} me={me} isAdmin={isAdmin}/>
               </div>
             </div>
           )}
@@ -2672,6 +3217,24 @@ export default function App() {
           )}
 
           {/* ── 勤怠打刻（スタッフ） ── */}
+          {/* ── TODO（スタッフ） ── */}
+          {tab==="todo"&&!isAdmin&&(
+            <div className="fade-in">
+              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>TODO・ルーティン</div>
+              <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>本日のチェックリスト</div>
+              <TodoTab staffList={staffList} today={today} me={me} isAdmin={false}/>
+            </div>
+          )}
+
+          {/* ── TODO（管理者 単独ページ） ── */}
+          {tab==="todo"&&isAdmin&&(
+            <div className="fade-in">
+              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>TODO・ルーティン</div>
+              <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>チェックリスト管理・履歴</div>
+              <TodoTab staffList={staffList} today={today} me={me} isAdmin={isAdmin}/>
+            </div>
+          )}
+
           {tab==="attendance"&&!isAdmin&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>勤怠打刻</div>
@@ -2994,33 +3557,17 @@ export default function App() {
           )}
 
           {/* ── 利用者メッセージ ── */}
+          {tab==="notices"&&isAdmin&&<div className="fade-in"><NoticeManagerTab/></div>}
+
           {tab==="msgs"&&(
             <div className="fade-in">
               <PH title="利用者メッセージ" sub={`未読 ${unread}件`}
                 extra={isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(msgs,"利用者メッセージ")}><Icon name="download" size={13}/>CSV</button>}
               />
               {msgs.length===0?<div className="card" style={{textAlign:"center",padding:"40px",color:"#94a3b8"}}><div style={{fontSize:32,marginBottom:8}}>📩</div>メッセージがありません</div>:(
-                <div style={{display:"grid",gap:10}}>
-                  {msgs.map((m,i)=>(
-                    <div key={i} className="card" style={{borderLeft:`4px solid ${m.is_read?"#e2e8f0":"#2563eb"}`}}>
-                      <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
-                        <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                          <div style={{fontWeight:700,fontSize:14}}>{m.user_name}</div>
-                          <span className="tag" style={{background:m.category==="緊急連絡"?"#fee2e2":"#ecfdf5",color:m.category==="緊急連絡"?"#ef4444":"#059669"}}>{m.category}</span>
-                          {!m.is_read&&<span className="tag" style={{background:"#2563eb",color:"white"}}>未読</span>}
-                        </div>
-                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                          <span className="mono" style={{fontSize:11,color:"#94a3b8"}}>{new Date(m.created_at).toLocaleString("ja-JP",{month:"numeric",day:"numeric",hour:"2-digit",minute:"2-digit"})}</span>
-                          {!m.is_read&&<button className="btn btn-green btn-sm" onClick={async()=>{await supabase.from("user_messages").update({is_read:true}).eq("id",m.id);loadAll();}}>既読</button>}
-                          {isAdmin&&<button className="btn btn-red btn-sm" onClick={()=>del("user_messages",m.id)}><Icon name="trash" size={12}/></button>}
-                        </div>
-                      </div>
-                      <div style={{fontSize:13,background:"#f8fafc",borderRadius:8,padding:"10px 12px",lineHeight:1.7}}>{m.message}</div>
-                    </div>
-                  ))}
-                </div>
+                <MsgList msgs={msgs} isAdmin={isAdmin} loadAll={loadAll} del={del}/>
               )}
-              {isAdmin&&<div className="card" style={{marginTop:16,background:"#eff6ff",border:"1px solid #bfdbfe"}}><div style={{fontWeight:700,fontSize:13,marginBottom:4,color:"#1d4ed8"}}>📱 アクセスコード設定</div><div style={{fontSize:13,color:"#1e40af"}}>「利用者状況」→ 各利用者の編集でアクセスコードを設定。利用者はトップ画面の「利用者メッセージ送信」から送れます。</div></div>}
+              {isAdmin&&<div className="card" style={{marginTop:16,background:"#eff6ff",border:"1px solid #bfdbfe"}}><div style={{fontWeight:700,fontSize:13,marginBottom:4,color:"#1d4ed8"}}>📱 アクセスコード設定</div><div style={{fontSize:13,color:"#1e40af"}}>「利用者状況」→ 各利用者の編集でアクセスコードを設定。利用者はトップ画面の「利用者ログイン」からアクセスできます。</div></div>}
             </div>
           )}
 
