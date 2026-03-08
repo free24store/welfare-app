@@ -3439,15 +3439,15 @@ export default function App() {
           {tab==="dashboard"&&isAdmin&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>ダッシュボード</div>
-              <div style={{fontSize:13,color:"#94a3b8",marginBottom:18}}>{today}</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(170px,1fr))",gap:12,marginBottom:18}}>
+              <div style={{fontSize:13,color:"#94a3b8",marginBottom:18}}>{today}（{["日","月","火","水","木","金","土"][new Date(today.replace(/-/g,"/")).getDay()]}）</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(160px,1fr))",gap:12,marginBottom:18}}>
                 {[
-                  {l:"在籍利用者",v:users.filter(u=>u.status==="在籍").length+"名",s:`外泊 ${users.filter(u=>u.status==="外泊中").length}名`,c:"#2563eb",i:"👥"},
-                  {l:"本日出勤",v:attendance.filter(a=>a.date===today).length+"名",s:"打刻済",c:"#059669",i:"⏰"},
+                  {l:"在籍利用者",v:users.filter(u=>u.status==="在籍").length+"名",s:`外泊中 ${users.filter(u=>u.status==="外泊中").length}名`,c:"#2563eb",i:"👥"},
+                  {l:"本日出勤中",v:attendance.filter(a=>a.date===today&&a.clock_in&&!a.clock_out).length+"名",s:`退勤済 ${attendance.filter(a=>a.date===today&&a.clock_out).length}名`,c:"#059669",i:"⏰"},
+                  {l:"本日支援記録",v:srecs.filter(r=>r.date===today).length+"件",s:`対象 ${users.filter(u=>u.status==="在籍").length}名`,c:"#0891b2",i:"📝"},
                   {l:"未読メッセージ",v:unread+"件",s:"利用者から",c:"#ef4444",i:"📩"},
-                  {l:"国保連請求",v:"¥"+fmt(totalClaim),s:`${claims.length}件`,c:"#7c3aed",i:"📄"},
-                  {l:"収支差額",v:(totalInc-totalExp>=0?"+":"")+"¥"+fmt(totalInc-totalExp),s:"累計",c:totalInc-totalExp>=0?"#059669":"#ef4444",i:"💰"},
                   {l:"支援計画期限超過",v:overdueP.length+"件",s:"更新要",c:"#f59e0b",i:"⚠️"},
+                  {l:"今月モニタリング",v:monitors.filter(m=>m.date&&m.date.startsWith(today.slice(0,7))).length+"件",s:today.slice(0,7),c:"#7c3aed",i:"📊"},
                 ].map((k,i)=>(
                   <div key={i} className="stat-card" style={{borderLeft:`4px solid ${k.c}`}}>
                     <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}><div style={{fontSize:11,color:"#64748b",fontWeight:500}}>{k.l}</div><div style={{fontSize:18}}>{k.i}</div></div>
@@ -3458,30 +3458,54 @@ export default function App() {
               </div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16,marginBottom:16}}>
                 <div className="card">
-                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>⚠️ 要対応事項</div>
-                  {[
-                    {t:`外泊中 ${users.filter(u=>u.status==="外泊中").length}名 — 帰宅確認`,w:true},
-                    {t:`支援計画期限超過 ${overdueP.length}件`,w:overdueP.length>0},
-                    {t:`未読メッセージ ${unread}件`,w:unread>0},
-                    {t:`国保連入金待ち ${claims.filter(c=>c.status==="請求済").length}件`,w:false},
-                  ].map((a,i)=>(
-                    <div key={i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:i<3?"1px solid #f8fafc":"none",alignItems:"flex-start"}}>
-                      <div style={{width:7,height:7,borderRadius:"50%",background:a.w?"#ef4444":"#3b82f6",marginTop:5,flexShrink:0}}/>
-                      <div style={{fontSize:13}}>{a.t}</div>
-                    </div>
-                  ))}
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>⏰ 本日の出勤状況</div>
+                  {staffList.length===0
+                    ?<div style={{fontSize:13,color:"#94a3b8"}}>スタッフ未登録</div>
+                    :staffList.slice(0,8).map(s=>{
+                      const rec=attendance.find(a=>a.staff_id===s.id&&a.date===today);
+                      return(
+                        <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f8fafc"}}>
+                          <div style={{fontSize:13,fontWeight:500}}>{s.name}</div>
+                          {rec?.clock_out
+                            ?<span className="tag" style={{background:"#f1f5f9",color:"#64748b",fontSize:11}}>退勤済</span>
+                            :rec?.clock_in
+                              ?<span className="tag" style={{background:"#ecfdf5",color:"#059669",fontSize:11}}>出勤中</span>
+                              :<span className="tag" style={{background:"#fef3c7",color:"#d97706",fontSize:11}}>未打刻</span>
+                          }
+                        </div>
+                      );
+                    })
+                  }
                 </div>
                 <div className="card">
-                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📋 本日の支援記録状況</div>
-                  {users.filter(u=>u.status==="在籍").slice(0,7).map(u=>{
-                    const rec=srecs.find(r=>r.user_id===u.id&&r.date===today);
-                    return(
-                      <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f8fafc"}}>
-                        <div style={{fontSize:13,fontWeight:500}}>{u.name}</div>
-                        {rec?<span className="tag" style={{background:"#ecfdf5",color:"#059669"}}>✓ 記録済</span>:<span className="tag" style={{background:"#fef3c7",color:"#d97706"}}>未記録</span>}
-                      </div>
-                    );
-                  })}
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📋 本日の支援記録</div>
+                  {users.filter(u=>u.status==="在籍").length===0
+                    ?<div style={{fontSize:13,color:"#94a3b8"}}>利用者未登録</div>
+                    :users.filter(u=>u.status==="在籍").slice(0,8).map(u=>{
+                      const rec=srecs.find(r=>r.user_id===u.id&&r.date===today);
+                      return(
+                        <div key={u.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f8fafc"}}>
+                          <div style={{fontSize:13,fontWeight:500}}>{u.name}</div>
+                          {rec?<span className="tag" style={{background:"#ecfdf5",color:"#059669"}}>✓ 記録済</span>:<span className="tag" style={{background:"#fef3c7",color:"#d97706"}}>未記録</span>}
+                        </div>
+                      );
+                    })
+                  }
+                </div>
+                <div className="card">
+                  <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>⚠️ 要対応事項</div>
+                  {[
+                    {t:`外泊中 ${users.filter(u=>u.status==="外泊中").length}名 — 帰宅確認`,w:users.filter(u=>u.status==="外泊中").length>0},
+                    {t:`支援計画期限超過 ${overdueP.length}件 — 更新要`,w:overdueP.length>0},
+                    {t:`未読メッセージ ${unread}件`,w:unread>0},
+                    {t:`未退勤スタッフ ${attendance.filter(a=>a.date===today&&a.clock_in&&!a.clock_out).length}名（本日）`,w:attendance.filter(a=>a.date===today&&a.clock_in&&!a.clock_out).length>0},
+                    {t:`国保連入金待ち ${claims.filter(c=>c.status==="請求済").length}件`,w:false},
+                  ].map((a,i)=>(
+                    <div key={i} style={{display:"flex",gap:8,padding:"7px 0",borderBottom:i<4?"1px solid #f8fafc":"none",alignItems:"flex-start"}}>
+                      <div style={{width:7,height:7,borderRadius:"50%",background:a.w?"#ef4444":"#3b82f6",marginTop:5,flexShrink:0}}/>
+                      <div style={{fontSize:13,color:a.w?"#1e293b":"#64748b"}}>{a.t}</div>
+                    </div>
+                  ))}
                 </div>
               </div>
               <div className="card">
