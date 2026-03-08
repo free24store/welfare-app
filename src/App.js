@@ -1062,6 +1062,139 @@ function SelfPinForm({me,loadAll}) {
   );
 }
 
+function CleaningTab({staffList}) {
+  const DAYS=["月","火","水","木","金","土","日"];
+  const [cleanData,setCleanData]=useState(null);
+  const [loaded,setLoaded]=useState(false);
+  useEffect(()=>{
+    supabase.from("app_settings").select("value").eq("key","cleaning_schedule").single().then(({data})=>{
+      if(data?.value){try{setCleanData(JSON.parse(data.value));}catch(e){}}
+      else setCleanData({日勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""},夜勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""}});
+      setLoaded(true);
+    });
+  },[]);
+  const save=async(newD)=>{
+    setCleanData(newD);
+    await supabase.from("app_settings").upsert({key:"cleaning_schedule",value:JSON.stringify(newD)},{onConflict:"key"});
+  };
+  if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+  return(
+    <div className="fade-in">
+      <PH title="掃除当番表" sub="日勤：事務所掃除 / 夜勤：GH掃除"/>
+      <div className="card" style={{overflowX:"auto"}}>
+        <table style={{minWidth:500}}>
+          <thead><tr>
+            <th style={{width:80}}>区分</th>
+            {DAYS.map(d=><th key={d} style={{textAlign:"center"}}>{d}</th>)}
+          </tr></thead>
+          <tbody>
+            {["日勤","夜勤"].map(shift=>(
+              <tr key={shift}>
+                <td><span style={{fontWeight:700,fontSize:13,color:shift==="日勤"?"#2563eb":"#7c3aed"}}>{shift}</span>
+                  <div style={{fontSize:10,color:"#94a3b8"}}>{shift==="日勤"?"事務所掃除":"GH掃除"}</div>
+                </td>
+                {DAYS.map(d=>(
+                  <td key={d} style={{textAlign:"center",padding:"6px 4px"}}>
+                    <select className="input" style={{fontSize:12,padding:"4px 6px",minWidth:70}} value={cleanData?.[shift]?.[d]||""} onChange={e=>{
+                      const newD={...cleanData,[shift]:{...cleanData[shift],[d]:e.target.value}};
+                      save(newD);
+                    }}>
+                      <option value="">--</option>
+                      {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function SuppliesTab() {
+  const [items,setItems]=useState([]);
+  const [loaded,setLoaded]=useState(false);
+  const [newItem,setNewItem]=useState({name:"",stock:0,min_stock:0,unit:"個",note:""});
+  const [adding,setAdding]=useState(false);
+  useEffect(()=>{
+    supabase.from("app_settings").select("value").eq("key","supplies_list").single().then(({data})=>{
+      if(data?.value){try{setItems(JSON.parse(data.value));}catch(e){setItems([]);}}
+      else setItems([]);
+      setLoaded(true);
+    });
+  },[]);
+  const saveItems=async(newItems)=>{
+    setItems(newItems);
+    await supabase.from("app_settings").upsert({key:"supplies_list",value:JSON.stringify(newItems)},{onConflict:"key"});
+  };
+  if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
+  const low=items.filter(i=>Number(i.stock)<=Number(i.min_stock)&&Number(i.min_stock)>0);
+  return(
+    <div className="fade-in">
+      <PH title="備品管理表" sub="在庫が最低枚数以下になると赤く表示されます"
+        onAdd={()=>setAdding(true)} addLabel="備品追加"/>
+      {low.length>0&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",marginBottom:12,color:"#dc2626",fontSize:13,fontWeight:600}}>
+        ⚠️ 発注が必要な備品: {low.map(i=>i.name).join("、")}
+      </div>}
+      {adding&&(
+        <div className="card" style={{marginBottom:12,background:"#f0f9ff",border:"1px solid #bae6fd"}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>備品追加</div>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>品名</label><input className="input" value={newItem.name} onChange={e=>setNewItem(v=>({...v,name:e.target.value}))} placeholder="例：マスク"/></div>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>単位</label><input className="input" value={newItem.unit} onChange={e=>setNewItem(v=>({...v,unit:e.target.value}))} placeholder="個・箱・枚"/></div>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>現在庫数</label><input className="input" type="number" value={newItem.stock} onChange={e=>setNewItem(v=>({...v,stock:e.target.value}))}/></div>
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>最低枚数（発注ライン）</label><input className="input" type="number" value={newItem.min_stock} onChange={e=>setNewItem(v=>({...v,min_stock:e.target.value}))}/></div>
+          </div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label><input className="input" value={newItem.note} onChange={e=>setNewItem(v=>({...v,note:e.target.value}))}/></div>
+          <div style={{display:"flex",gap:8,marginTop:10}}>
+            <button className="btn btn-primary btn-sm" onClick={()=>{
+              if(!newItem.name.trim()){alert("品名を入力してください");return;}
+              saveItems([...items,{...newItem,id:Date.now()}]);
+              setNewItem({name:"",stock:0,min_stock:0,unit:"個",note:""});
+              setAdding(false);
+            }}>追加</button>
+            <button className="btn btn-secondary btn-sm" onClick={()=>setAdding(false)}>キャンセル</button>
+          </div>
+        </div>
+      )}
+      <div className="card" style={{overflowX:"auto"}}>
+        {items.length===0?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>備品が登録されていません</div>:(
+          <table>
+            <thead><tr>
+              <th>品名</th><th>現在庫</th><th>最低枚数</th><th>単位</th><th>備考</th><th></th>
+            </tr></thead>
+            <tbody>
+              {items.map((item,idx)=>{
+                const isLow=Number(item.min_stock)>0&&Number(item.stock)<=Number(item.min_stock);
+                return(
+                  <tr key={item.id||idx} style={{background:isLow?"#fef2f2":""}}>
+                    <td style={{fontWeight:600,color:isLow?"#dc2626":"#0f172a"}}>{item.name}{isLow&&<span style={{marginLeft:6,fontSize:11,background:"#dc2626",color:"white",borderRadius:4,padding:"1px 5px"}}>要発注</span>}</td>
+                    <td style={{textAlign:"center"}}>
+                      <input type="number" style={{width:60,border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 6px",fontSize:13,textAlign:"center",color:isLow?"#dc2626":"#0f172a",fontWeight:isLow?700:400}} value={item.stock} onChange={e=>{
+                        const ni=[...items];ni[idx]={...item,stock:e.target.value};saveItems(ni);
+                      }}/>
+                    </td>
+                    <td style={{textAlign:"center"}}>
+                      <input type="number" style={{width:60,border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 6px",fontSize:13,textAlign:"center"}} value={item.min_stock} onChange={e=>{
+                        const ni=[...items];ni[idx]={...item,min_stock:e.target.value};saveItems(ni);
+                      }}/>
+                    </td>
+                    <td style={{textAlign:"center",color:"#64748b"}}>{item.unit}</td>
+                    <td style={{color:"#64748b",fontSize:12}}>{item.note}</td>
+                    <td><button className="btn btn-red btn-sm" onClick={()=>{if(window.confirm("削除しますか？"))saveItems(items.filter((_,j)=>j!==idx));}}>削除</button></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function DocsTab({today}) {
   const REQUIRED_DOCS = [
     {cat:"指定申請・運営",items:[
@@ -2895,139 +3028,10 @@ export default function App() {
 
 
           {/* ── 掃除当番表 ── */}
-          {tab==="cleaning"&&isAdmin&&(()=>{
-            const DAYS=["月","火","水","木","金","土","日"];
-            const [cleanData,setCleanData]=React.useState(null);
-            const [loaded,setLoaded]=React.useState(false);
-            React.useEffect(()=>{
-              supabase.from("app_settings").select("value").eq("key","cleaning_schedule").single().then(({data})=>{
-                if(data?.value){try{setCleanData(JSON.parse(data.value));}catch(e){}}
-                else setCleanData({日勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""},夜勤:{月:"",火:"",水:"",木:"",金:"",土:"",日:""}});
-                setLoaded(true);
-              });
-            },[]);
-            const save=async(newD)=>{
-              setCleanData(newD);
-              await supabase.from("app_settings").upsert({key:"cleaning_schedule",value:JSON.stringify(newD)},{onConflict:"key"});
-            };
-            if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
-            return(
-              <div className="fade-in">
-                <PH title="掃除当番表" sub="日勤：事務所掃除 / 夜勤：GH掃除"/>
-                <div className="card" style={{overflowX:"auto"}}>
-                  <table style={{minWidth:500}}>
-                    <thead><tr>
-                      <th style={{width:80}}>区分</th>
-                      {DAYS.map(d=><th key={d} style={{textAlign:"center"}}>{d}</th>)}
-                    </tr></thead>
-                    <tbody>
-                      {["日勤","夜勤"].map(shift=>(
-                        <tr key={shift}>
-                          <td><span style={{fontWeight:700,fontSize:13,color:shift==="日勤"?"#2563eb":"#7c3aed"}}>{shift}</span>
-                            <div style={{fontSize:10,color:"#94a3b8"}}>{shift==="日勤"?"事務所掃除":"GH掃除"}</div>
-                          </td>
-                          {DAYS.map(d=>(
-                            <td key={d} style={{textAlign:"center",padding:"6px 4px"}}>
-                              <select className="input" style={{fontSize:12,padding:"4px 6px",minWidth:70}} value={cleanData?.[shift]?.[d]||""} onChange={e=>{
-                                const newD={...cleanData,[shift]:{...cleanData[shift],[d]:e.target.value}};
-                                save(newD);
-                              }}>
-                                <option value="">--</option>
-                                {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
-                              </select>
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            );
-          })()}
+          {tab==="cleaning"&&isAdmin&&<CleaningTab staffList={staffList}/>}
 
           {/* ── 備品管理表 ── */}
-          {tab==="supplies"&&isAdmin&&(()=>{
-            const [items,setItems]=React.useState([]);
-            const [loaded,setLoaded]=React.useState(false);
-            const [newItem,setNewItem]=React.useState({name:"",stock:0,min_stock:0,unit:"個",note:""});
-            const [adding,setAdding]=React.useState(false);
-            React.useEffect(()=>{
-              supabase.from("app_settings").select("value").eq("key","supplies_list").single().then(({data})=>{
-                if(data?.value){try{setItems(JSON.parse(data.value));}catch(e){setItems([]);}}
-                else setItems([]);
-                setLoaded(true);
-              });
-            },[]);
-            const saveItems=async(newItems)=>{
-              setItems(newItems);
-              await supabase.from("app_settings").upsert({key:"supplies_list",value:JSON.stringify(newItems)},{onConflict:"key"});
-            };
-            if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
-            const low=items.filter(i=>Number(i.stock)<=Number(i.min_stock)&&Number(i.min_stock)>0);
-            return(
-              <div className="fade-in">
-                <PH title="備品管理表" sub="在庫が最低枚数以下になると赤く表示されます"
-                  onAdd={()=>setAdding(true)} addLabel="備品追加"/>
-                {low.length>0&&<div style={{background:"#fef2f2",border:"1px solid #fecaca",borderRadius:10,padding:"10px 14px",marginBottom:12,color:"#dc2626",fontSize:13,fontWeight:600}}>
-                  ⚠️ 発注が必要な備品: {low.map(i=>i.name).join("、")}
-                </div>}
-                {adding&&(
-                  <div className="card" style={{marginBottom:12,background:"#f0f9ff",border:"1px solid #bae6fd"}}>
-                    <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>備品追加</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>品名</label><input className="input" value={newItem.name} onChange={e=>setNewItem(v=>({...v,name:e.target.value}))} placeholder="例：マスク"/></div>
-                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>単位</label><input className="input" value={newItem.unit} onChange={e=>setNewItem(v=>({...v,unit:e.target.value}))} placeholder="個・箱・枚"/></div>
-                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>現在庫数</label><input className="input" type="number" value={newItem.stock} onChange={e=>setNewItem(v=>({...v,stock:e.target.value}))}/></div>
-                      <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>最低枚数（発注ライン）</label><input className="input" type="number" value={newItem.min_stock} onChange={e=>setNewItem(v=>({...v,min_stock:e.target.value}))}/></div>
-                    </div>
-                    <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label><input className="input" value={newItem.note} onChange={e=>setNewItem(v=>({...v,note:e.target.value}))}/></div>
-                    <div style={{display:"flex",gap:8,marginTop:10}}>
-                      <button className="btn btn-primary btn-sm" onClick={()=>{
-                        if(!newItem.name.trim()){alert("品名を入力してください");return;}
-                        saveItems([...items,{...newItem,id:Date.now()}]);
-                        setNewItem({name:"",stock:0,min_stock:0,unit:"個",note:""});
-                        setAdding(false);
-                      }}>追加</button>
-                      <button className="btn btn-secondary btn-sm" onClick={()=>setAdding(false)}>キャンセル</button>
-                    </div>
-                  </div>
-                )}
-                <div className="card" style={{overflowX:"auto"}}>
-                  {items.length===0?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>備品が登録されていません</div>:(
-                    <table>
-                      <thead><tr>
-                        <th>品名</th><th>現在庫</th><th>最低枚数</th><th>単位</th><th>備考</th><th></th>
-                      </tr></thead>
-                      <tbody>
-                        {items.map((item,i)=>{
-                          const isLow=Number(item.min_stock)>0&&Number(item.stock)<=Number(item.min_stock);
-                          return(
-                            <tr key={item.id||i} style={{background:isLow?"#fef2f2":""}}>
-                              <td style={{fontWeight:600,color:isLow?"#dc2626":"#0f172a"}}>{item.name}{isLow&&<span style={{marginLeft:6,fontSize:11,background:"#dc2626",color:"white",borderRadius:4,padding:"1px 5px"}}>要発注</span>}</td>
-                              <td style={{textAlign:"center"}}>
-                                <input type="number" style={{width:60,border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 6px",fontSize:13,textAlign:"center",color:isLow?"#dc2626":"#0f172a",fontWeight:isLow?700:400}} value={item.stock} onChange={e=>{
-                                  const newItems=[...items];newItems[i]={...item,stock:e.target.value};saveItems(newItems);
-                                }}/>
-                              </td>
-                              <td style={{textAlign:"center"}}>
-                                <input type="number" style={{width:60,border:"1px solid #e2e8f0",borderRadius:6,padding:"3px 6px",fontSize:13,textAlign:"center"}} value={item.min_stock} onChange={e=>{
-                                  const newItems=[...items];newItems[i]={...item,min_stock:e.target.value};saveItems(newItems);
-                                }}/>
-                              </td>
-                              <td style={{textAlign:"center",color:"#64748b"}}>{item.unit}</td>
-                              <td style={{color:"#64748b",fontSize:12}}>{item.note}</td>
-                              <td><button className="btn btn-red btn-sm" onClick={()=>{if(window.confirm("削除しますか？"))saveItems(items.filter((_,j)=>j!==i));}}>削除</button></td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-            );
-          })()}
+          {tab==="supplies"&&isAdmin&&<SuppliesTab/>}
 
           {/* ── 必須保存書類管理 ── */}
           {tab==="docs"&&isAdmin&&(
