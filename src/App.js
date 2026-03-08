@@ -4222,23 +4222,28 @@ export default function App() {
             <div className="fade-in">
               <PH title="業務リンク集" sub="世話人・生活支援員の業務に役立つリンク"/>
               {[
-                {cat:"📋 支援・記録",links:[
-                  {label:"障害福祉サービス 基礎知識",url:"https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/shougaishahukushi/service/index.html"},
-                  {label:"WAM NET（参考様式等）",url:"https://www.wam.go.jp/content/wamnet/pcpub/top/"},
+                {cat:"📋 障害福祉・支援",links:[
+                  {label:"厚労省 障害福祉サービスとは",url:"https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/shougaishahukushi/index.html"},
+                  {label:"障害者総合支援法 わかりやすい解説（WAM）",url:"https://www.wam.go.jp/content/wamnet/pcpub/top/"},
+                  {label:"共同生活援助（グループホーム）制度",url:"https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/shougaishahukushi/service/sumau.html"},
                 ]},
-                {cat:"🏥 健康・医療",links:[
-                  {label:"救急安心センター（#7119）",url:"tel:7119"},
-                  {label:"こころの健康相談統一ダイヤル",url:"tel:0570-064-556"},
-                  {label:"熱中症対策（厚労省）",url:"https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/kenkou_iryou/kenkou/heat_stroke.html"},
+                {cat:"🏥 健康・医療・緊急",links:[
+                  {label:"救急安心センター（#7119に電話）",url:"tel:7119"},
+                  {label:"こころの健康相談（0570-064-556）",url:"tel:0570-064-556"},
+                  {label:"中毒110番（0990-950-2499）",url:"tel:0990-950-2499"},
+                  {label:"熱中症に関する情報（環境省）",url:"https://www.wbgt.env.go.jp/"},
+                  {label:"感染症情報（国立感染症研究所）",url:"https://www.niid.go.jp/niid/ja/"},
                 ]},
-                {cat:"🚨 緊急・防災",links:[
-                  {label:"消防庁 防災情報",url:"https://www.fdma.go.jp/"},
-                  {label:"気象庁 天気予報",url:"https://www.jma.go.jp/jma/index.html"},
-                  {label:"Yahoo!防災速報",url:"https://emg.yahoo.co.jp/"},
+                {cat:"🌦 天気・防災",links:[
+                  {label:"気象庁 今日の天気",url:"https://www.jma.go.jp/bosai/forecast/"},
+                  {label:"気象庁 警報・注意報",url:"https://www.jma.go.jp/bosai/warning/"},
+                  {label:"国土交通省 川の防災情報",url:"https://www.river.go.jp/"},
+                  {label:"Yahoo!天気・災害",url:"https://weather.yahoo.co.jp/weather/"},
                 ]},
-                {cat:"📚 研修・資格",links:[
-                  {label:"障害者支援施設 研修情報（WAM）",url:"https://www.wam.go.jp/content/wamnet/pcpub/top/"},
-                  {label:"介護・福祉士ネット",url:"https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/"},
+                {cat:"📚 研修・スキルアップ",links:[
+                  {label:"WAM NET 福祉の仕事",url:"https://www.wam.go.jp/content/wamnet/pcpub/top/"},
+                  {label:"e-ラーニング 介護・福祉（中央福祉学院）",url:"https://www.chuofukushi.or.jp/"},
+                  {label:"障害者虐待防止・権利擁護（厚労省）",url:"https://www.mhlw.go.jp/stf/seisakunitsuite/bunya/hukushi_kaigo/shougaishahukushi/gyakutaiboushi/index.html"},
                 ]},
               ].map((sec,si)=>(
                 <div key={si} className="card" style={{marginBottom:12}}>
