@@ -1673,8 +1673,7 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
     const pays=staffList.map(s=>{const sm=calcStaffSummary(s.id);return "¥"+sm.pay.toLocaleString();});
     rows.push(["月計合計","", ...staffList.map(s=>{const ct=countShifts(s.id);return Object.entries(ct).filter(([k,v])=>v>0).map(([k,v])=>k+v+"日").join("/");}), ...totals, ""]);
     rows.push(["給与見込","","", ...pays,""]);
-    const csv=[header,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("
-");
+    const csv=[header,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");
     const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=selMonth+"_シフト表.csv";a.click();
   };
