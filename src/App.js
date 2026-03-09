@@ -1618,6 +1618,124 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
     return counts;
   };
   const weekendBg=(dateStr)=>{ const wd=new Date(dateStr).getDay(); return wd===0?"#fef2f2":wd===6?"#eff6ff":""; };
+
+  // シフト1件の実働分数を計算（跨ぎあり）
+  const shiftMins=(st,en,brk=0)=>{
+    if(!st||!en) return 0;
+    const [sh,sm]=st.split(":").map(Number);
+    const [eh,em]=en.split(":").map(Number);
+    let mins=(eh*60+em)-(sh*60+sm);
+    if(mins<=0) mins+=24*60; // 日跨ぎ
+    return Math.max(0,mins-brk);
+  };
+  // スタッフの月次サマリー計算
+  const calcStaffSummary=(staffId)=>{
+    const rate=Number(staffList.find(s=>s.id===staffId)?.hourly_rate||0);
+    const nightRate=Math.floor(rate*1.25);
+    let summary={total:0,day:0,night:0,early:0,late:0,training:0,pay:0};
+    days.forEach(d=>{
+      const c=shiftData[skey(staffId,d)]||{};
+      if(!c.shift||["公休","有休","欠勤"].includes(c.shift)) return;
+      const st=SHIFT_TYPES.find(t=>t.label===c.shift)||{};
+      const brk=c.break_minutes!==undefined?Number(c.break_minutes):(st.break||0);
+      const m=shiftMins(c.start||st.start,c.end||st.end,brk);
+      summary.total+=m;
+      if(c.shift==="日勤") summary.day+=m;
+      else if(c.shift==="夜勤") summary.night+=m;
+      else if(c.shift==="早番") summary.early+=m;
+      else if(c.shift==="遅番") summary.late+=m;
+      else if(c.shift==="研修") summary.training+=m;
+      summary.pay+=c.shift==="夜勤"?Math.round(nightRate*m/60):Math.round(rate*m/60);
+    });
+    return summary;
+  };
+  const fh=(m)=>Math.floor(m/60)+"h"+(m%60?""+m%60+"m":"");
+
+  // CSVダウンロード
+  const downloadCSV=()=>{
+    const header=["日付","曜日",...staffList.map(s=>s.name+" シフト"),...staffList.map(s=>s.name+" 時間"),"配置数"];
+    const rows=days.map(d=>{
+      const wd=["日","月","火","水","木","金","土"][new Date(d.replace(/-/g,"/")).getDay()];
+      const shifts=staffList.map(s=>{const c=shiftData[skey(s.id,d)]||{};return c.shift||"";});
+      const hours=staffList.map(s=>{
+        const c=shiftData[skey(s.id,d)]||{};
+        if(!c.shift||["公休","有休","欠勤"].includes(c.shift)) return "";
+        const st=SHIFT_TYPES.find(t=>t.label===c.shift)||{};
+        const brk=c.break_minutes!==undefined?Number(c.break_minutes):(st.break||0);
+        const m=shiftMins(c.start||st.start,c.end||st.end,brk);
+        return m?fh(m):"";
+      });
+      const wc=staffList.filter(s=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+      return [d,wd,...shifts,...hours,wc];
+    });
+    // 月計行
+    const totals=staffList.map(s=>{const sm=calcStaffSummary(s.id);return fh(sm.total);});
+    const pays=staffList.map(s=>{const sm=calcStaffSummary(s.id);return "¥"+sm.pay.toLocaleString();});
+    rows.push(["月計合計","", ...staffList.map(s=>{const ct=countShifts(s.id);return Object.entries(ct).filter(([k,v])=>v>0).map(([k,v])=>k+v+"日").join("/");}), ...totals, ""]);
+    rows.push(["給与見込","","", ...pays,""]);
+    const csv=[header,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("
+");
+    const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=selMonth+"_シフト表.csv";a.click();
+  };
+
+  // 印刷用HTML
+  const printShift=()=>{
+    const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>シフト表 ${selMonth}</title>
+<style>
+  body{font-family:'Noto Sans JP',sans-serif;margin:0;padding:16px;font-size:10px;color:#1e293b;}
+  h2{margin:0 0 4px;font-size:16px;} .sub{color:#64748b;font-size:11px;margin-bottom:12px;}
+  table{width:100%;border-collapse:collapse;font-size:9px;}
+  th{background:#1e3a8a;color:white;padding:4px 3px;text-align:center;white-space:nowrap;}
+  td{padding:3px;border:1px solid #e2e8f0;text-align:center;white-space:nowrap;}
+  .weekend-sun{background:#fef2f2;} .weekend-sat{background:#eff6ff;}
+  .summary{margin-top:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;}
+  .summary-card{border:1px solid #e2e8f0;border-radius:6px;padding:8px;}
+  .summary-card h4{margin:0 0 4px;font-size:11px;} .summary-card p{margin:2px 0;font-size:10px;color:#475569;}
+  @media print{button{display:none;}}
+</style></head><body>
+<h2>シフト管理表（勤務体制一覧）</h2>
+<div class="sub">${selMonth} ／ 様式4準拠</div>
+<table>
+<thead><tr><th>日</th><th>曜</th>${staffList.map(s=>`<th>${s.name}</th>`).join("")}<th>配置</th></tr></thead>
+<tbody>
+${days.map(d=>{
+  const wd=["日","月","火","水","木","金","土"][new Date(d.replace(/-/g,"/")).getDay()];
+  const cls=wd==="日"?" class='weekend-sun'":wd==="土"?" class='weekend-sat'":"";
+  const cells=staffList.map(s=>{
+    const c=shiftData[skey(s.id,d)]||{};
+    if(!c.shift) return "<td></td>";
+    const st=SHIFT_TYPES.find(t=>t.label===c.shift)||{};
+    return `<td style="background:${st.bg||''};color:${st.color||''};">${c.shift}${c.start&&c.end&&!["公休","有休","欠勤"].includes(c.shift)?"<br><span style='font-size:8px'>"+c.start+"〜"+c.end+"</span>":""}</td>`;
+  }).join("");
+  const wc=staffList.filter(s=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+  return `<tr${cls}><td>${d.slice(8)}</td><td>${wd}</td>${cells}<td style="font-weight:700;">${wc}名</td></tr>`;
+}).join("")}
+</tbody>
+<tfoot><tr style="background:#f8fafc;font-weight:700;"><td colspan="2">月計</td>${staffList.map(s=>{
+  const ct=countShifts(s.id);const sm=calcStaffSummary(s.id);
+  return `<td style="font-size:8px;">${Object.entries(ct).filter(([k,v])=>v>0&&k).map(([k,v])=>k+v).join("/")}${sm.total?"<br>"+fh(sm.total):""}${sm.pay?"<br>¥"+sm.pay.toLocaleString():""}</td>`;
+}).join("")}<td></td></tr></tfoot>
+</table>
+<div class="summary">
+${staffList.map(s=>{const sm=calcStaffSummary(s.id);const ct=countShifts(s.id);const r=staffList.find(x=>x.id===s.id);
+return `<div class="summary-card"><h4>👤 ${s.name}</h4>
+<p>総稼働: <b>${fh(sm.total)}</b></p>
+${sm.day?`<p>日勤: ${fh(sm.day)}</p>`:""}
+${sm.night?`<p>夜勤: ${fh(sm.night)}</p>`:""}
+${sm.early?`<p>早番: ${fh(sm.early)}</p>`:""}
+${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
+<p>給与見込: <b>¥${sm.pay.toLocaleString()}</b>（時給¥${Number(r?.hourly_rate||0).toLocaleString()}）</p>
+</div>`;}).join("")}
+</div>
+<div style="text-align:center;margin-top:16px;">
+<button onclick="window.print()" style="padding:10px 24px;background:#1e3a8a;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;">🖨️ 印刷・PDF保存</button>
+<button onclick="window.close()" style="padding:10px 16px;background:#f1f5f9;color:#475569;border:none;border-radius:6px;cursor:pointer;font-size:13px;margin-left:8px;">閉じる</button>
+</div></body></html>`;
+    const w=window.open("","_blank","width=1000,height=900");
+    if(w){w.document.write(html);w.document.close();}
+  };
+
   if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
   return(
     <div className="fade-in">
@@ -1627,7 +1745,12 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
         <div style={{display:"flex",gap:6}}>
           <button className="btn btn-sm" style={{background:viewMode==="table"?"#2563eb":"#f1f5f9",color:viewMode==="table"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("table")}>📊 表形式</button>
           <button className="btn btn-sm" style={{background:viewMode==="list"?"#2563eb":"#f1f5f9",color:viewMode==="list"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("list")}>📋 スタッフ別</button>
+          <button className="btn btn-sm" style={{background:viewMode==="summary"?"#2563eb":"#f1f5f9",color:viewMode==="summary"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("summary")}>💰 給与集計</button>
         </div>
+        {isAdmin&&<div style={{display:"flex",gap:6,marginLeft:"auto"}}>
+          <button className="btn btn-secondary btn-sm" onClick={downloadCSV}><Icon name="download" size={13}/>CSV</button>
+          <button className="btn btn-secondary btn-sm" onClick={printShift}>🖨️ 印刷</button>
+        </div>}
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
         {SHIFT_TYPES.filter(s=>s.label).map(s=>(
@@ -1690,16 +1813,34 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
                 <td colSpan={2} style={{padding:"6px",fontWeight:700,fontSize:11,position:"sticky",left:0,background:"#f8fafc",zIndex:5}}>月計</td>
                 {staffList.map(s=>{
                   const counts=countShifts(s.id);
+                  const sm=calcStaffSummary(s.id);
                   const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
                   return(
-                    <td key={s.id} style={{textAlign:"center",padding:"4px 2px"}}>
-                      <div style={{fontWeight:700,fontSize:12,color:"#2563eb"}}>{workDays}日</div>
+                    <td key={s.id} style={{textAlign:"center",padding:"4px 2px",verticalAlign:"top"}}>
+                      <div style={{fontWeight:700,fontSize:11,color:"#2563eb"}}>{workDays}日</div>
                       <div style={{fontSize:9,color:"#94a3b8"}}>休{(counts["公休"]||0)+(counts["有休"]||0)}日</div>
+                      {sm.total>0&&<div style={{fontSize:9,color:"#0369a1",marginTop:1}}>⏱{fh(sm.total)}</div>}
+                      {sm.pay>0&&<div style={{fontSize:9,color:"#059669",fontWeight:700}}>¥{sm.pay.toLocaleString()}</div>}
                     </td>
                   );
                 })}
-                <td/>
+                <td style={{position:"sticky",right:0,background:"#f8fafc"}}/>
               </tr>
+              {isAdmin&&<tr style={{background:"#eff6ff",borderTop:"1px solid #bfdbfe"}}>
+                <td colSpan={2} style={{padding:"6px",fontWeight:700,fontSize:10,color:"#1d4ed8",position:"sticky",left:0,background:"#eff6ff",zIndex:5}}>区分別</td>
+                {staffList.map(s=>{
+                  const sm=calcStaffSummary(s.id);
+                  return(
+                    <td key={s.id} style={{textAlign:"center",padding:"3px 2px",fontSize:8,color:"#475569",verticalAlign:"top"}}>
+                      {sm.day>0&&<div style={{color:"#2563eb"}}>日{fh(sm.day)}</div>}
+                      {sm.night>0&&<div style={{color:"#7c3aed"}}>夜{fh(sm.night)}</div>}
+                      {sm.early>0&&<div style={{color:"#059669"}}>早{fh(sm.early)}</div>}
+                      {sm.late>0&&<div style={{color:"#d97706"}}>遅{fh(sm.late)}</div>}
+                    </td>
+                  );
+                })}
+                <td style={{position:"sticky",right:0,background:"#eff6ff"}}/>
+              </tr>}
             </tfoot>
           </table>
         </div>
@@ -1708,34 +1849,107 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
         <div style={{display:"grid",gap:12}}>
           {staffList.map(s=>{
             const counts=countShifts(s.id);
+            const sm=calcStaffSummary(s.id);
             const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
             return(
               <div key={s.id} className="card">
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                   <div><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{fontSize:12,color:"#94a3b8"}}>{s.role}</div></div>
-                  <div style={{textAlign:"right"}}><div style={{fontWeight:700,fontSize:16,color:"#2563eb"}}>{workDays}日</div><div style={{fontSize:11,color:"#94a3b8"}}>勤務予定</div></div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontWeight:700,fontSize:16,color:"#2563eb"}}>{workDays}日</div>
+                    <div style={{fontSize:11,color:"#94a3b8"}}>勤務予定</div>
+                  </div>
                 </div>
-                <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                <div style={{display:"flex",gap:3,flexWrap:"wrap",marginBottom:10}}>
                   {days.map(d=>{
                     const c=shiftData[skey(s.id,d)]||{};
                     const st=SHIFT_TYPES.find(t=>t.label===c.shift)||SHIFT_TYPES[8];
-                    {(()=>{const done=isComplete(s.id,d);return(
+                    const done=isComplete(s.id,d);
+                    return(
                       <div key={d} onClick={()=>isAdmin?openEdit(s.id,d):undefined}
                         style={{width:26,height:26,borderRadius:4,background:done?"#f0fdf4":st.bg,border:"1px solid "+(done?"#059669":st.color||"#e2e8f0"),display:"flex",alignItems:"center",justifyContent:"center",cursor:isAdmin?"pointer":"default",fontSize:10,fontWeight:700,color:done?"#059669":st.color,position:"relative"}}
                         title={d.slice(5)+(c.shift?" "+c.shift:"")+(done?" ✓退勤済":"")}>
                         {c.shift?st.short:d.slice(8)}
                         {done&&<span style={{position:"absolute",top:-3,right:-3,fontSize:7,background:"#059669",color:"white",borderRadius:"50%",width:9,height:9,display:"flex",alignItems:"center",justifyContent:"center"}}>✓</span>}
-                      </div>);})()}
+                      </div>
+                    );
                   })}
                 </div>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:8}}>
+                {/* シフト区分カウント */}
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:8}}>
                   {SHIFT_TYPES.filter(s2=>s2.label&&counts[s2.label]>0).map(s2=>(
                     <span key={s2.label} style={{fontSize:11,color:s2.color,background:s2.bg,borderRadius:4,padding:"1px 6px"}}>{s2.label} {counts[s2.label]}日</span>
                   ))}
                 </div>
+                {/* 稼働時間・給与サマリー */}
+                {sm.total>0&&<div style={{background:"#f8fafc",borderRadius:8,padding:"8px 12px",display:"flex",gap:16,flexWrap:"wrap",fontSize:12}}>
+                  <div><span style={{color:"#64748b"}}>総稼働 </span><span style={{fontWeight:700,color:"#0369a1"}}>{fh(sm.total)}</span></div>
+                  {sm.day>0&&<div><span style={{color:"#64748b"}}>日勤 </span><span style={{fontWeight:600,color:"#2563eb"}}>{fh(sm.day)}</span></div>}
+                  {sm.night>0&&<div><span style={{color:"#64748b"}}>夜勤 </span><span style={{fontWeight:600,color:"#7c3aed"}}>{fh(sm.night)}</span></div>}
+                  {sm.early>0&&<div><span style={{color:"#64748b"}}>早番 </span><span style={{fontWeight:600,color:"#059669"}}>{fh(sm.early)}</span></div>}
+                  {sm.late>0&&<div><span style={{color:"#64748b"}}>遅番 </span><span style={{fontWeight:600,color:"#d97706"}}>{fh(sm.late)}</span></div>}
+                  {isAdmin&&sm.pay>0&&<div style={{marginLeft:"auto"}}><span style={{color:"#64748b"}}>給与見込 </span><span style={{fontWeight:800,color:"#059669",fontSize:14}}>¥{sm.pay.toLocaleString()}</span></div>}
+                </div>}
               </div>
             );
           })}
+        </div>
+      )}
+      {viewMode==="summary"&&isAdmin&&(
+        <div>
+          <div className="card" style={{marginBottom:14}}>
+            <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>💰 {selMonth} 給与集計サマリー</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:14}}>
+              {[
+                {l:"スタッフ数",v:staffList.length+"名",c:"#2563eb"},
+                {l:"合計給与見込",v:"¥"+staffList.reduce((sum,s)=>sum+calcStaffSummary(s.id).pay,0).toLocaleString(),c:"#059669"},
+                {l:"総稼働時間",v:fh(staffList.reduce((sum,s)=>sum+calcStaffSummary(s.id).total,0)),c:"#0891b2"},
+                {l:"日勤計",v:fh(staffList.reduce((sum,s)=>sum+calcStaffSummary(s.id).day,0)),c:"#2563eb"},
+                {l:"夜勤計",v:fh(staffList.reduce((sum,s)=>sum+calcStaffSummary(s.id).night,0)),c:"#7c3aed"},
+              ].map((k,i)=>(
+                <div key={i} className="stat-card" style={{borderLeft:"4px solid "+k.c,textAlign:"center"}}>
+                  <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div>
+                  <div style={{fontWeight:800,fontSize:16,color:k.c}}>{k.v}</div>
+                </div>
+              ))}
+            </div>
+            <table>
+              <thead><tr><th>スタッフ</th><th>役職</th><th>勤務日</th><th>総稼働</th><th>日勤</th><th>夜勤</th><th>早番</th><th>遅番</th><th>時給</th><th>夜勤時給</th><th>給与見込</th></tr></thead>
+              <tbody>
+                {staffList.map(s=>{
+                  const sm=calcStaffSummary(s.id);
+                  const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+                  const rate=Number(s.hourly_rate||0);
+                  const nightRate=Math.floor(rate*1.25);
+                  return(
+                    <tr key={s.id} className="row-hover">
+                      <td style={{fontWeight:700}}>{s.name}</td>
+                      <td style={{fontSize:12,color:"#64748b"}}>{s.role}</td>
+                      <td className="mono" style={{textAlign:"center"}}>{workDays}日</td>
+                      <td className="mono" style={{fontWeight:700,color:"#0369a1"}}>{sm.total?fh(sm.total):"-"}</td>
+                      <td className="mono" style={{color:"#2563eb"}}>{sm.day?fh(sm.day):"-"}</td>
+                      <td className="mono" style={{color:"#7c3aed"}}>{sm.night?fh(sm.night):"-"}</td>
+                      <td className="mono" style={{color:"#059669"}}>{sm.early?fh(sm.early):"-"}</td>
+                      <td className="mono" style={{color:"#d97706"}}>{sm.late?fh(sm.late):"-"}</td>
+                      <td className="mono" style={{fontSize:12}}>¥{rate.toLocaleString()}</td>
+                      <td className="mono" style={{fontSize:12,color:"#7c3aed"}}>¥{nightRate.toLocaleString()}</td>
+                      <td className="mono" style={{fontWeight:800,color:"#059669",fontSize:14}}>¥{sm.pay.toLocaleString()}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot><tr style={{background:"#f0fdf4",fontWeight:700}}>
+                <td colSpan={3}>合計</td>
+                <td className="mono" style={{color:"#0369a1"}}>{fh(staffList.reduce((s,x)=>s+calcStaffSummary(x.id).total,0))}</td>
+                <td className="mono" style={{color:"#2563eb"}}>{fh(staffList.reduce((s,x)=>s+calcStaffSummary(x.id).day,0))}</td>
+                <td className="mono" style={{color:"#7c3aed"}}>{fh(staffList.reduce((s,x)=>s+calcStaffSummary(x.id).night,0))}</td>
+                <td className="mono" style={{color:"#059669"}}>{fh(staffList.reduce((s,x)=>s+calcStaffSummary(x.id).early,0))}</td>
+                <td className="mono" style={{color:"#d97706"}}>{fh(staffList.reduce((s,x)=>s+calcStaffSummary(x.id).late,0))}</td>
+                <td colSpan={2}/>
+                <td className="mono" style={{color:"#059669",fontSize:15}}>¥{staffList.reduce((s,x)=>s+calcStaffSummary(x.id).pay,0).toLocaleString()}</td>
+              </tr></tfoot>
+            </table>
+          </div>
         </div>
       )}
       {editCell&&isAdmin&&(
