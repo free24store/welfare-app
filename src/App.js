@@ -3426,6 +3426,111 @@ function SparkLine({data, color="#2563eb", height=40, width=120}) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  PinListCard（マスター設定タブ内：PIN一覧CSV出力）
+// ═══════════════════════════════════════════════════════
+function PinListCard({homes, corps}) {
+  const [pinData, setPinData] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+
+  const fetchPins = async () => {
+    setLoading(true);
+    // app_settingsからmaster_pin / admin_pin / sabikan_pin取得
+    const {data:settings} = await supabase.from("app_settings").select("key,value").in("key",["master_pin","admin_pin","sabikan_pin"]);
+    const getPin = (key) => settings?.find(s=>s.key===key)?.value || "（未設定）";
+
+    // 全ホームのスタッフPIN取得
+    const {data:allStaff} = await supabase.from("staff_members").select("id,name,role,home_id,pin").order("home_id,id");
+
+    setPinData({ settings: {master: getPin("master_pin"), admin: getPin("admin_pin"), sabikan: getPin("sabikan_pin")}, staff: allStaff||[] });
+    setLoading(false);
+  };
+
+  const downloadCSV = () => {
+    if(!pinData) return;
+    const rows = [];
+    rows.push(["区分","法人名","ホーム名","名前","役職","PIN"]);
+    rows.push(["マスター","","","","マスター管理者",pinData.settings.master]);
+    rows.push(["管理者","","","","管理者",pinData.settings.admin]);
+    rows.push(["サービス管理責任者","","","","サービス管理責任者",pinData.settings.sabikan]);
+    pinData.staff.forEach(s => {
+      const home = homes.find(h=>h.home_id===s.home_id);
+      const corp = corps.find(c=>c.id===home?.corp_id);
+      rows.push(["スタッフ", corp?.name||"", home?.name||s.home_id, s.name, s.role, s.pin||"（未設定）"]);
+    });
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
+    const bom = "\uFEFF";
+    const blob = new Blob([bom+csv], {type:"text/csv;charset=utf-8;"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "PIN一覧_"+new Date().toLocaleDateString("ja-JP").replace(/\//g,"")+".csv";
+    a.click(); URL.revokeObjectURL(url);
+  };
+
+  return (
+    <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:18,marginTop:12}}>
+      <div style={{fontWeight:700,fontSize:13,color:"white",marginBottom:10}}>🔐 PIN一覧</div>
+      <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>全ホームの管理者・スタッフPINを一覧確認・CSV出力できます</div>
+      {!pinData && (
+        <button style={{background:"#3b82f6",color:"white",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={fetchPins} disabled={loading}>
+          {loading?"読み込み中...":"🔍 PIN一覧を取得"}
+        </button>
+      )}
+      {pinData && (
+        <>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12,marginBottom:14}}>
+            <thead>
+              <tr style={{borderBottom:"1px solid #334155"}}>
+                {["区分","法人名","ホーム名","名前","役職","PIN"].map(h=>(
+                  <th key={h} style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{borderBottom:"1px solid #1e293b"}}>
+                <td style={{padding:"6px 8px",color:"#f1f5f9"}}>マスター</td>
+                <td colSpan={3} style={{padding:"6px 8px",color:"#94a3b8"}}>—</td>
+                <td style={{padding:"6px 8px",color:"#94a3b8"}}>マスター管理者</td>
+                <td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{pinData.settings.master}</td>
+              </tr>
+              <tr style={{borderBottom:"1px solid #1e293b"}}>
+                <td style={{padding:"6px 8px",color:"#f1f5f9"}}>管理者</td>
+                <td colSpan={3} style={{padding:"6px 8px",color:"#94a3b8"}}>—</td>
+                <td style={{padding:"6px 8px",color:"#94a3b8"}}>管理者</td>
+                <td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{pinData.settings.admin}</td>
+              </tr>
+              <tr style={{borderBottom:"1px solid #334155"}}>
+                <td style={{padding:"6px 8px",color:"#f1f5f9"}}>サービス管理責任者</td>
+                <td colSpan={3} style={{padding:"6px 8px",color:"#94a3b8"}}>—</td>
+                <td style={{padding:"6px 8px",color:"#94a3b8"}}>サービス管理責任者</td>
+                <td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{pinData.settings.sabikan}</td>
+              </tr>
+              {pinData.staff.map(s=>{
+                const home = homes.find(h=>h.home_id===s.home_id);
+                const corp = corps.find(c=>c.id===home?.corp_id);
+                return (
+                  <tr key={s.id} style={{borderBottom:"1px solid #1e293b"}}>
+                    <td style={{padding:"6px 8px",color:"#94a3b8"}}>スタッフ</td>
+                    <td style={{padding:"6px 8px",color:"#94a3b8"}}>{corp?.name||"—"}</td>
+                    <td style={{padding:"6px 8px",color:"#94a3b8"}}>{home?.name||s.home_id}</td>
+                    <td style={{padding:"6px 8px",color:"#f1f5f9",fontWeight:600}}>{s.name}</td>
+                    <td style={{padding:"6px 8px",color:"#94a3b8"}}>{s.role}</td>
+                    <td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{s.pin||"（未設定）"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <div style={{display:"flex",gap:8}}>
+            <button style={{background:"#059669",color:"white",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={downloadCSV}>⬇ CSVダウンロード</button>
+            <button style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:8,padding:"8px 14px",fontSize:13,cursor:"pointer"}} onClick={()=>setPinData(null)}>閉じる</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
 //  MasterScreen
 // ═══════════════════════════════════════════════════════
 function MasterScreen({onBack}) {
@@ -3905,6 +4010,7 @@ function MasterScreen({onBack}) {
                 <div>• 各ホームURL: <span style={{color:"#94a3b8",fontFamily:"monospace"}}>{window.location.origin}?home=【ホームID】</span></div>
               </div>
             </div>
+            <PinListCard homes={homes} corps={corps}/>
           </div>
         )}
 
@@ -5482,6 +5588,8 @@ export default function App() {
   const [shifts, setShifts] = useState([]);
   const [health, setHealth] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [currentHome, setCurrentHome] = useState(null);
+  const [currentCorp, setCurrentCorp] = useState(null);
 
   const [selUser, setSelUser] = useState(null);
   const [modal, setModal] = useState(null);
@@ -5521,6 +5629,18 @@ export default function App() {
   const unread = msgs.filter(m=>!m.is_read).length;
 
   useEffect(() => { if(auth==="app") loadAll(); }, [auth]);
+
+  useEffect(()=>{
+    const fetchHomeInfo = async () => {
+      const {data:home} = await supabase.from("master_homes").select("*").eq("home_id",HOME_ID).single();
+      setCurrentHome(home||null);
+      if(home?.corp_id){
+        const {data:corp} = await supabase.from("master_corporations").select("*").eq("id",home.corp_id).single();
+        setCurrentCorp(corp||null);
+      }
+    };
+    fetchHomeInfo();
+  },[]);
 
   // 退勤打刻忘れチェック（5分おきにブラウザ側で検知 → Supabaseに通知リクエスト記録）
   useEffect(()=>{
@@ -5698,7 +5818,7 @@ export default function App() {
             setLogoTapTimer(t);
           }}
         >🏠</div>
-        <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>グループホーム管理システム</div>
+        <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div>
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:32}}>powered by SOMME合同会社</div>
         <div style={{display:"grid",gap:12}}>
           <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏠 利用者ログイン</button>
@@ -5906,7 +6026,7 @@ export default function App() {
             </button>
           )}
           <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏠</div>
-          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>グループホーム管理システム</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.name}`}</div></div>
+          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.name}`}</div></div>
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {unread>0&&<span style={{background:"#ef4444",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 8px"}}>📩 {unread}</span>}
