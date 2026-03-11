@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
-import * as XLSX from "xlsx";
 
 const supabase = createClient(
   "https://qfjmmictnrsbmnlzrbhj.supabase.co",
@@ -43,6 +42,19 @@ const Icon = ({ name, size = 18 }) => {
   };
   return icons[name] || null;
 };
+
+// XLSX CDN loader
+let _xlsxLoaded = false;
+const loadXLSX = () => new Promise((resolve, reject) => {
+  if(typeof window.XLSX !== "undefined"){ resolve(window.XLSX); return; }
+  if(_xlsxLoaded){ const t=setInterval(()=>{ if(window.XLSX){clearInterval(t);resolve(window.XLSX);}},50); return; }
+  _xlsxLoaded = true;
+  const s = document.createElement("script");
+  s.src = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
+  s.onload = () => resolve(window.XLSX);
+  s.onerror = () => reject(new Error("XLSX load failed"));
+  document.head.appendChild(s);
+});
 
 const CSS = `
   @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
@@ -2062,7 +2074,8 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
   };
 
   // 様式1準拠 XLSX出力（行政提出用スプレッドシート形式）
-  const downloadXLSX1=()=>{
+  const downloadXLSX1=async()=>{
+    const XLSX = await loadXLSX();
     const WDAYL=["日","月","火","水","木","金","土"];
     const [yr,mo]=selMonth.split("-");
     const wb=XLSX.utils.book_new();
@@ -4010,6 +4023,7 @@ function ExportAllTab({users,staffList,attendance,transport,entries,claims,srecs
 
   const exportAll = async() => {
     setExporting(true);
+    const XLSX = await loadXLSX();
     const wb = XLSX.utils.book_new();
     const now = new Date();
     const ts = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
