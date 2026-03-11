@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
+import * as XLSX from "xlsx";
 
 const supabase = createClient(
   "https://qfjmmictnrsbmnlzrbhj.supabase.co",
@@ -374,20 +375,30 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today, isMobi
 }
 
 function MySalaryTab({me, salaries, attendance}) {
-  const mySalaries = salaries.filter(s => s.staff_id === me?.id).slice(0, 12);
+  const allMySalaries = salaries.filter(s => s.staff_id === me?.id);
+  const thisMonth = localDate().slice(0,7);
+  const [selMonth, setSelMonth] = useState(thisMonth);
+
+  const mySalaries = allMySalaries.slice(0, 12);
   const nextSalary = mySalaries.find(s => s.status !== "支払済");
 
   const myAttendance = attendance.filter(a => a.staff_id === me?.id);
-  const thisMonth = new Date().toISOString().slice(0,7);
-  const thisMonthAtt = myAttendance.filter(a => a.date?.startsWith(thisMonth));
-  const totalMins = thisMonthAtt.reduce((sum,a) => {
+  const selMonthAtt = myAttendance.filter(a => a.date?.startsWith(selMonth));
+  const totalMins = selMonthAtt.reduce((sum,a) => {
     if (!a.clock_in || !a.clock_out) return sum;
     return sum + Math.max(0, Math.round((new Date(a.clock_out)-new Date(a.clock_in))/60000) - (a.break_minutes||0));
   }, 0);
+  const selMonthSalary = allMySalaries.find(s => s.year_month === selMonth);
 
   return (
     <div>
-      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>給料・シフト確認</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:18,fontWeight:700}}>給料・シフト確認</div>
+        <div style={{display:"flex",alignItems:"center",gap:8}}>
+          <label style={{fontSize:12,color:"#64748b"}}>年月</label>
+          <input className="input" type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{width:150,fontSize:13}}/>
+        </div>
+      </div>
       <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>{me?.name} さんの給与情報</div>
       {nextSalary && (
         <div style={{background:"linear-gradient(135deg,#1e3a8a,#7c3aed)",borderRadius:16,padding:"20px",color:"white",marginBottom:16}}>
@@ -414,13 +425,18 @@ function MySalaryTab({me, salaries, attendance}) {
       )}
       <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:12,marginBottom:16}}>
         <div className="stat-card" style={{borderTop:"3px solid #2563eb",textAlign:"center"}}>
-          <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>今月の勤務時間</div>
+          <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{selMonth}の勤務時間</div>
           <div className="mono" style={{fontSize:20,fontWeight:800,color:"#2563eb"}}>{Math.floor(totalMins/60)}h{totalMins%60}m</div>
         </div>
         <div className="stat-card" style={{borderTop:"3px solid #059669",textAlign:"center"}}>
           <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>出勤日数</div>
-          <div className="mono" style={{fontSize:20,fontWeight:800,color:"#059669"}}>{thisMonthAtt.filter(a=>a.clock_in).length}日</div>
+          <div className="mono" style={{fontSize:20,fontWeight:800,color:"#059669"}}>{selMonthAtt.filter(a=>a.clock_in).length}日</div>
         </div>
+        {selMonthSalary&&<div className="stat-card" style={{borderTop:"3px solid #7c3aed",textAlign:"center"}}>
+          <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{selMonth}の給与</div>
+          <div className="mono" style={{fontSize:20,fontWeight:800,color:"#7c3aed"}}>¥{(selMonthSalary.net_pay||0).toLocaleString()}</div>
+          <div style={{fontSize:10,color:"#94a3b8",marginTop:2}}>{selMonthSalary.status||"確認中"}</div>
+        </div>}
       </div>
       <div className="card">
         <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📋 給与履歴</div>
@@ -443,6 +459,46 @@ function MySalaryTab({me, salaries, attendance}) {
             </div>
           ))}
         </div>
+      </div>
+      {/* 選択月の勤怠記録 */}
+      <div className="card" style={{marginTop:12}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>🕐 {selMonth} 勤怠記録</div>
+        {selMonthAtt.length===0
+          ?<div style={{textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:13}}>この月の勤怠データはありません</div>
+          :<div style={{overflowX:"auto"}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+              <thead><tr style={{background:"#f8fafc"}}>
+                <th style={{padding:"6px 8px",textAlign:"left",borderBottom:"2px solid #e2e8f0"}}>日付</th>
+                <th style={{padding:"6px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0"}}>出勤</th>
+                <th style={{padding:"6px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0"}}>退勤</th>
+                <th style={{padding:"6px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0"}}>休憩</th>
+                <th style={{padding:"6px 8px",textAlign:"center",borderBottom:"2px solid #e2e8f0"}}>実働</th>
+              </tr></thead>
+              <tbody>
+                {selMonthAtt.sort((a,b)=>a.date.localeCompare(b.date)).map((a,i)=>{
+                  const wd=["日","月","火","水","木","金","土"][new Date(a.date.replace(/-/g,"/")).getDay()];
+                  const mins=a.clock_in&&a.clock_out?Math.max(0,Math.round((new Date(a.clock_out)-new Date(a.clock_in))/60000)-(a.break_minutes||0)):0;
+                  const isWE=wd==="日"||wd==="土";
+                  return(
+                    <tr key={i} style={{borderBottom:"1px solid #f1f5f9",background:isWE?"#fafafa":"white"}}>
+                      <td style={{padding:"5px 8px",fontWeight:600,color:wd==="日"?"#ef4444":wd==="土"?"#2563eb":"#1e293b"}}>{a.date.slice(5)} ({wd})</td>
+                      <td style={{padding:"5px 8px",textAlign:"center",fontFamily:"monospace"}}>{a.clock_in?new Date(a.clock_in).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}):"-"}</td>
+                      <td style={{padding:"5px 8px",textAlign:"center",fontFamily:"monospace"}}>{a.clock_out?new Date(a.clock_out).toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"}):"-"}</td>
+                      <td style={{padding:"5px 8px",textAlign:"center",color:"#64748b"}}>{a.break_minutes||0}分</td>
+                      <td style={{padding:"5px 8px",textAlign:"center",fontWeight:700,color:mins>0?"#2563eb":"#94a3b8"}}>{mins>0?Math.floor(mins/60)+"h"+mins%60+"m":"-"}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+              <tfoot>
+                <tr style={{background:"#eff6ff",fontWeight:700}}>
+                  <td colSpan={4} style={{padding:"6px 8px",textAlign:"right",fontSize:12}}>月計</td>
+                  <td style={{padding:"6px 8px",textAlign:"center",color:"#2563eb"}}>{Math.floor(totalMins/60)}h{totalMins%60}m</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        }
       </div>
     </div>
   );
@@ -563,6 +619,205 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
     </div>
   );
 }
+
+function TransportTab({transport, users, staffList, isAdmin, loadAll, csv}) {
+  const [gasPrice, setGasPrice] = useState(170);
+  const [savedGasPrice, setSavedGasPrice] = useState(170);
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState(null);
+  const [beforeImg, setBeforeImg] = useState(null);
+  const [afterImg, setAfterImg] = useState(null);
+  const [beforeKm, setBeforeKm] = useState("");
+  const [afterKm, setAfterKm] = useState("");
+  const [tForm, setTForm] = useState({date:localDate(),user_id:"",user_name:"",type:"送迎（往）",destination:"",driver:"",distance:"",cost:"",time:"",note:""});
+  const [saving, setSaving] = useState(false);
+  const [filterMonth, setFilterMonth] = useState(localDate().slice(0,7));
+
+  useEffect(()=>{
+    supabase.from("app_settings").select("value").eq("key","gas_price").single().then(({data})=>{
+      if(data?.value){const v=Number(data.value);setGasPrice(v);setSavedGasPrice(v);}
+    });
+  },[]);
+
+  const saveGasPrice=async()=>{
+    await supabase.from("app_settings").upsert({key:"gas_price",value:String(gasPrice)},{onConflict:"key"});
+    setSavedGasPrice(gasPrice);
+    alert("ガソリン単価を保存しました");
+  };
+
+  const toBase64=(file)=>new Promise((res,rej)=>{
+    const r=new FileReader();r.onload=()=>res(r.result.split(",")[1]);r.onerror=rej;r.readAsDataURL(file);
+  });
+
+  const readMeter=async(imgBase64,label)=>{
+    setOcrLoading(true);setOcrResult(null);
+    try {
+      const res=await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({
+          model:"claude-sonnet-4-20250514",max_tokens:100,
+          messages:[{role:"user",content:[
+            {type:"image",source:{type:"base64",media_type:"image/jpeg",data:imgBase64}},
+            {type:"text",text:"この車のオドメーター画像から走行距離の数値をkm単位で読み取り、数字のみ答えてください。例：12345.6"}
+          ]}]
+        })
+      });
+      const data=await res.json();
+      const text=data.content?.[0]?.text||"";
+      const num=parseFloat(text.replace(/[^0-9.]/g,""));
+      if(!isNaN(num)){
+        setOcrResult({label,km:num,ok:true});
+        if(label==="before")setBeforeKm(String(num));
+        else setAfterKm(String(num));
+      } else {
+        setOcrResult({label,error:"数値を読み取れませんでした。手動で入力してください。"});
+      }
+    } catch(e){setOcrResult({label,error:"読み取りエラー: "+e.message});}
+    setOcrLoading(false);
+  };
+
+  const handleImg=async(e,type)=>{
+    const file=e.target.files?.[0];if(!file)return;
+    const b64=await toBase64(file);
+    const url=URL.createObjectURL(file);
+    if(type==="before"){setBeforeImg(url);await readMeter(b64,"before");}
+    else{setAfterImg(url);await readMeter(b64,"after");}
+  };
+
+  const dist=afterKm&&beforeKm?Math.max(0,Number(afterKm)-Number(beforeKm)).toFixed(1):tForm.distance;
+  const autoCost=dist&&savedGasPrice?Math.round(Number(dist)/12*savedGasPrice):"";
+
+  const handleSave=async()=>{
+    if(!tForm.date||!tForm.user_id){alert("日付と利用者を入力してください");return;}
+    setSaving(true);
+    const d=Number(dist)||Number(tForm.distance)||0;
+    const c=Number(tForm.cost)||Number(autoCost)||0;
+    await supabase.from("transport_log").insert({...tForm,distance:d,cost:c,before_km:beforeKm||null,after_km:afterKm||null});
+    setTForm({date:localDate(),user_id:"",user_name:"",type:"送迎（往）",destination:"",driver:"",distance:"",cost:"",time:"",note:""});
+    setBeforeImg(null);setAfterImg(null);setBeforeKm("");setAfterKm("");setOcrResult(null);
+    setSaving(false);loadAll();
+  };
+
+  const filtered=transport.filter(t=>t.date&&t.date.startsWith(filterMonth));
+  const totalDist=filtered.reduce((s,t)=>s+Number(t.distance||0),0);
+  const totalCost=filtered.reduce((s,t)=>s+Number(t.cost||0),0);
+
+  return(
+    <div className="fade-in">
+      <div style={{fontWeight:700,fontSize:18,marginBottom:4}}>送迎管理</div>
+      <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>メーター写真でkm自動読取・ガソリンコスト計算</div>
+
+      {isAdmin&&<div className="card" style={{marginBottom:14,background:"#fffbeb",border:"1px solid #fde68a"}}>
+        <div style={{fontWeight:700,fontSize:13,marginBottom:8}}>⛽ ガソリン単価設定（相模原市平均）</div>
+        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+          <input className="input" type="number" min={100} max={300} style={{maxWidth:110}} value={gasPrice} onChange={e=>setGasPrice(Number(e.target.value))}/>
+          <span style={{fontSize:13,color:"#64748b"}}>円/L</span>
+          <button className="btn btn-primary btn-sm" onClick={saveGasPrice}>保存</button>
+          <span style={{fontSize:11,color:"#94a3b8"}}>保存済: ¥{savedGasPrice}/L　燃費12km/L換算で自動計算</span>
+        </div>
+      </div>}
+
+      <div className="card" style={{marginBottom:14}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📷 送迎記録追加</div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+          <div>
+            <div style={{fontWeight:600,fontSize:12,marginBottom:6,color:"#2563eb"}}>🚗 出発前メーター</div>
+            <label style={{display:"block",border:"2px dashed #93c5fd",borderRadius:10,padding:12,textAlign:"center",cursor:"pointer",background:"#eff6ff",marginBottom:6,minHeight:80}}>
+              <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>handleImg(e,"before")}/>
+              {beforeImg?<img src={beforeImg} alt="before" style={{maxWidth:"100%",maxHeight:100,borderRadius:6,objectFit:"contain"}}/>:<div style={{fontSize:12,color:"#2563eb",paddingTop:16}}>📷 タップして撮影<br/><span style={{fontSize:10,color:"#94a3b8"}}>または選択</span></div>}
+            </label>
+            <input className="input" type="number" placeholder="km（手動入力可）" value={beforeKm} onChange={e=>setBeforeKm(e.target.value)} style={{fontSize:13}}/>
+          </div>
+          <div>
+            <div style={{fontWeight:600,fontSize:12,marginBottom:6,color:"#059669"}}>🏁 到着後メーター</div>
+            <label style={{display:"block",border:"2px dashed #6ee7b7",borderRadius:10,padding:12,textAlign:"center",cursor:"pointer",background:"#ecfdf5",marginBottom:6,minHeight:80}}>
+              <input type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={e=>handleImg(e,"after")}/>
+              {afterImg?<img src={afterImg} alt="after" style={{maxWidth:"100%",maxHeight:100,borderRadius:6,objectFit:"contain"}}/>:<div style={{fontSize:12,color:"#059669",paddingTop:16}}>📷 タップして撮影<br/><span style={{fontSize:10,color:"#94a3b8"}}>または選択</span></div>}
+            </label>
+            <input className="input" type="number" placeholder="km（手動入力可）" value={afterKm} onChange={e=>setAfterKm(e.target.value)} style={{fontSize:13}}/>
+          </div>
+        </div>
+
+        {ocrLoading&&<div style={{textAlign:"center",padding:"10px",fontSize:13,color:"#2563eb",background:"#eff6ff",borderRadius:8,marginBottom:10}}>🤖 AIがメーターを読み取り中...</div>}
+        {ocrResult&&<div style={{padding:"8px 12px",borderRadius:8,marginBottom:10,background:ocrResult.error?"#fef2f2":"#f0fdf4",border:"1px solid "+(ocrResult.error?"#fecaca":"#bbf7d0"),fontSize:13}}>
+          {ocrResult.error?<span style={{color:"#ef4444"}}>⚠️ {ocrResult.error}</span>:<span style={{color:"#059669"}}>✅ {ocrResult.label==="before"?"出発前":"到着後"}: <strong>{ocrResult.km} km</strong></span>}
+        </div>}
+
+        {(dist||autoCost)&&<div style={{display:"flex",gap:16,padding:"10px 14px",background:"#f8fafc",borderRadius:8,marginBottom:10,flexWrap:"wrap"}}>
+          {dist&&<div><span style={{fontSize:12,color:"#64748b"}}>走行距離: </span><span style={{fontWeight:700,color:"#0369a1",fontSize:15}}>{dist} km</span></div>}
+          {autoCost&&<div><span style={{fontSize:12,color:"#64748b"}}>推定ガソリン代: </span><span style={{fontWeight:700,color:"#059669",fontSize:15}}>¥{Number(autoCost).toLocaleString()}</span><span style={{fontSize:10,color:"#94a3b8"}}>（¥{savedGasPrice}/L, 12km/L）</span></div>}
+        </div>}
+
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(155px,1fr))",gap:8,marginBottom:10}}>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>日付</label><input className="input" type="date" value={tForm.date} onChange={e=>setTForm(f=>({...f,date:e.target.value}))}/></div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>時刻</label><input className="input" type="time" value={tForm.time} onChange={e=>setTForm(f=>({...f,time:e.target.value}))}/></div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
+            <select className="input" value={tForm.user_id} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setTForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
+              <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>種別</label>
+            <select className="input" value={tForm.type} onChange={e=>setTForm(f=>({...f,type:e.target.value}))}>
+              {["送迎（往）","送迎（復）","通院送迎","その他"].map(t=><option key={t}>{t}</option>)}
+            </select>
+          </div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当者</label>
+            <select className="input" value={tForm.driver} onChange={e=>setTForm(f=>({...f,driver:e.target.value}))}>
+              <option value="">選択...</option>{staffList.map(s=><option key={s.id}>{s.name}</option>)}
+            </select>
+          </div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>目的地</label><input className="input" value={tForm.destination} onChange={e=>setTForm(f=>({...f,destination:e.target.value}))} placeholder="例: 相模原市立病院"/></div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>距離(km)</label><input className="input" type="number" value={dist||tForm.distance} onChange={e=>setTForm(f=>({...f,distance:e.target.value}))} placeholder="写真から自動"/></div>
+          <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>コスト(円)</label><input className="input" type="number" value={tForm.cost||autoCost} onChange={e=>setTForm(f=>({...f,cost:e.target.value}))} placeholder={autoCost?String(autoCost):"自動計算"}/></div>
+        </div>
+        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px"}} onClick={handleSave} disabled={saving}>{saving?"保存中...":"📝 送迎記録を保存"}</button>
+      </div>
+
+      <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
+        <input className="input" type="month" style={{maxWidth:160}} value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}/>
+        {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(filtered,"送迎記録")}><Icon name="download" size={13}/>CSV</button>}
+      </div>
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))",gap:10,marginBottom:14}}>
+        {[
+          {l:"送迎回数",v:filtered.length+"回",c:"#2563eb"},
+          {l:"総走行距離",v:totalDist.toFixed(1)+"km",c:"#d97706"},
+          {l:"推定ガソリン代",v:"¥"+Math.round(totalDist/12*savedGasPrice).toLocaleString(),c:"#7c3aed"},
+          {l:"記録コスト合計",v:"¥"+totalCost.toLocaleString(),c:"#059669"},
+        ].map((k,i)=>(
+          <div key={i} className="stat-card" style={{borderLeft:"4px solid "+k.c}}>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div>
+            <div style={{fontWeight:800,fontSize:16,color:k.c}}>{k.v}</div>
+          </div>
+        ))}
+      </div>
+      <div className="card">
+        <table>
+          <thead><tr><th>日付</th><th>時刻</th><th>利用者</th><th>種別</th><th>目的地</th><th>担当</th><th>距離</th><th>コスト</th>{isAdmin&&<th>操作</th>}</tr></thead>
+          <tbody>
+            {filtered.length===0
+              ?<tr><td colSpan={9} style={{textAlign:"center",padding:"24px",color:"#94a3b8"}}>この月の記録はありません</td></tr>
+              :filtered.map((t,i)=>(
+                <tr key={i} className="row-hover">
+                  <td className="mono" style={{fontSize:12}}>{t.date}</td>
+                  <td className="mono" style={{fontSize:12}}>{t.time||"—"}</td>
+                  <td style={{fontWeight:600}}>{t.user_name}</td>
+                  <td><span className="tag" style={{background:"#eff6ff",color:"#2563eb",fontSize:11}}>{t.type}</span></td>
+                  <td style={{fontSize:12}}>{t.destination}</td>
+                  <td style={{fontSize:12}}>{t.driver}</td>
+                  <td className="mono">{Number(t.distance||0).toFixed(1)}km</td>
+                  <td className="mono" style={{fontWeight:700,color:"#059669"}}>¥{Number(t.cost||0).toLocaleString()}</td>
+                  {isAdmin&&<td><button className="btn btn-red btn-sm" onClick={async()=>{if(window.confirm("削除しますか？")){await supabase.from("transport_log").delete().eq("id",t.id);loadAll();}}}><Icon name="trash" size={12}/></button></td>}
+                </tr>
+              ))
+            }
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 
 function BillingTab({claims, users, perfs, srecs, today}) {
   const [activeSection, setActiveSection] = useState("menu");
@@ -1175,6 +1430,86 @@ function SabikanPinForm() {
   );
 }
 
+
+// 打刻通知設定コンポーネント
+function ClockNotifySettings({staffList}) {
+  const [notifyEmail, setNotifyEmail] = useState("");
+  const [notifyEnabled, setNotifyEnabled] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+  const [lastSent, setLastSent] = useState(null);
+
+  useEffect(()=>{
+    supabase.from("app_settings").select("value").eq("key","clock_notify_settings").single().then(({data})=>{
+      if(data?.value){
+        try{const v=JSON.parse(data.value);setNotifyEmail(v.email||"");setNotifyEnabled(v.enabled||false);setLastSent(v.last_sent||null);}catch(e){}
+      }
+      setLoaded(true);
+    });
+  },[]);
+
+  const save=async()=>{
+    if(notifyEnabled&&!notifyEmail){alert("通知先メールアドレスを入力してください");return;}
+    setSaving(true);
+    const val=JSON.stringify({email:notifyEmail,enabled:notifyEnabled,last_sent:lastSent});
+    await supabase.from("app_settings").upsert({key:"clock_notify_settings",value:val},{onConflict:"key"});
+    setSaving(false);
+    alert("通知設定を保存しました");
+  };
+
+  if(!loaded) return null;
+  return(
+    <div className="card" style={{marginBottom:16,border:"2px solid #dbeafe"}}>
+      <div style={{fontWeight:700,fontSize:15,marginBottom:4,display:"flex",alignItems:"center",gap:8}}>
+        <span style={{fontSize:20}}>🔔</span> 打刻忘れ通知設定
+      </div>
+      <div style={{fontSize:12,color:"#64748b",marginBottom:16,lineHeight:1.8}}>
+        勤務終了時刻を過ぎても退勤打刻がないスタッフに、設定したメールアドレスへ通知します。<br/>
+        ※ メール送信にはSupabaseのEdge FunctionとResend（無料）の設定が必要です。<br/>
+        <a href="https://resend.com" target="_blank" rel="noreferrer" style={{color:"#2563eb",fontSize:11}}>Resend無料登録 →</a>
+      </div>
+      <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+        <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontWeight:600,fontSize:13}}>
+          <input type="checkbox" checked={notifyEnabled} onChange={e=>setNotifyEnabled(e.target.checked)} style={{width:16,height:16}}/>
+          通知を有効にする
+        </label>
+      </div>
+      {notifyEnabled&&<>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:4}}>通知先メールアドレス（管理者）</label>
+          <input className="input" type="email" value={notifyEmail} onChange={e=>setNotifyEmail(e.target.value)} placeholder="admin@example.com" style={{maxWidth:300}}/>
+        </div>
+        <div style={{background:"#fffbeb",border:"1px solid #fde68a",borderRadius:8,padding:"10px 14px",marginBottom:12,fontSize:12,color:"#92400e"}}>
+          <strong>📋 各スタッフのシフト勤務終了時刻</strong>
+          <div style={{marginTop:6,display:"flex",flexWrap:"wrap",gap:8}}>
+            {[
+              {label:"日勤",end:"18:00"},{label:"早番",end:"16:00"},
+              {label:"遅番",end:"20:00"},{label:"夜勤",end:"05:00（翌日）"},
+            ].map(s=><span key={s.label} style={{background:"white",border:"1px solid #fde68a",borderRadius:4,padding:"2px 8px",fontWeight:600}}>{s.label}: {s.end}</span>)}
+          </div>
+          <div style={{marginTop:8,fontSize:11,color:"#b45309"}}>
+            ※ Supabase Edge Function（cron）で上記時刻の5分後に退勤未打刻スタッフを検知してメール送信します。<br/>
+            Edge Functionの設定手順: Supabase Dashboard → Edge Functions → 新規作成
+          </div>
+        </div>
+        <div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"10px 14px",marginBottom:12}}>
+          <div style={{fontSize:12,fontWeight:700,marginBottom:6,color:"#065f46"}}>📧 各スタッフのメールアドレス確認</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+            {staffList.map(s=>(
+              <div key={s.id} style={{fontSize:11,padding:"3px 8px",borderRadius:6,background:s.email?"#dcfce7":"#fee2e2",color:s.email?"#065f46":"#991b1b",border:"1px solid "+(s.email?"#bbf7d0":"#fecaca")}}>
+                {s.name}：{s.email||"⚠️ メール未設定"}
+              </div>
+            ))}
+          </div>
+          <div style={{fontSize:11,color:"#64748b",marginTop:6}}>⚠️ のスタッフはスタッフ管理から登録してください</div>
+        </div>
+      </>}
+      <button className="btn btn-primary" onClick={save} disabled={saving}>{saving?"保存中...":"設定を保存"}</button>
+      {lastSent&&<div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>最終通知: {lastSent}</div>}
+    </div>
+  );
+}
+
 function AdminPinForm({loadAll}) {
   const [cur,setCur]=useState("");
   const [nw,setNw]=useState("");
@@ -1724,7 +2059,88 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
     const csv=rows.map(r=>r.map(v=>'"'+String(v||"").replace(/"/g,'""')+'"').join(",")).join("\n");
     const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
     const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=selMonth+"_様式4_勤務体制一覧表.csv";a.click();
-  }
+  };
+
+  // 様式1準拠 XLSX出力（行政提出用スプレッドシート形式）
+  const downloadXLSX1=()=>{
+    const WDAYL=["日","月","火","水","木","金","土"];
+    const [yr,mo]=selMonth.split("-");
+    const wb=XLSX.utils.book_new();
+    const ws_data=[];
+    // ── ヘッダー ──
+    ws_data.push(["（参考様式１）","","","","","従業者の勤務の体制及び勤務形態一覧表（令和"+( Number(yr)-2018)+"年"+Number(mo)+"月分）","","","サービス種類","共同生活援助　介護包括型"]);
+    ws_data.push(["","","","","","","","","事業所名","グループホームつながり"]);
+    ws_data.push([]);
+    // ── 凡例 ──
+    ws_data.push(["１．勤務時間凡例"]);
+    ws_data.push(["区分","時間帯","時間数","区分","時間帯","時間数"]);
+    ws_data.push(["①","09:00〜18:00","7.00","②","22:00〜05:00","7.00"]);
+    ws_data.push([]);
+    // ── 列ヘッダー ──
+    const hRow=["職種","勤務形態","氏名","社会福祉士等","法人常勤","法人勤続3年以上","行動援護従事"];
+    days.forEach(d=>{
+      const wd=WDAYL[new Date(d.replace(/-/g,"/")).getDay()];
+      hRow.push(Number(d.slice(8))+"("+wd+")");
+    });
+    hRow.push("4週合計","週平均","常勤換算");
+    ws_data.push(hRow);
+
+    // ── スタッフ別2行（時間帯・時間数）──
+    // 役職グループ順で並べる
+    const roleOrder=["管理者","サービス管理責任者","世話人","生活支援員","夜間支援員","その他"];
+    const sorted=[...staffList].sort((a,b)=>roleOrder.indexOf(a.role)-roleOrder.indexOf(b.role));
+    sorted.forEach(s=>{
+      const ft=s.full_time==="true"?"A：常勤専従":"C：非常勤専従";
+      // 時間帯行
+      const bandRow=[s.role||"",ft,s.name,"","","",""];
+      // 時間数行
+      const timeRow=["","","","","","",""];
+      let totalMins=0;
+      days.forEach(d=>{
+        const c=shiftData[skey(s.id,d)]||{};
+        if(!c.shift||["公休","有休","欠勤",""].includes(c.shift)){
+          bandRow.push(c.shift==="公休"||c.shift==="有休"?"休":c.shift==="欠勤"?"欠":"");
+          timeRow.push(c.shift==="公休"||c.shift==="有休"||c.shift==="欠勤"?"0":"");
+          return;
+        }
+        const st=SHIFT_TYPES.find(t=>t.label===c.shift)||{};
+        // 凡例記号
+        const band=c.shift==="日勤"||c.shift==="早番"||c.shift==="遅番"?"①":c.shift==="夜勤"?"②":c.shift;
+        const mins=shiftMins(c.start||st.start, c.end||st.end, c.break_minutes!==undefined?Number(c.break_minutes):(st.break||0));
+        totalMins+=mins;
+        bandRow.push(band);
+        timeRow.push(mins>0?(mins/60).toFixed(2):"");
+      });
+      const weeks=Math.ceil(days.length/7);
+      bandRow.push("","","");
+      timeRow.push(totalMins>0?(totalMins/60).toFixed(2):"0", totalMins>0?((totalMins/60)/weeks).toFixed(1):"0", totalMins>0?((totalMins/60)/40).toFixed(2):"0");
+      ws_data.push(bandRow);
+      ws_data.push(timeRow);
+      ws_data.push([]); // スタッフ間の空行
+    });
+
+    // ── 配置数合計行 ──
+    ws_data.push([]);
+    const countRow=["配置数","","合計"];
+    for(let i=0;i<7;i++) countRow.push("");
+    days.forEach(d=>{
+      const wc=staffList.filter(s=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+      countRow.push(wc>0?wc:"");
+    });
+    ws_data.push(countRow);
+
+    // ── シート作成 ──
+    const ws=XLSX.utils.aoa_to_sheet(ws_data);
+
+    // 列幅設定
+    const colWidths=[{wch:14},{wch:12},{wch:10},{wch:8},{wch:6},{wch:8},{wch:8}];
+    days.forEach(()=>colWidths.push({wch:5}));
+    colWidths.push({wch:7},{wch:7},{wch:8});
+    ws["!cols"]=colWidths;
+
+    XLSX.utils.book_append_sheet(wb,ws,yr+"年"+Number(mo)+"月");
+    XLSX.writeFile(wb, selMonth+"_様式1_勤務体制一覧表.xlsx");
+  };
 
   // 印刷用HTML
   const printShift=()=>{
@@ -1904,9 +2320,10 @@ ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
             </div>
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"center"}}>
-            <div style={{fontSize:9,color:"#1d4ed8",fontWeight:700}}>🏛 行政提出（様式4）</div>
-            <div style={{display:"flex",gap:4}}>
-              <button className="btn btn-sm" style={{background:"#1d4ed8",color:"white",fontSize:12,padding:"4px 10px"}} onClick={downloadCSV4}><Icon name="download" size={13}/>CSV</button>
+            <div style={{fontSize:9,color:"#1d4ed8",fontWeight:700}}>🏛 行政提出（様式1/4）</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+              <button className="btn btn-sm" style={{background:"#1d4ed8",color:"white",fontSize:12,padding:"4px 10px"}} onClick={downloadXLSX1} title="参考様式1準拠のExcelファイル"><Icon name="download" size={13}/>様式1 XLSX</button>
+              <button className="btn btn-sm" style={{background:"#0e7490",color:"white",fontSize:12,padding:"4px 10px"}} onClick={downloadCSV4} title="CSV形式（様式4）"><Icon name="download" size={13}/>CSV</button>
               <button className="btn btn-sm" style={{background:"#1d4ed8",color:"white",fontSize:12,padding:"4px 10px"}} onClick={printShift4}>🖨️ PDF</button>
             </div>
           </div>
@@ -2351,9 +2768,1260 @@ function SuppliesTab() {
   );
 }
 
-function DocsTab({today}) {
+
+// ─── 管理者：立替払い管理 ───────────────────────────────
+function ExpenseAdminTab({expenses, staffList, loadAll, csv}) {
+  const CATS = ["利用者の日用品・生活用品","送迎・交通費","食材・食事関連","医療・薬代","業務用品・事務用品","研修・書籍","その他"];
+  const [filterMonth, setFilterMonth] = useState(localDate().slice(0,7));
+  const [filterStaff, setFilterStaff] = useState("全員");
+  const [filterStatus, setFilterStatus] = useState("全て");
+  const [previewUrl, setPreviewUrl] = useState(null);
+
+  const filtered = expenses.filter(e=>{
+    if(filterMonth && !e.date?.startsWith(filterMonth)) return false;
+    if(filterStaff!=="全員" && e.staff_name!==filterStaff) return false;
+    if(filterStatus!=="全て" && (e.status||"申請中")!==filterStatus) return false;
+    return true;
+  });
+
+  const totalAmt = filtered.reduce((s,e)=>s+Number(e.amount||0),0);
+  const pendingAmt = filtered.filter(e=>e.status==="申請中").reduce((s,e)=>s+Number(e.amount||0),0);
+  const paidAmt = filtered.filter(e=>e.status==="精算済").reduce((s,e)=>s+Number(e.amount||0),0);
+
+  const updateStatus = async(id, status) => {
+    await supabase.from("expense_claims").update({status, approved_at: status==="承認済"||status==="精算済" ? localDate() : null}).eq("id",id);
+    loadAll();
+  };
+
+  const downloadCSV = () => {
+    const rows = [["日付","スタッフ","カテゴリ","内容","金額","領収書","ステータス","承認日","備考","画像URL"]];
+    filtered.forEach(e=>rows.push([e.date,e.staff_name,e.category,e.description,e.amount,e.has_receipt?"あり":"なし",e.status||"申請中",e.approved_at||"",e.note||"",e.receipt_url||""]));
+    const c=rows.map(r=>r.map(v=>'"'+String(v||"").replace(/"/g,'""')+'"').join(",")).join("\n");
+    const blob=new Blob(["\uFEFF"+c],{type:"text/csv;charset=utf-8;"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=filterMonth+"_立替払い一覧.csv";a.click();
+  };
+
+  const catTotals = CATS.map(cat=>({cat,amt:filtered.filter(e=>e.category===cat).reduce((s,e)=>s+Number(e.amount||0),0)})).filter(x=>x.amt>0);
+  const statusColor = s => s==="精算済"?"#059669":s==="承認済"?"#2563eb":s==="却下"?"#ef4444":"#d97706";
+  const statusBg   = s => s==="精算済"?"#f0fdf4":s==="承認済"?"#eff6ff":s==="却下"?"#fef2f2":"#fffbeb";
+
+  return (
+    <div className="fade-in">
+      {/* 画像プレビューモーダル */}
+      {previewUrl&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setPreviewUrl(null)}>
+          <div style={{position:"relative",maxWidth:600,width:"100%"}} onClick={e=>e.stopPropagation()}>
+            <img src={previewUrl} alt="領収書" style={{width:"100%",borderRadius:12,boxShadow:"0 20px 60px rgba(0,0,0,.5)"}}/>
+            <button onClick={()=>setPreviewUrl(null)} style={{position:"absolute",top:-12,right:-12,width:32,height:32,borderRadius:"50%",background:"white",border:"none",fontSize:18,cursor:"pointer",lineHeight:"32px",textAlign:"center",boxShadow:"0 2px 8px rgba(0,0,0,.3)"}}>✕</button>
+          </div>
+        </div>
+      )}
+
+      <PH title="立替払い管理" sub={`${filtered.length}件`} extra={
+        <button className="btn btn-secondary btn-sm" onClick={downloadCSV}><Icon name="download" size={13}/>CSV</button>
+      }/>
+
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10,marginBottom:16}}>
+        {[
+          {l:"合計金額",v:"¥"+totalAmt.toLocaleString(),c:"#1e293b"},
+          {l:"申請中",v:"¥"+pendingAmt.toLocaleString(),c:"#d97706"},
+          {l:"精算済",v:"¥"+paidAmt.toLocaleString(),c:"#059669"},
+          {l:"件数",v:filtered.length+"件",c:"#2563eb"},
+        ].map(k=>(
+          <div key={k.l} className="stat-card" style={{textAlign:"center"}}>
+            <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div>
+            <div style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
+        <input className="input" type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{width:150}}/>
+        <select className="input" value={filterStaff} onChange={e=>setFilterStaff(e.target.value)} style={{width:140}}>
+          <option value="全員">全スタッフ</option>
+          {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+        </select>
+        {["全て","申請中","承認済","精算済","却下"].map(st=>(
+          <button key={st} className="btn btn-sm" style={{background:filterStatus===st?"#2563eb":"#f1f5f9",color:filterStatus===st?"white":"#475569",border:"none",fontSize:12}} onClick={()=>setFilterStatus(st)}>{st}</button>
+        ))}
+      </div>
+
+      {catTotals.length>0&&(
+        <div className="card" style={{marginBottom:14,padding:"10px 14px"}}>
+          <div style={{fontWeight:700,fontSize:12,marginBottom:8,color:"#64748b"}}>📊 カテゴリ別合計</div>
+          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+            {catTotals.map(x=>(
+              <div key={x.cat} style={{fontSize:11,padding:"3px 8px",borderRadius:8,background:"#f1f5f9",color:"#475569"}}>
+                {x.cat}：<b>¥{x.amt.toLocaleString()}</b>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div style={{display:"grid",gap:8}}>
+        {filtered.length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8",fontSize:13}}>該当する申請がありません</div>}
+        {filtered.map(e=>(
+          <div key={e.id} style={{background:statusBg(e.status),border:"1px solid #e2e8f0",borderRadius:10,padding:"12px 14px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap",marginBottom:4}}>
+                  <span style={{fontWeight:700,fontSize:14}}>¥{Number(e.amount||0).toLocaleString()}</span>
+                  <span className="tag" style={{background:"#f1f5f9",color:"#475569",fontSize:11}}>{e.category}</span>
+                  {e.receipt_url
+                    ? <button onClick={()=>setPreviewUrl(e.receipt_url)} style={{fontSize:11,padding:"2px 8px",borderRadius:8,background:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",cursor:"pointer",fontWeight:600}}>🧾 領収書を見る</button>
+                    : e.has_receipt&&<span className="tag" style={{background:"#f0fdf4",color:"#059669",fontSize:11}}>🧾 領収書あり</span>
+                  }
+                  <span style={{fontSize:11,padding:"2px 8px",borderRadius:8,background:statusBg(e.status),color:statusColor(e.status),border:"1px solid "+statusColor(e.status),fontWeight:700}}>{e.status||"申請中"}</span>
+                </div>
+                <div style={{fontSize:13,marginBottom:2}}>{e.description}</div>
+                <div style={{fontSize:11,color:"#64748b",display:"flex",gap:12,flexWrap:"wrap"}}>
+                  <span>👤 {e.staff_name}</span><span>📅 {e.date}</span>
+                  {e.approved_at&&<span>✅ 承認: {e.approved_at}</span>}
+                  {e.note&&<span>📝 {e.note}</span>}
+                </div>
+              </div>
+              <div style={{display:"flex",gap:4,flexShrink:0,flexWrap:"wrap"}}>
+                {e.status==="申請中"&&<>
+                  <button className="btn btn-sm" style={{background:"#2563eb",color:"white",fontSize:11,padding:"4px 8px"}} onClick={()=>updateStatus(e.id,"承認済")}>承認</button>
+                  <button className="btn btn-sm" style={{background:"#ef4444",color:"white",fontSize:11,padding:"4px 8px"}} onClick={()=>updateStatus(e.id,"却下")}>却下</button>
+                </>}
+                {e.status==="承認済"&&<button className="btn btn-sm" style={{background:"#059669",color:"white",fontSize:11,padding:"4px 8px"}} onClick={()=>updateStatus(e.id,"精算済")}>精算済</button>}
+                {(e.status==="精算済"||e.status==="却下")&&<button className="btn btn-secondary btn-sm" style={{fontSize:11,padding:"4px 8px"}} onClick={()=>updateStatus(e.id,"申請中")}>戻す</button>}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── スタッフ：立替申請（レシートAI解析付き） ─────────────
+function MyExpenseTab({me, expenses, loadAll}) {
+  const CATS = ["利用者の日用品・生活用品","送迎・交通費","食材・食事関連","医療・薬代","業務用品・事務用品","研修・書籍","その他"];
+  const today = localDate();
+  const [form, setForm] = useState({date:today, category:CATS[0], description:"", amount:"", has_receipt:false, note:"", other_cat:""});
+  const [sending, setSending] = useState(false);
+  const [msg, setMsg] = useState("");
+  const [filterMonth, setFilterMonth] = useState(today.slice(0,7));
+
+  // レシート関連
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [receiptPreview, setReceiptPreview] = useState(null);
+  const [analyzing, setAnalyzing] = useState(false);
+  const [aiResult, setAiResult] = useState(null);
+  const fileInputRef = useRef(null);
+
+  const myExpenses = expenses.filter(e=>e.staff_id===me?.id);
+  const filtered = myExpenses.filter(e=>!filterMonth||e.date?.startsWith(filterMonth));
+  const pendingTotal = myExpenses.filter(e=>e.status==="申請中"||e.status==="承認済").reduce((s,e)=>s+Number(e.amount||0),0);
+  const paidTotal = myExpenses.filter(e=>e.status==="精算済").reduce((s,e)=>s+Number(e.amount||0),0);
+
+  // 画像選択
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if(!file) return;
+    setReceiptFile(file);
+    setAiResult(null);
+    const reader = new FileReader();
+    reader.onload = ev => setReceiptPreview(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  // Claude APIでレシート解析
+  const analyzeReceipt = async() => {
+    if(!receiptFile) return;
+    setAnalyzing(true);
+    setAiResult(null);
+    try {
+      const base64 = await new Promise((res,rej)=>{
+        const r = new FileReader();
+        r.onload = ()=>res(r.result.split(",")[1]);
+        r.onerror = ()=>rej(new Error("read error"));
+        r.readAsDataURL(receiptFile);
+      });
+      const mediaType = receiptFile.type||"image/jpeg";
+
+      const resp = await fetch("https://api.anthropic.com/v1/messages",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514",
+          max_tokens:1000,
+          messages:[{
+            role:"user",
+            content:[
+              {type:"image",source:{type:"base64",media_type:mediaType,data:base64}},
+              {type:"text",text:`このレシート・領収書を読み取って、以下のJSON形式のみで返答してください（他のテキスト不要）：
+{
+  "amount": 合計金額（数値のみ・税込）,
+  "date": "購入日（YYYY-MM-DD形式、不明なら空文字）",
+  "store": "店名",
+  "items": "購入品目の簡潔な説明（30文字以内）",
+  "category": 以下から最も適切な1つ: "利用者の日用品・生活用品" or "送迎・交通費" or "食材・食事関連" or "医療・薬代" or "業務用品・事務用品" or "研修・書籍" or "その他",
+  "confidence": "high" or "medium" or "low"
+}`}
+            ]
+          }]
+        })
+      });
+      const data = await resp.json();
+      const text = data.content?.find(b=>b.type==="text")?.text||"";
+      const clean = text.replace(/```json|```/g,"").trim();
+      const parsed = JSON.parse(clean);
+      setAiResult(parsed);
+      // フォームに自動反映
+      setForm(f=>({
+        ...f,
+        amount: parsed.amount>0 ? String(parsed.amount) : f.amount,
+        description: parsed.items||f.description,
+        category: CATS.includes(parsed.category) ? parsed.category : f.category,
+        note: parsed.store ? (f.note||parsed.store) : f.note,
+        has_receipt: true,
+        date: parsed.date||f.date,
+      }));
+    } catch(err) {
+      setAiResult({error: "読み取りに失敗しました。手動で入力してください。"});
+    }
+    setAnalyzing(false);
+  };
+
+  // Supabase Storageにアップロード
+  const uploadReceipt = async(expenseId) => {
+    if(!receiptFile) return null;
+    const ext = receiptFile.name.split(".").pop()||"jpg";
+    const path = `receipts/${me?.id}/${expenseId}_${Date.now()}.${ext}`;
+    const {error} = await supabase.storage.from("expense-receipts").upload(path, receiptFile, {upsert:true});
+    if(error) return null;
+    const {data} = supabase.storage.from("expense-receipts").getPublicUrl(path);
+    return data?.publicUrl||null;
+  };
+
+  const submit = async() => {
+    const cat = form.category==="その他"&&form.other_cat ? "その他："+form.other_cat : form.category;
+    if(!form.description){setMsg("内容を入力してください");return;}
+    if(!form.amount||isNaN(Number(form.amount))||Number(form.amount)<=0){setMsg("金額を入力してください");return;}
+    setSending(true);setMsg("");
+    // まず仮insertしてIDを取得
+    const {data:inserted, error} = await supabase.from("expense_claims").insert({
+      staff_id: me?.id,
+      staff_name: me?.name,
+      date: form.date,
+      category: cat,
+      description: form.description,
+      amount: Number(form.amount),
+      has_receipt: form.has_receipt||!!receiptFile,
+      note: form.note,
+      status: "申請中",
+    }).select().single();
+    if(error){setSending(false);setMsg("送信エラー: "+error.message);return;}
+    // 画像アップロード
+    if(receiptFile&&inserted?.id){
+      const url = await uploadReceipt(inserted.id);
+      if(url) await supabase.from("expense_claims").update({receipt_url:url}).eq("id",inserted.id);
+    }
+    setSending(false);
+    setMsg("✅ 申請しました");
+    setForm({date:today,category:CATS[0],description:"",amount:"",has_receipt:false,note:"",other_cat:""});
+    setReceiptFile(null);setReceiptPreview(null);setAiResult(null);
+    if(fileInputRef.current) fileInputRef.current.value="";
+    loadAll();
+  };
+
+  const statusColor = s => s==="精算済"?"#059669":s==="承認済"?"#2563eb":s==="却下"?"#ef4444":"#d97706";
+  const statusBg   = s => s==="精算済"?"#f0fdf4":s==="承認済"?"#eff6ff":s==="却下"?"#fef2f2":"#fffbeb";
+
+  return(
+    <div className="fade-in">
+      <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>立替払い申請</div>
+      <div style={{fontSize:13,color:"#94a3b8",marginBottom:14}}>{me?.name} さんの立替申請</div>
+
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+        <div className="stat-card" style={{borderTop:"3px solid #d97706",textAlign:"center"}}>
+          <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>精算待ち</div>
+          <div style={{fontSize:20,fontWeight:800,color:"#d97706"}}>¥{pendingTotal.toLocaleString()}</div>
+        </div>
+        <div className="stat-card" style={{borderTop:"3px solid #059669",textAlign:"center"}}>
+          <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>精算済（累計）</div>
+          <div style={{fontSize:20,fontWeight:800,color:"#059669"}}>¥{paidTotal.toLocaleString()}</div>
+        </div>
+      </div>
+
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>＋ 新規申請</div>
+
+        {/* ── レシートアップロードエリア ── */}
+        <div style={{marginBottom:14}}>
+          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:6}}>📷 レシート・領収書（任意）</label>
+          <div
+            style={{border:"2px dashed #bfdbfe",borderRadius:12,padding:"16px",textAlign:"center",background:"#f8fbff",cursor:"pointer",position:"relative"}}
+            onClick={()=>fileInputRef.current?.click()}
+          >
+            {receiptPreview ? (
+              <div style={{position:"relative",display:"inline-block"}}>
+                <img src={receiptPreview} alt="レシートプレビュー" style={{maxHeight:200,maxWidth:"100%",borderRadius:8,boxShadow:"0 2px 8px rgba(0,0,0,.15)"}}/>
+                <button
+                  onClick={e=>{e.stopPropagation();setReceiptFile(null);setReceiptPreview(null);setAiResult(null);if(fileInputRef.current)fileInputRef.current.value="";}}
+                  style={{position:"absolute",top:-8,right:-8,width:24,height:24,borderRadius:"50%",background:"#ef4444",color:"white",border:"none",cursor:"pointer",fontSize:14,lineHeight:"24px",textAlign:"center"}}
+                >✕</button>
+              </div>
+            ) : (
+              <div style={{color:"#94a3b8"}}>
+                <div style={{fontSize:32,marginBottom:4}}>📷</div>
+                <div style={{fontSize:13,fontWeight:600,color:"#64748b"}}>タップして写真を選択</div>
+                <div style={{fontSize:11,marginTop:2}}>JPG / PNG / HEIC 対応</div>
+              </div>
+            )}
+            <input ref={fileInputRef} type="file" accept="image/*" capture="environment" style={{display:"none"}} onChange={handleFileChange}/>
+          </div>
+
+          {/* AI解析ボタン */}
+          {receiptFile&&!analyzing&&(
+            <button
+              className="btn btn-primary"
+              style={{width:"100%",marginTop:8,background:"linear-gradient(135deg,#7c3aed,#2563eb)"}}
+              onClick={analyzeReceipt}
+            >
+              ✨ AIでレシートを読み取る
+            </button>
+          )}
+          {analyzing&&(
+            <div style={{textAlign:"center",padding:"12px",color:"#7c3aed",fontSize:13,fontWeight:600}}>
+              <span style={{marginRight:6}}>✨</span>読み取り中...
+            </div>
+          )}
+
+          {/* AI解析結果バナー */}
+          {aiResult&&!aiResult.error&&(
+            <div style={{marginTop:10,padding:"12px 14px",background:"linear-gradient(135deg,#f5f3ff,#eff6ff)",borderRadius:10,border:"1px solid #c4b5fd"}}>
+              <div style={{fontWeight:700,fontSize:12,color:"#7c3aed",marginBottom:6}}>✨ AI読み取り結果（フォームに反映済み）</div>
+              <div style={{display:"flex",gap:10,flexWrap:"wrap",fontSize:12}}>
+                <span>💴 ¥{Number(aiResult.amount||0).toLocaleString()}</span>
+                {aiResult.store&&<span>🏪 {aiResult.store}</span>}
+                {aiResult.date&&<span>📅 {aiResult.date}</span>}
+                <span>📂 {aiResult.category}</span>
+                <span style={{fontSize:10,color:"#94a3b8"}}>
+                  精度: {aiResult.confidence==="high"?"高":aiResult.confidence==="medium"?"中":"低"}
+                </span>
+              </div>
+              {aiResult.items&&<div style={{fontSize:12,marginTop:4,color:"#475569"}}>📝 {aiResult.items}</div>}
+              <div style={{fontSize:11,color:"#94a3b8",marginTop:4}}>内容を確認して必要に応じて修正してください</div>
+            </div>
+          )}
+          {aiResult?.error&&<div style={{marginTop:8,fontSize:12,color:"#ef4444",padding:"8px 12px",background:"#fef2f2",borderRadius:8}}>{aiResult.error}</div>}
+        </div>
+
+        {/* フォーム入力欄 */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:10,marginBottom:10}}>
+          <div>
+            <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>日付</label>
+            <input className="input" type="date" value={form.date} onChange={e=>setForm(f=>({...f,date:e.target.value}))}/>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>カテゴリ {aiResult&&!aiResult.error&&<span style={{color:"#7c3aed",fontSize:10}}>✨AI提案</span>}</label>
+            <select className="input" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))}>
+              {CATS.map(c=><option key={c}>{c}</option>)}
+            </select>
+          </div>
+          <div>
+            <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>金額（円）{aiResult&&!aiResult.error&&<span style={{color:"#7c3aed",fontSize:10}}>✨AI抽出</span>} <span style={{color:"#ef4444"}}>*</span></label>
+            <input className="input" type="number" min={1} placeholder="例: 1500" value={form.amount} onChange={e=>setForm(f=>({...f,amount:e.target.value}))}/>
+          </div>
+        </div>
+        {form.category==="その他"&&(
+          <div style={{marginBottom:10}}>
+            <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>その他の内容を入力</label>
+            <input className="input" type="text" placeholder="例: クリーニング代" value={form.other_cat} onChange={e=>setForm(f=>({...f,other_cat:e.target.value}))}/>
+          </div>
+        )}
+        <div style={{marginBottom:10}}>
+          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>内容・品目 {aiResult&&!aiResult.error&&<span style={{color:"#7c3aed",fontSize:10}}>✨AI抽出</span>} <span style={{color:"#ef4444"}}>*</span></label>
+          <input className="input" type="text" placeholder="例: 〇〇さんのシャンプー・ボディソープ購入" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))}/>
+        </div>
+        <div style={{marginBottom:12}}>
+          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>備考・補足 {aiResult?.store&&<span style={{color:"#7c3aed",fontSize:10}}>✨{aiResult.store}</span>}</label>
+          <input className="input" type="text" placeholder="店名、理由など" value={form.note} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/>
+        </div>
+        <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+          <label style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:13}}>
+            <input type="checkbox" checked={form.has_receipt||!!receiptFile} onChange={e=>setForm(f=>({...f,has_receipt:e.target.checked}))} style={{width:16,height:16}}/>
+            🧾 領収書あり{receiptFile&&<span style={{color:"#2563eb",fontSize:11,marginLeft:4}}>（画像添付済）</span>}
+          </label>
+        </div>
+        {msg&&<div style={{fontSize:13,color:msg.startsWith("✅")?"#059669":"#ef4444",marginBottom:8}}>{msg}</div>}
+        <button className="btn btn-primary" onClick={submit} disabled={sending}>{sending?"送信中...":"申請する"}</button>
+      </div>
+
+      {/* 申請履歴 */}
+      <div className="card">
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+          <div style={{fontWeight:700,fontSize:14}}>📋 申請履歴</div>
+          <input className="input" type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{width:150,fontSize:12}}/>
+        </div>
+        {filtered.length===0&&<div style={{textAlign:"center",padding:"20px",color:"#94a3b8",fontSize:13}}>申請がありません</div>}
+        <div style={{display:"grid",gap:8}}>
+          {filtered.sort((a,b)=>b.date?.localeCompare(a.date)).map(e=>(
+            <div key={e.id} style={{background:statusBg(e.status),border:"1px solid #e2e8f0",borderRadius:8,padding:"10px 12px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,flexWrap:"wrap"}}>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:3}}>
+                    <span style={{fontWeight:700,fontSize:14}}>¥{Number(e.amount||0).toLocaleString()}</span>
+                    <span className="tag" style={{background:"#f1f5f9",color:"#475569",fontSize:11}}>{e.category}</span>
+                    {e.receipt_url
+                      ? <a href={e.receipt_url} target="_blank" rel="noreferrer" style={{fontSize:11,padding:"2px 8px",borderRadius:8,background:"#eff6ff",color:"#2563eb",border:"1px solid #bfdbfe",textDecoration:"none",fontWeight:600}}>🧾 領収書</a>
+                      : e.has_receipt&&<span style={{fontSize:11,color:"#059669"}}>🧾</span>
+                    }
+                  </div>
+                  <div style={{fontSize:12,marginBottom:2}}>{e.description}</div>
+                  <div style={{fontSize:11,color:"#64748b"}}>📅 {e.date}{e.note&&<span style={{marginLeft:8}}>📝 {e.note}</span>}</div>
+                </div>
+                <span style={{fontSize:12,padding:"3px 10px",borderRadius:10,background:statusBg(e.status),color:statusColor(e.status),border:"1px solid "+statusColor(e.status),fontWeight:700,flexShrink:0}}>{e.status||"申請中"}</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+//  SVG Chart Helpers (standalone, no external deps)
+// ═══════════════════════════════════════════════════════
+function PieChart({data, size=160, title}) {
+  // data: [{label, value, color}]
+  const total = data.reduce((s,d)=>s+d.value,0);
+  if(total===0) return <div style={{width:size,height:size,display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:12}}>データなし</div>;
+  let angle = -Math.PI/2;
+  const cx=size/2, cy=size/2, r=size*0.38, ir=size*0.22;
+  const slices = data.map(d=>{
+    const sweep = (d.value/total)*2*Math.PI;
+    const x1=cx+r*Math.cos(angle), y1=cy+r*Math.sin(angle);
+    angle+=sweep;
+    const x2=cx+r*Math.cos(angle), y2=cy+r*Math.sin(angle);
+    const ix1=cx+ir*Math.cos(angle-sweep), iy1=cy+ir*Math.sin(angle-sweep);
+    const ix2=cx+ir*Math.cos(angle), iy2=cy+ir*Math.sin(angle);
+    const large=sweep>Math.PI?1:0;
+    const path=`M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} L${ix2},${iy2} A${ir},${ir} 0 ${large},0 ${ix1},${iy1} Z`;
+    return {...d, path, pct:Math.round(d.value/total*100)};
+  });
+  return(
+    <div style={{textAlign:"center"}}>
+      {title&&<div style={{fontSize:11,color:"#64748b",marginBottom:4,fontWeight:600}}>{title}</div>}
+      <svg width={size} height={size}>
+        {slices.map((s,i)=><path key={i} d={s.path} fill={s.color} stroke="white" strokeWidth={1.5}/>)}
+        <text x={cx} y={cy+1} textAnchor="middle" dominantBaseline="middle" fontSize={size*0.12} fontWeight="700" fill="#1e293b">{total}</text>
+        <text x={cx} y={cy+size*0.1+4} textAnchor="middle" dominantBaseline="middle" fontSize={size*0.07} fill="#64748b">件</text>
+      </svg>
+      <div style={{display:"flex",flexWrap:"wrap",gap:4,justifyContent:"center",marginTop:4}}>
+        {slices.map((s,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:3,fontSize:10,color:"#475569"}}>
+          <div style={{width:8,height:8,borderRadius:2,background:s.color,flexShrink:0}}/>
+          {s.label}({s.pct}%)
+        </div>)}
+      </div>
+    </div>
+  );
+}
+
+function BarChart({data, height=120, color="#2563eb", yLabel, title}) {
+  // data: [{label, value}]
+  if(!data||data.length===0) return <div style={{height,display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:12}}>データなし</div>;
+  const max=Math.max(...data.map(d=>d.value),1);
+  const W=Math.max(data.length*44,200), H=height;
+  const padL=32, padB=24, padT=12, padR=8;
+  const cW=W-padL-padR, cH=H-padB-padT;
+  const barW=Math.min(28, (cW/data.length)*0.6);
+  return(
+    <div style={{textAlign:"center"}}>
+      {title&&<div style={{fontSize:11,color:"#64748b",marginBottom:4,fontWeight:600}}>{title}</div>}
+      <div style={{overflowX:"auto"}}>
+        <svg width={W} height={H} style={{minWidth:"100%"}}>
+          {/* Grid */}
+          {[0,0.25,0.5,0.75,1].map((t,i)=>{
+            const y=padT+cH*(1-t);
+            return <g key={i}>
+              <line x1={padL} y1={y} x2={W-padR} y2={y} stroke="#f1f5f9" strokeWidth={1}/>
+              <text x={padL-4} y={y+1} textAnchor="end" fontSize={9} fill="#94a3b8" dominantBaseline="middle">{Math.round(max*t)}</text>
+            </g>;
+          })}
+          {/* Bars */}
+          {data.map((d,i)=>{
+            const x=padL+(cW/data.length)*i+(cW/data.length-barW)/2;
+            const bH=max>0?(d.value/max)*cH:0;
+            const y=padT+cH-bH;
+            const isArr=Array.isArray(color);
+            const c=isArr?color[i%color.length]:color;
+            return <g key={i}>
+              <rect x={x} y={y} width={barW} height={bH} fill={c} rx={3}/>
+              {d.value>0&&<text x={x+barW/2} y={y-3} textAnchor="middle" fontSize={9} fill={c} fontWeight="600">{d.value}</text>}
+              <text x={x+barW/2} y={H-4} textAnchor="middle" fontSize={9} fill="#64748b">{d.label}</text>
+            </g>;
+          })}
+        </svg>
+      </div>
+    </div>
+  );
+}
+
+function SparkLine({data, color="#2563eb", height=40, width=120}) {
+  if(!data||data.length<2) return null;
+  const max=Math.max(...data,1), min=Math.min(...data,0);
+  const range=max-min||1;
+  const pts=data.map((v,i)=>`${(i/(data.length-1))*width},${height-(((v-min)/range)*(height-6)+3)}`).join(" ");
+  return(
+    <svg width={width} height={height}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"/>
+      <circle cx={(data.length-1)/(data.length-1)*width} cy={height-(((data[data.length-1]-min)/range)*(height-6)+3)} r={3} fill={color}/>
+    </svg>
+  );
+}
+
+// ═══════════════════════════════════════════════════════
+//  MasterScreen
+// ═══════════════════════════════════════════════════════
+function MasterScreen({onBack}) {
+  const [masterTab, setMasterTab] = useState("dashboard");
+  const [homes, setHomes] = useState([]);
+  const [allData, setAllData] = useState({});
+  const [loading, setLoading] = useState(true);
+  const [selHome, setSelHome] = useState(null);
+  const [masterPinNew, setMasterPinNew] = useState("");
+  const [pinMsg, setPinMsg] = useState("");
+  const [homeForm, setHomeForm] = useState({name:"",company:"",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});
+  const [homeModal, setHomeModal] = useState(null); // null | "add" | "edit"
+  const [editHomeId, setEditHomeId] = useState(null);
+  const [filterMonth, setFilterMonth] = useState(localDate().slice(0,7));
+
+  const COLORS = ["#2563eb","#7c3aed","#059669","#d97706","#dc2626","#0891b2","#be185d","#65a30d","#9333ea","#ea580c"];
+
+  const loadMasterData = async() => {
+    setLoading(true);
+    // ホーム一覧
+    const {data:hs} = await supabase.from("master_homes").select("*").order("id");
+    setHomes(hs||[]);
+    // 全テーブルの件数サマリー
+    const [u,st,att,exp,sr,sal,tr,acc,cl,mo,pr,wr,sc,msg,pl,hlt] = await Promise.all([
+      supabase.from("users").select("id,status,unit,created_at"),
+      supabase.from("staff_members").select("id,role,full_time"),
+      supabase.from("attendance").select("id,date,staff_id,shift_type"),
+      supabase.from("expense_claims").select("id,date,amount,status,category"),
+      supabase.from("support_records").select("id,date,user_id"),
+      supabase.from("salary_records").select("id,year_month,staff_id,net_pay,gross_pay"),
+      supabase.from("transport_log").select("id,date"),
+      supabase.from("accounting_entries").select("id,date,category,amount"),
+      supabase.from("claim_data").select("id,year_month,amount,status"),
+      supabase.from("monitoring").select("id,date,user_id"),
+      supabase.from("performance_records").select("id,date,user_id,service_type"),
+      supabase.from("wage_records").select("id,year_month,amount,user_id"),
+      supabase.from("schedules").select("id,type,start_date"),
+      supabase.from("user_messages").select("id,created_at,is_read"),
+      supabase.from("support_plans").select("id,period_start,user_id,status"),
+      supabase.from("health_records").select("id,date,user_id"),
+    ]);
+    setAllData({
+      users:u.data||[], staff:st.data||[], attendance:att.data||[],
+      expenses:exp.data||[], srecs:sr.data||[], salaries:sal.data||[],
+      transport:tr.data||[], accounting:acc.data||[], claims:cl.data||[],
+      monitoring:mo.data||[], perfs:pr.data||[], wages:wr.data||[],
+      schedules:sc.data||[], msgs:msg.data||[], plans:pl.data||[], health:hlt.data||[],
+    });
+    setLoading(false);
+  };
+
+  useEffect(()=>{ loadMasterData(); },[]);
+
+  const saveHome = async() => {
+    if(!homeForm.name){return;}
+    if(homeModal==="add"){
+      await supabase.from("master_homes").insert({...homeForm, capacity:Number(homeForm.capacity)||0});
+    } else {
+      await supabase.from("master_homes").update({...homeForm, capacity:Number(homeForm.capacity)||0}).eq("id",editHomeId);
+    }
+    setHomeModal(null);
+    setHomeForm({name:"",company:"",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});
+    loadMasterData();
+  };
+
+  const deleteHome = async(id) => {
+    if(!window.confirm("このホームを削除しますか？")) return;
+    await supabase.from("master_homes").delete().eq("id",id);
+    loadMasterData();
+  };
+
+  const saveMasterPin = async() => {
+    if(masterPinNew.length<4){setPinMsg("4文字以上で入力してください");return;}
+    await supabase.from("app_settings").upsert({key:"master_pin",value:masterPinNew});
+    setPinMsg("✅ 更新しました");
+    setMasterPinNew("");
+  };
+
+  // ── 集計データ計算 ──
+  const d = allData;
+  const activeUsers = (d.users||[]).filter(u=>u.status!=="退居");
+  const totalUsers = activeUsers.length;
+  const totalStaff = (d.staff||[]).length;
+  const fullTimeStaff = (d.staff||[]).filter(s=>s.full_time==="常勤").length;
+
+  // 今月の勤怠
+  const thisMonthAtt = (d.attendance||[]).filter(a=>a.date?.startsWith(filterMonth));
+  const thisMonthExp = (d.expenses||[]).filter(e=>e.date?.startsWith(filterMonth));
+  const thisMonthSal = (d.salaries||[]).filter(s=>s.year_month===filterMonth);
+  const thisMonthAcc = (d.accounting||[]).filter(a=>a.date?.startsWith(filterMonth));
+  const totalIncome = thisMonthAcc.filter(a=>a.category==="収入").reduce((s,a)=>s+Number(a.amount||0),0);
+  const totalExpenseAcc = thisMonthAcc.filter(a=>a.category==="支出").reduce((s,a)=>s+Number(a.amount||0),0);
+  const totalExpenseClaim = thisMonthExp.reduce((s,e)=>s+Number(e.amount||0),0);
+  const totalSalary = thisMonthSal.reduce((s,r)=>s+Number(r.net_pay||0),0);
+  const totalSrecs = (d.srecs||[]).filter(s=>s.date?.startsWith(filterMonth)).length;
+  const totalMessages = (d.msgs||[]).filter(m=>m.created_at?.startsWith(filterMonth)).length;
+  const unreadMessages = (d.msgs||[]).filter(m=>!m.is_read).length;
+
+  // 過去6ヶ月トレンド
+  const months6 = Array.from({length:6},(_,i)=>{
+    const d=new Date(); d.setMonth(d.getMonth()-5+i);
+    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
+  });
+  const attTrend = months6.map(m=>({label:m.slice(5)+"月",value:(d.attendance||[]).filter(a=>a.date?.startsWith(m)).length}));
+  const srecTrend = months6.map(m=>({label:m.slice(5)+"月",value:(d.srecs||[]).filter(s=>s.date?.startsWith(m)).length}));
+  const expTrend = months6.map(m=>({label:m.slice(5)+"月",value:(d.expenses||[]).filter(e=>e.date?.startsWith(m)).reduce((s,e)=>s+Number(e.amount||0),0)}));
+
+  // 円グラフデータ
+  const userStatusPie = [
+    {label:"入居中",value:activeUsers.length,color:"#059669"},
+    {label:"外泊中",value:(d.users||[]).filter(u=>u.status==="外泊").length,color:"#d97706"},
+    {label:"退居",value:(d.users||[]).filter(u=>u.status==="退居").length,color:"#94a3b8"},
+  ].filter(x=>x.value>0);
+
+  const staffRolePie = [
+    {label:"世話人",value:(d.staff||[]).filter(s=>s.role==="世話人").length,color:"#2563eb"},
+    {label:"生活支援員",value:(d.staff||[]).filter(s=>s.role==="生活支援員").length,color:"#7c3aed"},
+    {label:"管理者",value:(d.staff||[]).filter(s=>s.role==="管理者"||s.role==="施設長").length,color:"#059669"},
+    {label:"その他",value:(d.staff||[]).filter(s=>!["世話人","生活支援員","管理者","施設長"].includes(s.role)).length,color:"#94a3b8"},
+  ].filter(x=>x.value>0);
+
+  const expenseCatPie = [
+    {label:"日用品",value:(d.expenses||[]).filter(e=>e.category?.includes("日用品")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#2563eb"},
+    {label:"交通費",value:(d.expenses||[]).filter(e=>e.category?.includes("交通")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#7c3aed"},
+    {label:"食材",value:(d.expenses||[]).filter(e=>e.category?.includes("食材")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#059669"},
+    {label:"医療",value:(d.expenses||[]).filter(e=>e.category?.includes("医療")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#ef4444"},
+    {label:"業務",value:(d.expenses||[]).filter(e=>e.category?.includes("業務")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#d97706"},
+    {label:"その他",value:(d.expenses||[]).filter(e=>!["日用品","交通","食材","医療","業務"].some(k=>e.category?.includes(k))).reduce((s,e)=>s+Number(e.amount||0),0),color:"#94a3b8"},
+  ].filter(x=>x.value>0);
+
+  const expenseStatusPie = [
+    {label:"申請中",value:(d.expenses||[]).filter(e=>e.status==="申請中").length,color:"#d97706"},
+    {label:"承認済",value:(d.expenses||[]).filter(e=>e.status==="承認済").length,color:"#2563eb"},
+    {label:"精算済",value:(d.expenses||[]).filter(e=>e.status==="精算済").length,color:"#059669"},
+    {label:"却下",value:(d.expenses||[]).filter(e=>e.status==="却下").length,color:"#ef4444"},
+  ].filter(x=>x.value>0);
+
+  const shiftTypePie = [
+    {label:"日勤",value:thisMonthAtt.filter(a=>a.shift_type==="日勤"||!a.shift_type).length,color:"#2563eb"},
+    {label:"夜勤",value:thisMonthAtt.filter(a=>a.shift_type==="夜勤").length,color:"#7c3aed"},
+    {label:"早番",value:thisMonthAtt.filter(a=>a.shift_type==="早番").length,color:"#059669"},
+    {label:"遅番",value:thisMonthAtt.filter(a=>a.shift_type==="遅番").length,color:"#d97706"},
+  ].filter(x=>x.value>0);
+
+  const unitBar = [...new Set((d.users||[]).map(u=>u.unit).filter(Boolean))].map((unit,i)=>({
+    label:unit, value:(d.users||[]).filter(u=>u.unit===unit&&u.status!=="退居").length
+  }));
+
+  const CSS_MASTER = `
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Noto Sans JP',sans-serif;}
+    .m-card{background:white;border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid #f1f5f9;}
+    .m-tab{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;}
+    .m-tab-active{background:#0f172a;color:white;}
+    .m-tab-inactive{background:#f1f5f9;color:#475569;}
+    .m-kpi{background:white;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid #f1f5f9;}
+    .m-input{width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;font-family:inherit;}
+    .m-input:focus{border-color:#0f172a;}
+    .m-btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;}
+  `;
+
+  const TABS = [
+    {id:"dashboard",label:"📊 ダッシュボード"},
+    {id:"homes",label:"🏠 ホーム管理"},
+    {id:"analytics",label:"📈 データ分析"},
+    {id:"settings",label:"⚙️ 設定"},
+  ];
+
+  if(loading) return(
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:14}}>
+      <style>{CSS_MASTER}</style>⏳ マスターデータ読み込み中...
+    </div>
+  );
+
+  return(
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#0f172a",color:"#f8fafc"}}>
+      <style>{CSS_MASTER}</style>
+
+      {/* ヘッダー */}
+      <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",borderBottom:"1px solid #334155",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#334155,#475569)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🛡️</div>
+          <div>
+            <div style={{fontWeight:800,fontSize:14,color:"white"}}>Master Console</div>
+            <div style={{fontSize:10,color:"#64748b"}}>グループホーム統合管理</div>
+          </div>
+        </div>
+        <button onClick={onBack} style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>← 退出</button>
+      </div>
+
+      {/* タブ */}
+      <div style={{padding:"12px 20px",display:"flex",gap:8,overflowX:"auto",borderBottom:"1px solid #1e293b"}}>
+        {TABS.map(t=>(
+          <button key={t.id} className={"m-tab "+(masterTab===t.id?"m-tab-active":"m-tab-inactive")}
+            style={{whiteSpace:"nowrap",background:masterTab===t.id?"white":"#1e293b",color:masterTab===t.id?"#0f172a":"#94a3b8"}}
+            onClick={()=>setMasterTab(t.id)}>
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      <div style={{padding:"16px 20px",maxWidth:1200,margin:"0 auto"}}>
+
+        {/* ═══ ダッシュボード ═══ */}
+        {masterTab==="dashboard"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+              <div style={{fontSize:16,fontWeight:800,color:"white"}}>概要ダッシュボード</div>
+              <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}
+                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#e2e8f0",padding:"6px 10px",fontSize:13}}/>
+            </div>
+
+            {/* KPIカード */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10,marginBottom:16}}>
+              {[
+                {l:"入居利用者",v:totalUsers+"名",sub:"アクティブ",c:"#3b82f6",icon:"👤"},
+                {l:"スタッフ数",v:totalStaff+"名",sub:`常勤${fullTimeStaff}名`,c:"#8b5cf6",icon:"👥"},
+                {l:"今月 支援記録",v:totalSrecs+"件",sub:filterMonth,c:"#10b981",icon:"📝"},
+                {l:"今月 勤怠打刻",v:thisMonthAtt.length+"件",sub:filterMonth,c:"#f59e0b",icon:"⏰"},
+                {l:"今月 立替総額",v:"¥"+totalExpenseClaim.toLocaleString(),sub:`${thisMonthExp.length}件`,c:"#ef4444",icon:"🧾"},
+                {l:"今月 収入",v:"¥"+(totalIncome/10000).toFixed(0)+"万",sub:"経理登録",c:"#059669",icon:"💰"},
+                {l:"今月 支出",v:"¥"+(totalExpenseAcc/10000).toFixed(0)+"万",sub:"経理登録",c:"#dc2626",icon:"💸"},
+                {l:"未読メッセージ",v:unreadMessages+"件",sub:`今月${totalMessages}件`,c:"#0891b2",icon:"💬"},
+              ].map((k,i)=>(
+                <div key={i} className="m-kpi" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                  <div style={{fontSize:18,marginBottom:4}}>{k.icon}</div>
+                  <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>{k.l}</div>
+                  <div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div>
+                  <div style={{fontSize:10,color:"#475569"}}>{k.sub}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* グラフ行1 */}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12,marginBottom:12}}>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>👤 利用者ステータス</div>
+                <PieChart data={userStatusPie} size={150} />
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>👥 スタッフ役職別</div>
+                <PieChart data={staffRolePie} size={150} />
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>🧾 立替ステータス</div>
+                <PieChart data={expenseStatusPie} size={150} />
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>⏰ 今月シフト種別</div>
+                <PieChart data={shiftTypePie} size={150} />
+              </div>
+            </div>
+
+            {/* グラフ行2：トレンド */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📅 月別 勤怠打刻数（6ヶ月）</div>
+                <BarChart data={attTrend} height={110} color="#3b82f6"/>
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📝 月別 支援記録数（6ヶ月）</div>
+                <BarChart data={srecTrend} height={110} color="#10b981"/>
+              </div>
+            </div>
+
+            {/* 棟別利用者 + 立替カテゴリ */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🏠 棟別 入居者数</div>
+                {unitBar.length>0?<BarChart data={unitBar} height={110} color={COLORS}/>:<div style={{color:"#64748b",fontSize:12,padding:"20px",textAlign:"center"}}>データなし</div>}
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🧾 立替カテゴリ別金額（全期間）</div>
+                <PieChart data={expenseCatPie} size={140}/>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ ホーム管理 ═══ */}
+        {masterTab==="homes"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div style={{fontSize:16,fontWeight:800,color:"white"}}>🏠 ホーム・ユニット管理</div>
+              <button className="m-btn" style={{background:"#3b82f6",color:"white"}} onClick={()=>{setHomeForm({name:"",company:"",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});setHomeModal("add");}}>＋ ホーム追加</button>
+            </div>
+
+            {homes.length===0&&<div className="m-card" style={{background:"#1e293b",border:"1px solid #334155",textAlign:"center",padding:40,color:"#64748b"}}>登録されているホームがありません<br/><span style={{fontSize:12}}>「ホーム追加」から登録してください</span></div>}
+
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
+              {homes.map((h,i)=>{
+                const hUsers = (d.users||[]).filter(u=>u.unit===h.unit&&u.status!=="退居");
+                const hStaff = (d.staff||[]).filter(s=>s.unit===h.unit||true); // unit未紐付けのため全員
+                const fillRate = h.capacity>0?Math.round(hUsers.length/h.capacity*100):null;
+                return(
+                  <div key={h.id} className="m-card" style={{background:"#1e293b",border:"1px solid #334155",cursor:"pointer",transition:"border-color .15s"}}
+                    onMouseEnter={e=>e.currentTarget.style.borderColor="#3b82f6"}
+                    onMouseLeave={e=>e.currentTarget.style.borderColor="#334155"}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                      <div>
+                        <div style={{fontWeight:800,fontSize:15,color:"white",marginBottom:2}}>{h.name}</div>
+                        <div style={{fontSize:11,color:"#64748b"}}>{h.company} {h.unit&&<span>/ {h.unit}棟</span>}</div>
+                      </div>
+                      <div style={{width:10,height:10,borderRadius:"50%",background:COLORS[i%COLORS.length],marginTop:4}}/>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                      {[
+                        {l:"定員",v:h.capacity||"-"},
+                        {l:"入居者",v:hUsers.length+"名"},
+                        {l:"充填率",v:fillRate!=null?fillRate+"%":"-"},
+                      ].map((k,j)=>(
+                        <div key={j} style={{textAlign:"center",padding:"8px 4px",background:"#0f172a",borderRadius:8}}>
+                          <div style={{fontSize:10,color:"#64748b"}}>{k.l}</div>
+                          <div style={{fontSize:16,fontWeight:800,color:"white"}}>{k.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {fillRate!=null&&(
+                      <div style={{height:6,background:"#334155",borderRadius:3,marginBottom:10}}>
+                        <div style={{height:"100%",width:Math.min(fillRate,100)+"%",background:fillRate>=90?"#ef4444":fillRate>=70?"#d97706":"#3b82f6",borderRadius:3,transition:"width .3s"}}/>
+                      </div>
+                    )}
+                    <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>
+                      {h.address&&<div>📍 {h.address}</div>}
+                      {h.tel&&<div>📞 {h.tel}</div>}
+                      {h.open_date&&<div>📅 開設: {h.open_date}</div>}
+                      {h.note&&<div>📝 {h.note}</div>}
+                    </div>
+                    <div style={{display:"flex",gap:6}}>
+                      <button className="m-btn" style={{background:"#334155",color:"#94a3b8",fontSize:11,padding:"5px 10px",flex:1}} onClick={()=>{setHomeForm({name:h.name,company:h.company||"",unit:h.unit||"",address:h.address||"",capacity:String(h.capacity||""),tel:h.tel||"",open_date:h.open_date||"",note:h.note||""});setEditHomeId(h.id);setHomeModal("edit");}}>✏️ 編集</button>
+                      <button className="m-btn" style={{background:"#450a0a",color:"#fca5a5",fontSize:11,padding:"5px 10px"}} onClick={()=>deleteHome(h.id)}>🗑</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* ホーム追加・編集モーダル */}
+            {homeModal&&(
+              <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setHomeModal(null)}>
+                <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:24,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
+                  <div style={{fontWeight:800,fontSize:15,color:"white",marginBottom:16}}>{homeModal==="add"?"🏠 ホーム追加":"🏠 ホーム編集"}</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                    {[
+                      {l:"ホーム名 *",k:"name",type:"text",span:2},
+                      {l:"運営会社",k:"company",type:"text"},
+                      {l:"棟・ユニット名",k:"unit",type:"text"},
+                      {l:"定員",k:"capacity",type:"number"},
+                      {l:"電話番号",k:"tel",type:"tel"},
+                      {l:"開設日",k:"open_date",type:"date"},
+                      {l:"住所",k:"address",type:"text",span:2},
+                      {l:"備考",k:"note",type:"text",span:2},
+                    ].map(f=>(
+                      <div key={f.k} style={{gridColumn:f.span?"span 2":"span 1"}}>
+                        <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>{f.l}</label>
+                        <input className="m-input" type={f.type||"text"} value={homeForm[f.k]} onChange={e=>setHomeForm(fm=>({...fm,[f.k]:e.target.value}))}
+                          style={{background:"#0f172a",borderColor:"#334155",color:"white"}}/>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button className="m-btn" style={{background:"#3b82f6",color:"white",flex:1}} onClick={saveHome}>保存</button>
+                    <button className="m-btn" style={{background:"#334155",color:"#94a3b8"}} onClick={()=>setHomeModal(null)}>キャンセル</button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ═══ データ分析 ═══ */}
+        {masterTab==="analytics"&&(
+          <div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
+              <div style={{fontSize:16,fontWeight:800,color:"white"}}>📈 詳細データ分析</div>
+              <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}
+                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#e2e8f0",padding:"6px 10px",fontSize:13}}/>
+            </div>
+
+            {/* 財務分析 */}
+            <div style={{fontSize:13,fontWeight:700,color:"#64748b",marginBottom:8,marginTop:4}}>💰 財務・経費分析</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,marginBottom:12}}>
+              {[
+                {l:"今月 収入合計",v:"¥"+totalIncome.toLocaleString(),c:"#10b981"},
+                {l:"今月 支出合計",v:"¥"+totalExpenseAcc.toLocaleString(),c:"#ef4444"},
+                {l:"収支差額",v:(totalIncome-totalExpenseAcc>=0?"+":"")+"¥"+(totalIncome-totalExpenseAcc).toLocaleString(),c:totalIncome-totalExpenseAcc>=0?"#10b981":"#ef4444"},
+                {l:"今月 立替払い",v:"¥"+totalExpenseClaim.toLocaleString(),c:"#f59e0b"},
+                {l:"今月 給与合計",v:"¥"+totalSalary.toLocaleString(),c:"#8b5cf6"},
+                {l:"立替 未精算件数",v:(d.expenses||[]).filter(e=>e.status==="申請中"||e.status==="承認済").length+"件",c:"#dc2626"},
+              ].map((k,i)=>(
+                <div key={i} className="m-kpi" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                  <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📊 月別立替金額推移（6ヶ月）</div>
+                <BarChart data={expTrend} height={120} color="#f59e0b"/>
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🧾 立替カテゴリ別（全期間累計）</div>
+                <PieChart data={expenseCatPie} size={150}/>
+              </div>
+            </div>
+
+            {/* 支援・ケア分析 */}
+            <div style={{fontSize:13,fontWeight:700,color:"#64748b",marginBottom:8}}>📝 支援・ケア分析</div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,marginBottom:12}}>
+              {[
+                {l:"今月 支援記録",v:totalSrecs+"件",c:"#10b981"},
+                {l:"今月 モニタリング",v:(d.monitoring||[]).filter(m=>m.date?.startsWith(filterMonth)).length+"件",c:"#3b82f6"},
+                {l:"今月 健康記録",v:(d.health||[]).filter(h=>h.date?.startsWith(filterMonth)).length+"件",c:"#8b5cf6"},
+                {l:"今月 外泊予定",v:(d.schedules||[]).filter(s=>s.type==="外泊"&&s.start_date?.startsWith(filterMonth)).length+"件",c:"#d97706"},
+                {l:"活動中 支援計画",v:(d.plans||[]).filter(p=>p.status==="進行中"||!p.status).length+"件",c:"#059669"},
+                {l:"利用者 メッセージ",v:totalMessages+"件",c:"#0891b2"},
+              ].map((k,i)=>(
+                <div key={i} className="m-kpi" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                  <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div>
+                  <div style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📅 月別 支援記録数（6ヶ月）</div>
+                <BarChart data={srecTrend} height={110} color="#10b981"/>
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🏠 棟別 入居者分布</div>
+                {unitBar.length>0?<BarChart data={unitBar} height={110} color={COLORS}/>:<div style={{color:"#64748b",fontSize:12,padding:"20px",textAlign:"center"}}>棟データなし</div>}
+              </div>
+            </div>
+
+            {/* スタッフ分析 */}
+            <div style={{fontSize:13,fontWeight:700,color:"#64748b",marginBottom:8}}>👥 スタッフ分析</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>👥 役職構成</div>
+                <PieChart data={staffRolePie} size={150}/>
+              </div>
+              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>⏰ 今月シフト種別</div>
+                <PieChart data={shiftTypePie} size={150}/>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ═══ 設定 ═══ */}
+        {masterTab==="settings"&&(
+          <div>
+            <div style={{fontSize:16,fontWeight:800,color:"white",marginBottom:16}}>⚙️ マスター設定</div>
+
+            <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155",marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:14,color:"white",marginBottom:12}}>🔑 マスターPIN変更</div>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:10}}>現在のマスターPINを変更します（初期値: 999999）</div>
+              <input className="m-input" type="password" maxLength={8} placeholder="新しいマスターPIN（4〜8桁）"
+                value={masterPinNew} onChange={e=>setMasterPinNew(e.target.value)}
+                style={{background:"#0f172a",borderColor:"#334155",color:"white",marginBottom:8}}/>
+              {pinMsg&&<div style={{fontSize:12,color:pinMsg.startsWith("✅")?"#10b981":"#ef4444",marginBottom:8}}>{pinMsg}</div>}
+              <button className="m-btn" style={{background:"#3b82f6",color:"white"}} onClick={saveMasterPin}>更新</button>
+            </div>
+
+            <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155",marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:14,color:"white",marginBottom:8}}>📊 データ概要</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
+                {[
+                  ["利用者総数",(d.users||[]).length+"名"],
+                  ["スタッフ総数",(d.staff||[]).length+"名"],
+                  ["支援記録総数",(d.srecs||[]).length+"件"],
+                  ["勤怠記録総数",(d.attendance||[]).length+"件"],
+                  ["立替総件数",(d.expenses||[]).length+"件"],
+                  ["立替総額","¥"+(d.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0).toLocaleString()],
+                  ["メッセージ総数",(d.msgs||[]).length+"件"],
+                  ["ホーム登録数",homes.length+"件"],
+                ].map(([l,v],i)=>(
+                  <div key={i} style={{padding:"10px",background:"#0f172a",borderRadius:8}}>
+                    <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>{l}</div>
+                    <div style={{fontSize:15,fontWeight:800,color:"#e2e8f0"}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
+              <div style={{fontWeight:700,fontSize:14,color:"white",marginBottom:8}}>🛡️ アクセス方法</div>
+              <div style={{fontSize:12,color:"#64748b",lineHeight:1.8}}>
+                <div>• ログイン画面のロゴアイコンを <b style={{color:"#e2e8f0"}}>5回連続タップ</b> でマスターPIN入力画面へ</div>
+                <div>• 通常の管理者・スタッフ画面からは一切アクセス不可</div>
+                <div>• マスターPINは管理者PINとは別に管理してください</div>
+                <div>• ナビゲーションにも表示されません</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+function ExportAllTab({users,staffList,attendance,transport,entries,claims,srecs,plans,monitors,perfs,wages,files,scheds,msgs,salaries,shifts,health,expenses}) {
+  const [exporting, setExporting] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [filterMonth, setFilterMonth] = useState("");
+  const [selectedSheets, setSelectedSheets] = useState({
+    users:true, staff:true, attendance:true, shifts_data:true,
+    salaries:true, expenses:true, transport:true, srecs:true,
+    plans:true, monitors:true, health:true, msgs:true,
+    scheds:true, claims:true, accounting:true, wages:true,
+    perfs:true, files:true,
+  });
+
+  const toggleSheet = (key) => setSelectedSheets(s=>({...s,[key]:!s[key]}));
+  const allOn  = () => setSelectedSheets(s=>Object.fromEntries(Object.keys(s).map(k=>[k,true])));
+  const allOff = () => setSelectedSheets(s=>Object.fromEntries(Object.keys(s).map(k=>[k,false])));
+
+  const SHEETS = [
+    {key:"users",       label:"利用者情報",         icon:"👤", data:users,
+     cols:["id","name","kana","status","birth_date","disability_type","recipient_no","unit","move_in_date","move_out_date","emergency_contact","note","access_code"]},
+    {key:"staff",       label:"スタッフ情報",        icon:"👥", data:staffList,
+     cols:["id","name","kana","role","full_time","tel","email","hourly_rate","night_rate","hire_date","certifications"]},
+    {key:"attendance",  label:"勤怠記録",            icon:"⏰", data:attendance,
+     cols:["id","staff_id","date","clock_in","clock_out","break_minutes","shift_type","note"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"shifts_data", label:"シフト申請",          icon:"📅", data:shifts,
+     cols:["id","staff_id","staff_name","type","date_from","date_to","reason","status","created_at"],
+     filter: r=>!filterMonth||r.date_from?.startsWith(filterMonth)},
+    {key:"salaries",    label:"給与記録",            icon:"💴", data:salaries,
+     cols:["id","staff_id","staff_name","year_month","work_minutes","gross_pay","deductions","net_pay","pay_date","status","note"],
+     filter: r=>!filterMonth||r.year_month?.startsWith(filterMonth)},
+    {key:"expenses",    label:"立替払い",            icon:"🧾", data:expenses,
+     cols:["id","staff_id","staff_name","date","category","description","amount","has_receipt","receipt_url","note","status","approved_at"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"transport",   label:"送迎記録",            icon:"🚗", data:transport,
+     cols:["id","date","staff_name","user_name","direction","departure","destination","distance_km","note"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"srecs",       label:"支援記録",            icon:"📝", data:srecs,
+     cols:["id","user_id","date","staff_name","content","category","next_action"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"plans",       label:"支援計画",            icon:"📋", data:plans,
+     cols:["id","user_id","created_at","period_start","period_end","goal","content","status"]},
+    {key:"monitors",    label:"モニタリング",         icon:"🔍", data:monitors,
+     cols:["id","user_id","date","staff_name","evaluation","issues","next_plan"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"health",      label:"健康記録",            icon:"🏥", data:health,
+     cols:["id","user_id","date","temperature","weight","blood_pressure","condition","medication_taken","note"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"msgs",        label:"利用者メッセージ",    icon:"💬", data:msgs,
+     cols:["id","user_id","staff_name","content","created_at","is_read"],
+     filter: r=>!filterMonth||r.created_at?.startsWith(filterMonth)},
+    {key:"scheds",      label:"予定管理",            icon:"🗓️", data:scheds,
+     cols:["id","user_id","unit","type","start_date","end_date","note","status"],
+     filter: r=>!filterMonth||r.start_date?.startsWith(filterMonth)},
+    {key:"claims",      label:"国保連請求",          icon:"🏦", data:claims,
+     cols:["id","year_month","user_id","service_days","amount","status"]},
+    {key:"accounting",  label:"経理・仕訳",          icon:"📊", data:entries,
+     cols:["id","date","category","sub_category","description","amount","debit","credit"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"wages",       label:"工賃記録",            icon:"💰", data:wages,
+     cols:["id","user_id","year_month","work_days","amount","note"],
+     filter: r=>!filterMonth||r.year_month?.startsWith(filterMonth)},
+    {key:"perfs",       label:"実績記録",            icon:"📈", data:perfs,
+     cols:["id","user_id","date","service_type","hours","note"],
+     filter: r=>!filterMonth||r.date?.startsWith(filterMonth)},
+    {key:"files",       label:"ファイル記録",        icon:"📁", data:files,
+     cols:["id","date","category","title","note","url"]},
+  ];
+
+  // 日本語列名マッピング
+  const COL_JA = {
+    id:"ID", name:"氏名", kana:"フリガナ", status:"状態", birth_date:"生年月日",
+    disability_type:"障害種別", recipient_no:"受給者番号", unit:"棟", move_in_date:"入居日",
+    move_out_date:"退居日", emergency_contact:"緊急連絡先", note:"備考", access_code:"アクセスコード",
+    role:"役職", full_time:"雇用形態", tel:"電話", email:"メール", hourly_rate:"基本時給",
+    night_rate:"夜勤時給", hire_date:"入職日", certifications:"資格",
+    staff_id:"スタッフID", staff_name:"スタッフ名", date:"日付", clock_in:"出勤",
+    clock_out:"退勤", break_minutes:"休憩(分)", shift_type:"シフト種別",
+    type:"種別", date_from:"開始日", date_to:"終了日", reason:"理由",
+    created_at:"作成日時", year_month:"年月", work_minutes:"勤務時間(分)",
+    gross_pay:"総支給額", deductions:"控除額", net_pay:"手取り", pay_date:"支払日",
+    category:"カテゴリ", description:"内容", amount:"金額", has_receipt:"領収書",
+    receipt_url:"領収書URL", approved_at:"承認日", direction:"方向",
+    departure:"出発地", destination:"目的地", distance_km:"距離(km)",
+    user_id:"利用者ID", content:"内容", next_action:"次のアクション",
+    period_start:"計画開始", period_end:"計画終了", goal:"目標", evaluation:"評価",
+    issues:"課題", next_plan:"次の計画", temperature:"体温", weight:"体重",
+    blood_pressure:"血圧", condition:"体調", medication_taken:"服薬",
+    is_read:"既読", start_date:"開始日", end_date:"終了日",
+    service_days:"利用日数", service_type:"サービス種別", hours:"時間",
+    sub_category:"補助科目", debit:"借方", credit:"貸方",
+    work_days:"勤務日数", url:"URL", title:"タイトル",
+  };
+
+  const exportAll = async() => {
+    setExporting(true);
+    const wb = XLSX.utils.book_new();
+    const now = new Date();
+    const ts = now.getFullYear()+"-"+String(now.getMonth()+1).padStart(2,"0")+"-"+String(now.getDate()).padStart(2,"0");
+
+    // 表紙シート
+    const coverData = [
+      ["グループホームつながり データエクスポート"],
+      ["出力日時", now.toLocaleString("ja-JP")],
+      ["対象期間", filterMonth||"全期間"],
+      ["出力シート数", SHEETS.filter(s=>selectedSheets[s.key]).length+"シート"],
+      [],
+      ["シート名","件数","説明"],
+    ];
+    const activeSheets = SHEETS.filter(s=>selectedSheets[s.key]);
+    activeSheets.forEach(s=>{
+      const rows = s.filter ? (s.data||[]).filter(s.filter) : (s.data||[]);
+      coverData.push([s.icon+" "+s.label, rows.length+"件", ""]);
+    });
+    const coverWS = XLSX.utils.aoa_to_sheet(coverData);
+    coverWS["!cols"] = [{wch:35},{wch:20},{wch:20}];
+    XLSX.utils.book_append_sheet(wb, coverWS, "📋 概要");
+
+    // 各データシート
+    for(const sheet of activeSheets){
+      setProgress(sheet.label+"を処理中...");
+      await new Promise(r=>setTimeout(r,10));
+
+      const rawData = sheet.data||[];
+      const filtered = sheet.filter ? rawData.filter(sheet.filter) : rawData;
+
+      if(filtered.length===0){
+        const emptyWS = XLSX.utils.aoa_to_sheet([[sheet.label+"のデータがありません"]]);
+        XLSX.utils.book_append_sheet(wb, emptyWS, sheet.icon+" "+sheet.label);
+        continue;
+      }
+
+      // ヘッダー行（日本語）
+      const header = sheet.cols.map(c=>COL_JA[c]||c);
+      // データ行
+      const rows = filtered.map(row=>
+        sheet.cols.map(col=>{
+          const v = row[col];
+          if(v===null||v===undefined) return "";
+          if(typeof v==="boolean") return v?"はい":"いいえ";
+          // 日時文字列を見やすく
+          if(typeof v==="string"&&v.match(/^\d{4}-\d{2}-\d{2}T/)) {
+            try{ return new Date(v).toLocaleString("ja-JP"); }catch(e){ return v; }
+          }
+          return v;
+        })
+      );
+
+      const wsData = [header, ...rows];
+      const ws = XLSX.utils.aoa_to_sheet(wsData);
+
+      // 列幅自動設定
+      const colWidths = header.map((h,i)=>{
+        const maxLen = Math.max(h.length, ...rows.map(r=>String(r[i]||"").length));
+        return {wch: Math.min(Math.max(maxLen+2, 8), 40)};
+      });
+      ws["!cols"] = colWidths;
+
+      // ヘッダー行スタイル（背景色）
+      const range = XLSX.utils.decode_range(ws["!ref"]||"A1");
+      for(let c=range.s.c; c<=range.e.c; c++){
+        const cell = ws[XLSX.utils.encode_cell({r:0,c})];
+        if(cell) cell.s = {fill:{fgColor:{rgb:"1E3A8A"}},font:{bold:true,color:{rgb:"FFFFFF"}}};
+      }
+
+      const sheetName = (sheet.icon+" "+sheet.label).slice(0,31);
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    }
+
+    setProgress("ファイルを生成中...");
+    await new Promise(r=>setTimeout(r,10));
+
+    const filename = "グループホームつながり_データ_"+(filterMonth||ts)+".xlsx";
+    XLSX.writeFile(wb, filename);
+    setProgress("");
+    setExporting(false);
+  };
+
+  const totalSelected = SHEETS.filter(s=>selectedSheets[s.key]).length;
+  const totalRows = SHEETS.filter(s=>selectedSheets[s.key]).reduce((sum,s)=>{
+    const d = s.filter ? (s.data||[]).filter(s.filter) : (s.data||[]);
+    return sum + d.length;
+  }, 0);
+
+  return(
+    <div className="fade-in">
+      <PH title="データエクスポート" sub="全データをExcelファイルに出力"/>
+
+      {/* 設定カード */}
+      <div className="card" style={{marginBottom:16}}>
+        <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>⚙️ エクスポート設定</div>
+        <div style={{display:"flex",gap:12,alignItems:"center",flexWrap:"wrap",marginBottom:12}}>
+          <div>
+            <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>対象期間（空欄で全期間）</label>
+            <input className="input" type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)} style={{width:160}}/>
+          </div>
+          <div style={{display:"flex",gap:6,alignItems:"flex-end"}}>
+            <button className="btn btn-secondary btn-sm" onClick={allOn}>全選択</button>
+            <button className="btn btn-secondary btn-sm" onClick={allOff}>全解除</button>
+          </div>
+        </div>
+        <div style={{fontSize:12,color:"#64748b",marginBottom:8}}>出力するシートを選択：</div>
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(200px,1fr))",gap:6}}>
+          {SHEETS.map(s=>{
+            const cnt = s.filter ? (s.data||[]).filter(s.filter).length : (s.data||[]).length;
+            return(
+              <label key={s.key} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",borderRadius:8,background:selectedSheets[s.key]?"#eff6ff":"#f8fafc",border:"1px solid "+(selectedSheets[s.key]?"#bfdbfe":"#e2e8f0"),cursor:"pointer",fontSize:12}}>
+                <input type="checkbox" checked={selectedSheets[s.key]} onChange={()=>toggleSheet(s.key)} style={{width:14,height:14}}/>
+                <span>{s.icon} {s.label}</span>
+                <span style={{marginLeft:"auto",color:"#94a3b8",fontSize:11}}>{cnt}件</span>
+              </label>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 出力ボタン */}
+      <div className="card" style={{textAlign:"center",padding:24}}>
+        <div style={{fontSize:13,color:"#64748b",marginBottom:4}}>{totalSelected}シート / 約{totalRows.toLocaleString()}件のデータ</div>
+        {progress&&<div style={{fontSize:12,color:"#7c3aed",marginBottom:8}}>⏳ {progress}</div>}
+        <button
+          className="btn btn-primary"
+          style={{fontSize:15,padding:"12px 32px",background:"linear-gradient(135deg,#1e3a8a,#2563eb)",opacity:exporting||totalSelected===0?0.6:1}}
+          onClick={exportAll}
+          disabled={exporting||totalSelected===0}
+        >
+          {exporting?"出力中...":"📥 Excelファイルをダウンロード"}
+        </button>
+        <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>
+          ファイル名: グループホームつながり_データ_{filterMonth||"全期間"}.xlsx
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DocsTab({today, staffList=[]}) {
   const REQUIRED_DOCS = [
-    {cat:"指定申請・運営",items:[
+    {cat:"指定申請・運営",icon:"📋",items:[
       {id:"d01",name:"指定申請書・添付書類",keep:"永久",freq:"変更時更新"},
       {id:"d02",name:"運営規程",keep:"永久",freq:"変更時更新"},
       {id:"d03",name:"重要事項説明書",keep:"永久",freq:"変更時更新"},
@@ -2361,7 +4029,7 @@ function DocsTab({today}) {
       {id:"d23",name:"苦情受付・解決記録",keep:"5年",freq:"発生時"},
       {id:"d24",name:"入居者名簿・緊急連絡先一覧",keep:"退居後5年",freq:"入居時・変更時"},
     ]},
-    {cat:"個別支援関係",items:[
+    {cat:"個別支援関係",icon:"👤",items:[
       {id:"d05",name:"個別支援計画（全利用者）",keep:"5年",freq:"6ヶ月ごと"},
       {id:"d06",name:"アセスメント記録",keep:"5年",freq:"計画作成時"},
       {id:"d07",name:"モニタリング記録",keep:"5年",freq:"6ヶ月ごと"},
@@ -2369,20 +4037,20 @@ function DocsTab({today}) {
       {id:"d25",name:"相談支援専門員との連携記録",keep:"5年",freq:"随時"},
       {id:"d26",name:"医療機関・関係機関との連携記録",keep:"5年",freq:"随時"},
     ]},
-    {cat:"請求・経理",items:[
+    {cat:"請求・経理",icon:"💴",items:[
       {id:"d09",name:"給付費請求書・明細書",keep:"5年",freq:"月次"},
       {id:"d10",name:"領収書・支払記録",keep:"5年",freq:"随時"},
       {id:"d11",name:"収支計算書",keep:"10年",freq:"年次"},
       {id:"d27",name:"加算算定根拠書類（体制届等）",keep:"5年",freq:"届出時・変更時"},
     ]},
-    {cat:"人員・組織",items:[
+    {cat:"人員・組織",icon:"👥",items:[
       {id:"d12",name:"従業者の勤務体制記録（様式4）",keep:"5年",freq:"月次"},
       {id:"d13",name:"資格証・研修修了証（全スタッフ）",keep:"在職中",freq:"取得時"},
       {id:"d14",name:"雇用契約書",keep:"退職後3年",freq:"採用時"},
       {id:"d28",name:"サービス管理責任者 実務経験証明書",keep:"永久",freq:"就任時"},
       {id:"d29",name:"健康診断結果（全従業者）",keep:"5年",freq:"年1回以上"},
     ]},
-    {cat:"安全・緊急対応",items:[
+    {cat:"安全・緊急対応",icon:"🚨",items:[
       {id:"d15",name:"事故報告書・ヒヤリハット",keep:"5年",freq:"発生時"},
       {id:"d16",name:"業務継続計画（BCP）",keep:"永久",freq:"年次見直し"},
       {id:"d17",name:"虐待防止・身体拘束廃止計画",keep:"永久",freq:"年次見直し"},
@@ -2390,7 +4058,7 @@ function DocsTab({today}) {
       {id:"d30",name:"防火・避難計画・訓練記録",keep:"5年",freq:"年2回以上"},
       {id:"d31",name:"身体拘束適正化の取組記録",keep:"5年",freq:"発生時・委員会時"},
     ]},
-    {cat:"会議・委員会",items:[
+    {cat:"会議・委員会",icon:"📝",items:[
       {id:"d19",name:"職員会議議事録",keep:"5年",freq:"月次"},
       {id:"d20",name:"虐待防止委員会議事録",keep:"5年",freq:"年2回以上"},
       {id:"d21",name:"身体拘束廃止委員会議事録",keep:"5年",freq:"年2回以上"},
@@ -2398,69 +4066,213 @@ function DocsTab({today}) {
       {id:"d32",name:"地域連携推進会議 議事録・参加者記録",keep:"5年",freq:"年1回以上"},
       {id:"d33",name:"感染症対策委員会議事録",keep:"5年",freq:"年2回以上"},
     ]},
-    {cat:"自立支援・地域移行",items:[
+    {cat:"自立支援・地域移行",icon:"🏘️",items:[
       {id:"d34",name:"地域移行・地域定着支援記録",keep:"5年",freq:"随時"},
       {id:"d35",name:"日中活動・就労支援連携記録",keep:"5年",freq:"随時"},
       {id:"d36",name:"自立生活移行計画（該当者）",keep:"5年",freq:"作成時"},
     ]},
   ];
-  const [docStatus,setDocStatus]=useState({});
-  const [loaded,setLoaded]=useState(false);
+
+  const [docStatus, setDocStatus] = useState({});
+  const [loaded, setLoaded] = useState(false);
+  const [expandedId, setExpandedId] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("全て");
+  const [filterExpiry, setFilterExpiry] = useState(false);
+
   useEffect(()=>{
     supabase.from("app_settings").select("value").eq("key","doc_status").single().then(({data})=>{
       if(data?.value){try{setDocStatus(JSON.parse(data.value));}catch(e){}}
       setLoaded(true);
     });
   },[]);
-  const update = async(id,field,val)=>{
+
+  const update = async(id, field, val)=>{
     const newS={...docStatus,[id]:{...docStatus[id],[field]:val}};
     setDocStatus(newS);
-    await supabase.from("app_settings").upsert({key:"doc_status",value:JSON.stringify(newS)});
+    await supabase.from("app_settings").upsert({key:"doc_status",value:JSON.stringify(newS)},{onConflict:"key"});
   };
-  const allDocs=REQUIRED_DOCS.flatMap(c=>c.items);
-  const done=allDocs.filter(d=>docStatus[d.id]?.status==="整備済").length;
-  const pct=Math.round(done/allDocs.length*100);
+
+  const updateMulti = async(id, fields)=>{
+    const newS={...docStatus,[id]:{...docStatus[id],...fields}};
+    setDocStatus(newS);
+    await supabase.from("app_settings").upsert({key:"doc_status",value:JSON.stringify(newS)},{onConflict:"key"});
+  };
+
+  // 期限チェック
+  const getExpiryState = (docId) => {
+    const s = docStatus[docId]||{};
+    if(!s.expiry_date) return "none";
+    const diff = (new Date(s.expiry_date) - new Date(today)) / (1000*60*60*24);
+    if(diff < 0) return "expired";
+    if(diff <= 30) return "soon";
+    if(diff <= 90) return "warn";
+    return "ok";
+  };
+
+  const allDocs = REQUIRED_DOCS.flatMap(c=>c.items);
+  const done = allDocs.filter(d=>(docStatus[d.id]?.status||"未整備")==="整備済").length;
+  const inprog = allDocs.filter(d=>(docStatus[d.id]?.status||"未整備")==="整備中").length;
+  const expired = allDocs.filter(d=>getExpiryState(d.id)==="expired").length;
+  const expiringSoon = allDocs.filter(d=>["soon","warn"].includes(getExpiryState(d.id))).length;
+  const pct = Math.round(done/allDocs.length*100);
+
+  const filteredCats = REQUIRED_DOCS.map(cat=>({
+    ...cat,
+    items: cat.items.filter(doc=>{
+      const s = docStatus[doc.id]||{status:"未整備"};
+      const st = s.status||"未整備";
+      if(filterStatus!=="全て" && st!==filterStatus) return false;
+      if(filterExpiry){
+        const ex=getExpiryState(doc.id);
+        if(!["expired","soon","warn"].includes(ex)) return false;
+      }
+      return true;
+    })
+  })).filter(cat=>cat.items.length>0);
+
+  const expiryBadge = (docId) => {
+    const state = getExpiryState(docId);
+    const s = docStatus[docId]||{};
+    if(state==="none") return null;
+    const diff = Math.ceil((new Date(s.expiry_date) - new Date(today)) / (1000*60*60*24));
+    if(state==="expired") return <span style={{fontSize:10,padding:"2px 6px",borderRadius:10,background:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",fontWeight:700}}>⚠️ 期限切れ</span>;
+    if(state==="soon") return <span style={{fontSize:10,padding:"2px 6px",borderRadius:10,background:"#fef2f2",color:"#ef4444",border:"1px solid #fecaca",fontWeight:700}}>🔴 あと{diff}日</span>;
+    if(state==="warn") return <span style={{fontSize:10,padding:"2px 6px",borderRadius:10,background:"#fffbeb",color:"#d97706",border:"1px solid #fde68a",fontWeight:700}}>🟡 あと{diff}日</span>;
+    return <span style={{fontSize:10,padding:"2px 6px",borderRadius:10,background:"#f0fdf4",color:"#059669",border:"1px solid #bbf7d0"}}>✓ {diff}日後</span>;
+  };
+
   return(
-    <div>
-      <div className="card" style={{marginBottom:16}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-          <div style={{fontWeight:700,fontSize:15}}>整備状況 {done}/{allDocs.length}件</div>
-          <div className="mono" style={{fontSize:22,fontWeight:800,color:pct>=80?"#059669":pct>=50?"#d97706":"#ef4444"}}>{pct}%</div>
-        </div>
-        <div style={{height:10,background:"#e2e8f0",borderRadius:5,overflow:"hidden"}}>
-          <div style={{height:"100%",width:pct+"%",background:pct>=80?"#059669":pct>=50?"#f59e0b":"#ef4444",transition:"width .4s",borderRadius:5}}/>
-        </div>
-        <div style={{display:"flex",gap:16,marginTop:8,fontSize:12,flexWrap:"wrap"}}>
-          {[{l:"整備済",c:"#059669",st:"整備済"},{l:"整備中",c:"#d97706",st:"整備中"},{l:"未整備",c:"#ef4444",st:"未整備"}].map(k=>(
-            <div key={k.st} style={{display:"flex",alignItems:"center",gap:5}}><div style={{width:8,height:8,borderRadius:"50%",background:k.c}}/><span style={{color:"#64748b"}}>{k.l}: {allDocs.filter(d=>(docStatus[d.id]?.status||"未整備")===k.st).length}件</span></div>
-          ))}
+    <div className="fade-in">
+      {/* サマリーカード */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10,marginBottom:16}}>
+        {[
+          {l:"整備済",v:done,c:"#059669",bg:"#f0fdf4",b:"#bbf7d0"},
+          {l:"整備中",v:inprog,c:"#d97706",bg:"#fffbeb",b:"#fde68a"},
+          {l:"未整備",v:allDocs.length-done-inprog,c:"#ef4444",bg:"#fef2f2",b:"#fecaca"},
+          {l:"期限切れ",v:expired,c:"#ef4444",bg:"#fef2f2",b:"#fecaca"},
+          {l:"期限間近",v:expiringSoon,c:"#d97706",bg:"#fffbeb",b:"#fde68a"},
+        ].map(k=>(
+          <div key={k.l} style={{background:k.bg,border:"1px solid "+k.b,borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+            <div style={{fontSize:11,color:k.c,fontWeight:600,marginBottom:2}}>{k.l}</div>
+            <div style={{fontSize:22,fontWeight:800,color:k.c}}>{k.v}</div>
+            <div style={{fontSize:10,color:"#94a3b8"}}>/ {allDocs.length}件</div>
+          </div>
+        ))}
+        <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:10,padding:"10px 12px",textAlign:"center"}}>
+          <div style={{fontSize:11,color:"#2563eb",fontWeight:600,marginBottom:2}}>整備率</div>
+          <div style={{fontSize:22,fontWeight:800,color:"#2563eb"}}>{pct}%</div>
+          <div style={{height:4,background:"#bfdbfe",borderRadius:2,marginTop:4,overflow:"hidden"}}>
+            <div style={{height:"100%",width:pct+"%",background:"#2563eb",borderRadius:2,transition:"width .4s"}}/>
+          </div>
         </div>
       </div>
-      {!loaded?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>読み込み中...</div>:
-      REQUIRED_DOCS.map(cat=>(
-        <div key={cat.cat} style={{marginBottom:18}}>
-          <div style={{fontWeight:700,fontSize:14,marginBottom:8,paddingBottom:6,borderBottom:"2px solid #f1f5f9"}}>📁 {cat.cat}</div>
-          <div style={{display:"grid",gap:6}}>
+
+      {/* フィルター */}
+      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14,alignItems:"center"}}>
+        {["全て","整備済","整備中","未整備"].map(s=>(
+          <button key={s} className="btn btn-sm" style={{background:filterStatus===s?"#2563eb":"#f1f5f9",color:filterStatus===s?"white":"#475569",border:"none",fontSize:12}} onClick={()=>setFilterStatus(s)}>{s}</button>
+        ))}
+        <button className="btn btn-sm" style={{background:filterExpiry?"#ef4444":"#f1f5f9",color:filterExpiry?"white":"#475569",border:"none",fontSize:12}} onClick={()=>setFilterExpiry(v=>!v)}>⚠️ 期限問題のみ</button>
+      </div>
+
+      {!loaded ? <div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>読み込み中...</div> :
+      filteredCats.length===0 ? <div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>該当する書類がありません</div> :
+      filteredCats.map(cat=>(
+        <div key={cat.cat} style={{marginBottom:20}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:8,paddingBottom:6,borderBottom:"2px solid #f1f5f9",display:"flex",alignItems:"center",gap:6}}>
+            {cat.icon} {cat.cat}
+            <span style={{fontSize:11,color:"#94a3b8",fontWeight:400}}>（{cat.items.length}件）</span>
+          </div>
+          <div style={{display:"grid",gap:8}}>
             {cat.items.map(doc=>{
-              const s=docStatus[doc.id]||{status:"未整備"};
-              const color=s.status==="整備済"?"#059669":s.status==="整備中"?"#d97706":"#ef4444";
-              const bg=s.status==="整備済"?"#f0fdf4":s.status==="整備中"?"#fffbeb":"#fef2f2";
+              const s = docStatus[doc.id]||{status:"未整備"};
+              const st = s.status||"未整備";
+              const color = st==="整備済"?"#059669":st==="整備中"?"#d97706":"#ef4444";
+              const bg = st==="整備済"?"#f0fdf4":st==="整備中"?"#fffbeb":"#fef2f2";
+              const border = st==="整備済"?"#bbf7d0":st==="整備中"?"#fde68a":"#fecaca";
+              const exState = getExpiryState(doc.id);
+              const isExpired = exState==="expired";
+              const isExpanded = expandedId===doc.id;
               return(
-                <div key={doc.id} style={{background:bg,borderRadius:10,padding:"10px 14px",border:`1px solid ${s.status==="整備済"?"#bbf7d0":s.status==="整備中"?"#fde68a":"#fecaca"}`}}>
-                  <div style={{display:"flex",justifyContent:"space-between",gap:10,alignItems:"flex-start"}}>
-                    <div style={{flex:1}}>
-                      <div style={{fontWeight:600,fontSize:13,marginBottom:3}}>{doc.name}</div>
-                      <div style={{fontSize:11,color:"#64748b"}}>保管期間: {doc.keep} ／ 更新: {doc.freq}</div>
-                      {s.updated&&<div style={{fontSize:11,color:"#94a3b8",marginTop:2}}>更新日: {s.updated}</div>}
-                      <input className="input" style={{marginTop:6,fontSize:12}} placeholder="メモ・保管場所・担当者..." value={s.memo||""} onChange={e=>update(doc.id,"memo",e.target.value)}/>
+                <div key={doc.id} style={{background:isExpired?"#fef2f2":bg,borderRadius:10,border:`1px solid ${isExpired?"#fca5a5":border}`,overflow:"hidden"}}>
+                  {/* 折りたたみヘッダー */}
+                  <div
+                    style={{padding:"10px 14px",cursor:"pointer",display:"flex",justifyContent:"space-between",alignItems:"center",gap:8}}
+                    onClick={()=>setExpandedId(isExpanded?null:doc.id)}
+                  >
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap",marginBottom:2}}>
+                        <span style={{fontWeight:600,fontSize:13}}>{doc.name}</span>
+                        {expiryBadge(doc.id)}
+                      </div>
+                      <div style={{fontSize:11,color:"#64748b",display:"flex",gap:10,flexWrap:"wrap"}}>
+                        <span>📦 保管: {doc.keep}</span>
+                        <span>🔄 更新: {doc.freq}</span>
+                        {s.assignee&&<span>👤 担当: {s.assignee}</span>}
+                        {s.updated_at&&<span>📅 更新日: {s.updated_at}</span>}
+                      </div>
                     </div>
-                    <div style={{flexShrink:0,display:"flex",flexDirection:"column",gap:4,alignItems:"flex-end"}}>
-                      <span className="tag" style={{color,border:`1px solid ${color}`,background:"white"}}>{s.status}</span>
-                      <select style={{fontSize:11,border:"1px solid #e2e8f0",borderRadius:6,padding:"4px 6px",cursor:"pointer"}} value={s.status||"未整備"} onChange={e=>update(doc.id,"status",e.target.value).then(()=>update(doc.id,"updated",today))}>
-                        <option>未整備</option><option>整備中</option><option>整備済</option>
-                      </select>
+                    <div style={{display:"flex",alignItems:"center",gap:6,flexShrink:0}}>
+                      <span style={{fontSize:11,padding:"3px 8px",borderRadius:8,background:"white",color,border:`1px solid ${color}`,fontWeight:700}}>{st}</span>
+                      <span style={{color:"#94a3b8",fontSize:14}}>{isExpanded?"▲":"▼"}</span>
                     </div>
                   </div>
+
+                  {/* 展開エリア */}
+                  {isExpanded&&(
+                    <div style={{padding:"0 14px 14px",borderTop:"1px solid "+border,paddingTop:12,display:"grid",gap:10}}>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
+                        {/* ステータス */}
+                        <div>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>ステータス</label>
+                          <select className="input" style={{fontSize:13,color}} value={st} onChange={e=>updateMulti(doc.id,{status:e.target.value,updated_at:today})}>
+                            <option>未整備</option><option>整備中</option><option>整備済</option>
+                          </select>
+                        </div>
+                        {/* 担当者 */}
+                        <div>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>担当者</label>
+                          <select className="input" style={{fontSize:13}} value={s.assignee||""} onChange={e=>update(doc.id,"assignee",e.target.value)}>
+                            <option value="">選択してください</option>
+                            {staffList.map(st=><option key={st.id} value={st.name}>{st.name}</option>)}
+                            <option value="管理者">管理者</option>
+                            <option value="サービス管理責任者">サービス管理責任者</option>
+                          </select>
+                        </div>
+                        {/* 更新日 */}
+                        <div>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>最終更新日</label>
+                          <input className="input" type="date" style={{fontSize:13}} value={s.updated_at||""} onChange={e=>update(doc.id,"updated_at",e.target.value)}/>
+                        </div>
+                        {/* 有効期限 */}
+                        <div>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>
+                            有効期限
+                            {s.expiry_date&&<span style={{marginLeft:4,fontSize:10,color:exState==="expired"?"#ef4444":exState==="soon"?"#ef4444":exState==="warn"?"#d97706":"#059669"}}>
+                              {exState==="expired"?"（期限切れ）":exState==="soon"||exState==="warn"?"（間近）":"（有効）"}
+                            </span>}
+                          </label>
+                          <input className="input" type="date" style={{fontSize:13,borderColor:exState==="expired"?"#ef4444":exState==="soon"?"#f97316":""}} value={s.expiry_date||""} onChange={e=>update(doc.id,"expiry_date",e.target.value)}/>
+                        </div>
+                        {/* 次回更新予定 */}
+                        <div>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>次回更新予定日</label>
+                          <input className="input" type="date" style={{fontSize:13}} value={s.next_update||""} onChange={e=>update(doc.id,"next_update",e.target.value)}/>
+                        </div>
+                        {/* 保管場所 */}
+                        <div>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>保管場所</label>
+                          <input className="input" type="text" style={{fontSize:13}} placeholder="例: 事務室キャビネット2段目" value={s.location||""} onChange={e=>update(doc.id,"location",e.target.value)}/>
+                        </div>
+                      </div>
+                      {/* 備考 */}
+                      <div>
+                        <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>備考・メモ</label>
+                        <textarea className="input" rows={2} style={{fontSize:12,resize:"vertical",width:"100%",boxSizing:"border-box"}} placeholder="特記事項・引き継ぎ事項・関連書類の場所など" value={s.memo||""} onChange={e=>update(doc.id,"memo",e.target.value)}/>
+                      </div>
+                      {s.updated_at&&<div style={{fontSize:11,color:"#94a3b8",textAlign:"right"}}>最終保存: {s.updated_at}</div>}
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -3411,6 +5223,10 @@ const SREC_TEMPLATES = {
 
 export default function App() {
   const [auth, setAuth] = useState("select");
+  const [isMaster, setIsMaster] = useState(false);
+  const [masterPin, setMasterPin] = useState("");
+  const [logoTapCount, setLogoTapCount] = useState(0);
+  const [logoTapTimer, setLogoTapTimer] = useState(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSabikan, setIsSabikan] = useState(false);
   const [me, setMe] = useState(null);
@@ -3440,6 +5256,7 @@ export default function App() {
   const [salaries, setSalaries] = useState([]);
   const [shifts, setShifts] = useState([]);
   const [health, setHealth] = useState([]);
+  const [expenses, setExpenses] = useState([]);
 
   const [selUser, setSelUser] = useState(null);
   const [modal, setModal] = useState(null);
@@ -3480,9 +5297,51 @@ export default function App() {
 
   useEffect(() => { if(auth==="app") loadAll(); }, [auth]);
 
+  // 退勤打刻忘れチェック（5分おきにブラウザ側で検知 → Supabaseに通知リクエスト記録）
+  useEffect(()=>{
+    if(auth!=="app"||!isAdmin) return;
+    const SHIFT_ENDS=[
+      {label:"日勤",end:"18:05"},{label:"早番",end:"16:05"},
+      {label:"遅番",end:"20:05"},{label:"夜勤",end:"05:05"},
+    ];
+    const checkUnclocked=async()=>{
+      const now=new Date();
+      const hm=String(now.getHours()).padStart(2,"0")+":"+String(now.getMinutes()).padStart(2,"0");
+      const matched=SHIFT_ENDS.find(s=>s.end===hm);
+      if(!matched) return;
+      const todayStr=localDate();
+      const {data:att}=await supabase.from("attendance").select("*").eq("date",todayStr).is("clock_out",null).not("clock_in",null,"is",null);
+      if(!att||att.length===0) return;
+      // app_settingsから通知設定取得
+      const {data:cfg}=await supabase.from("app_settings").select("value").eq("key","clock_notify_settings").single();
+      if(!cfg?.value) return;
+      let settings;
+      try{settings=JSON.parse(cfg.value);}catch(e){return;}
+      if(!settings.enabled||!settings.email) return;
+      // 未退勤スタッフ名リスト
+      const names=att.map(a=>{const s=staffList.find(x=>x.id===a.staff_id);return s?.name||"不明";}).filter(Boolean);
+      if(names.length===0) return;
+      // 通知リクエストをSupabaseに記録（Edge Functionがポーリングして送信）
+      const msg=todayStr+" "+matched.label+"終了時点で退勤打刻なし: "+names.join("、");
+      await supabase.from("app_settings").upsert({
+        key:"clock_notify_pending",
+        value:JSON.stringify({email:settings.email,message:msg,names,date:todayStr,shift:matched.label,created_at:new Date().toISOString()})
+      },{onConflict:"key"});
+      // ブラウザ通知（管理者が画面を開いている場合）
+      if(Notification.permission==="granted"){
+        new Notification("退勤打刻忘れ",{body:names.join("、")+"が退勤打刻していません"});
+      }
+    };
+    // ブラウザ通知の許可をリクエスト
+    if(Notification.permission==="default") Notification.requestPermission();
+    const timer=setInterval(checkUnclocked,60000);
+    return ()=>clearInterval(timer);
+  },[auth,isAdmin,staffList]);
+
+
   const loadAll = async () => {
     setLoading(true);
-    const [u,t,e,c,a,sr,sp,mo,pr,wr,fr,sc,um,st,sal,shf,hl] = await Promise.all([
+    const [u,t,e,c,a,sr,sp,mo,pr,wr,fr,sc,um,st,sal,shf,hl,ex] = await Promise.all([
       supabase.from("users").select("*").order("id"),
       supabase.from("transport_log").select("*").order("date",{ascending:false}),
       supabase.from("accounting_entries").select("*").order("date",{ascending:false}),
@@ -3500,6 +5359,7 @@ export default function App() {
       supabase.from("salary_records").select("*").order("year_month",{ascending:false}),
       supabase.from("shift_requests").select("*").order("created_at",{ascending:false}),
       supabase.from("health_records").select("*").order("date",{ascending:false}),
+      supabase.from("expense_claims").select("*").order("date",{ascending:false}),
     ]);
     setUsers(u.data||[]); setTransport(t.data||[]); setEntries(e.data||[]);
     setClaims(c.data||[]); setAttendance(a.data||[]); setSrecs(sr.data||[]);
@@ -3507,6 +5367,7 @@ export default function App() {
     setWages(wr.data||[]); setFiles(fr.data||[]); setScheds(sc.data||[]);
     setMsgs(um.data||[]); setStaffList(st.data||[]);
     setSalaries(sal.data||[]); setShifts(shf.data||[]); setHealth(hl.data||[]);
+    setExpenses(ex.data||[]);
     setLoading(false);
   };
 
@@ -3601,7 +5462,17 @@ export default function App() {
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#1e3a8a,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
       <style>{CSS}</style>
       <div style={{background:"white",borderRadius:24,padding:44,width:"100%",maxWidth:440,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
-        <div style={{width:68,height:68,borderRadius:18,background:"linear-gradient(135deg,#2563eb,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 16px"}}>🏠</div>
+        <div
+          style={{width:68,height:68,borderRadius:18,background:"linear-gradient(135deg,#2563eb,#7c3aed)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:32,margin:"0 auto 16px",cursor:"pointer",userSelect:"none"}}
+          onClick={()=>{
+            if(logoTapTimer) clearTimeout(logoTapTimer);
+            const next = logoTapCount+1;
+            setLogoTapCount(next);
+            if(next>=5){ setLogoTapCount(0); setAuth("master_pin"); return; }
+            const t = setTimeout(()=>setLogoTapCount(0), 2000);
+            setLogoTapTimer(t);
+          }}
+        >🏠</div>
         <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>グループホーム管理システム</div>
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:32}}>powered by SOMME合同会社</div>
         <div style={{display:"grid",gap:12}}>
@@ -3662,6 +5533,37 @@ export default function App() {
     </div>
   );
 
+  if(auth==="master_pin") return (
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#0f172a,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{CSS}</style>
+      <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.5)"}}>
+        <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#0f172a,#334155)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:26}}>🛡️</div>
+        <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4}}>マスター管理</div>
+        <div style={{fontSize:12,color:"#94a3b8",marginBottom:20}}>Master Console</div>
+        <input className="input" type="password" maxLength={8} placeholder="マスターPIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={masterPin} onChange={e=>setMasterPin(e.target.value)} onKeyDown={async e=>{
+          if(e.key==="Enter"){
+            const {data} = await supabase.from("app_settings").select("value").eq("key","master_pin").single();
+            const correctPin = data?.value||"999999";
+            if(masterPin===correctPin){ setIsMaster(true); setAuth("master"); setMasterPin(""); }
+            else { setPinErr("PINが違います"); }
+          }
+        }}/>
+        {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
+        <button style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8,background:"linear-gradient(135deg,#0f172a,#334155)",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontSize:15,fontWeight:600,display:"flex",alignItems:"center",gap:8}} onClick={async()=>{
+          const {data} = await supabase.from("app_settings").select("value").eq("key","master_pin").single();
+          const correctPin = data?.value||"999999";
+          if(masterPin===correctPin){ setIsMaster(true); setAuth("master"); setMasterPin(""); setPinErr(""); }
+          else { setPinErr("PINが違います"); }
+        }}><Icon name="check" size={15}/>ログイン</button>
+        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setMasterPin("");setPinErr("");setLogoTapCount(0);}}>← 戻る</button>
+      </div>
+    </div>
+  );
+
+  if(auth==="master") {
+    return <MasterScreen onBack={()=>{setAuth("select");setIsMaster(false);setMasterPin("");}} />;
+  }
+
   if(auth==="user_login") {
     return <UserLoginScreen onBack={()=>setAuth("select")} onLogin={(u)=>{setAuth("user_portal");setMe(u);}} />;
   }
@@ -3684,7 +5586,6 @@ export default function App() {
     {g:"実績・工賃",items:[
       {id:"perf_daily",label:"実績管理（日別）",icon:"chart"},
       {id:"perf_sum",label:"実績管理（集計）",icon:"chart"},
-      {id:"wage",label:"工賃計算表",icon:"wage"},
     ]},
     {g:"スタッフ",items:[
       {id:"staff",label:"スタッフ管理",icon:"staff"},
@@ -3697,6 +5598,7 @@ export default function App() {
       {id:"transport",label:"送迎管理",icon:"car"},
       {id:"claims",label:"国保連請求",icon:"claim"},
       {id:"accounting",label:"経理・決算",icon:"accounting"},
+      {id:"expenses",label:"立替払い管理",icon:"claim"},
     ]},
     {g:"予定・連絡",items:[
       {id:"scheds",label:"予定管理",icon:"calendar"},
@@ -3715,6 +5617,7 @@ export default function App() {
     ]},
     {g:"設定",items:[
       {id:"password",label:"パスワード変更",icon:"shield"},
+      {id:"export_all",label:"データエクスポート",icon:"download"},
     ]},
   ];
   const staffTabs = [
@@ -3728,6 +5631,7 @@ export default function App() {
       {id:"srecs",label:"支援記録入力",icon:"book"},
       {id:"journal",label:"業務日誌確認",icon:"calendar"},
       {id:"transport",label:"送迎記録",icon:"car"},
+      {id:"my_expenses",label:"立替申請",icon:"claim"},
     ]},
     {g:"連絡",items:[
       {id:"msgs",label:"利用者メッセージ",icon:"message",badge:unread},
@@ -3850,23 +5754,26 @@ export default function App() {
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:16,marginBottom:16}}>
                 <div className="card">
                   <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>⏰ 本日の出勤状況</div>
-                  {staffList.length===0
-                    ?<div style={{fontSize:13,color:"#94a3b8"}}>スタッフ未登録</div>
-                    :staffList.slice(0,8).map(s=>{
-                      const rec=attendance.find(a=>a.staff_id===s.id&&a.date===today);
-                      return(
-                        <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f8fafc"}}>
-                          <div style={{fontSize:13,fontWeight:500}}>{s.name}</div>
-                          {rec?.clock_out
-                            ?<span className="tag" style={{background:"#f1f5f9",color:"#64748b",fontSize:11}}>退勤済</span>
-                            :rec?.clock_in
-                              ?<span className="tag" style={{background:"#ecfdf5",color:"#059669",fontSize:11}}>出勤中</span>
-                              :<span className="tag" style={{background:"#fef3c7",color:"#d97706",fontSize:11}}>未打刻</span>
-                          }
-                        </div>
-                      );
-                    })
-                  }
+                  {(()=>{
+                    const clockedToday=attendance.filter(a=>a.date===today);
+                    const displayStaff=clockedToday.length>0
+                      ?staffList.filter(s=>clockedToday.some(a=>a.staff_id===s.id))
+                      :[];
+                    return displayStaff.length===0
+                      ?<div style={{fontSize:13,color:"#94a3b8"}}>本日の出勤打刻なし</div>
+                      :displayStaff.map(s=>{
+                        const rec=clockedToday.find(a=>a.staff_id===s.id);
+                        return(
+                          <div key={s.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #f8fafc"}}>
+                            <div style={{fontSize:13,fontWeight:500}}>{s.name}</div>
+                            {rec?.clock_out
+                              ?<span className="tag" style={{background:"#f1f5f9",color:"#64748b",fontSize:11}}>退勤済</span>
+                              :<span className="tag" style={{background:"#ecfdf5",color:"#059669",fontSize:11}}>出勤中</span>
+                            }
+                          </div>
+                        );
+                      });
+                  })()}
                 </div>
                 <div className="card">
                   <div style={{fontWeight:700,fontSize:14,marginBottom:12}}>📋 本日の支援記録</div>
@@ -4542,67 +6449,8 @@ export default function App() {
             </div>
           )}
 
-          {/* ── 工賃計算表 ── */}
-          {tab==="wage"&&isAdmin&&(
-            <div className="fade-in">
-              <PH title="工賃計算表" sub="利用者工賃管理"
-                onAdd={()=>openModal("工賃",{user_id:"",year_month:fDate.slice(0,7),work_days:0,work_hours:0,unit_wage:0,total_wage:0,paid:false,note:""})}
-                addLabel="工賃追加"
-              />
-              <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
-                <input className="input" type="month" style={{flex:1,minWidth:130}} value={fDate.slice(0,7)} onChange={e=>setFDate(e.target.value+"-01")}/>
-                <button className="btn btn-secondary btn-sm" onClick={()=>csv(wages.filter(r=>r.year_month===fDate.slice(0,7)),"工賃計算表")}><Icon name="download" size={13}/>CSV</button>
-              </div>
-              <div className="card" style={{marginBottom:16,display:"flex",gap:24,flexWrap:"wrap"}}>
-                {[{l:"支払総額",v:"¥"+fmt(wages.filter(r=>r.year_month===fDate.slice(0,7)).reduce((s,r)=>s+r.total_wage,0))},{l:"支払済",v:wages.filter(r=>r.year_month===fDate.slice(0,7)&&r.paid).length+"名"},{l:"未払い",v:wages.filter(r=>r.year_month===fDate.slice(0,7)&&!r.paid).length+"名"}].map((k,i)=>(
-                  <div key={i}><div style={{fontSize:11,color:"#94a3b8",marginBottom:2}}>{k.l}</div><div className="mono" style={{fontSize:18,fontWeight:700}}>{k.v}</div></div>
-                ))}
-              </div>
-              <div className="card">
-                <table>
-                  <thead><tr><th>利用者</th><th>年月</th><th>勤務日数</th><th>勤務時間</th><th>単価</th><th>工賃合計</th><th>支払状況</th><th>操作</th></tr></thead>
-                  <tbody>
-                    {wages.filter(r=>r.year_month===fDate.slice(0,7)).map((r,i)=>(
-                      <tr key={i} className="row-hover">
-                        <td style={{fontWeight:600}}>{r.user_name}</td>
-                        <td className="mono" style={{fontSize:12}}>{r.year_month}</td>
-                        <td className="mono">{r.work_days}日</td>
-                        <td className="mono">{r.work_hours}時間</td>
-                        <td className="mono">¥{fmt(r.unit_wage)}</td>
-                        <td className="mono" style={{fontWeight:700,color:"#059669"}}>¥{fmt(r.total_wage)}</td>
-                        <td><span className="tag" style={{background:r.paid?"#ecfdf5":"#fef3c7",color:r.paid?"#059669":"#d97706"}}>{r.paid?"支払済":"未払い"}</span></td>
-                        <td><div style={{display:"flex",gap:4}}>
-                          {!r.paid&&<button className="btn btn-green btn-sm" onClick={async()=>{await supabase.from("wage_records").update({paid:true}).eq("id",r.id);loadAll();}}>支払済</button>}
-                          <button className="btn btn-secondary btn-sm" onClick={()=>openEdit("工賃",r)}><Icon name="edit" size={12}/></button>
-                          <button className="btn btn-red btn-sm" onClick={()=>del("wage_records",r.id)}><Icon name="trash" size={12}/></button>
-                        </div></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                {wages.filter(r=>r.year_month===fDate.slice(0,7)).length===0&&<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>工賃データがありません</div>}
-              </div>
-              <MD name="工賃" table="wage_records" modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
-                    <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
-                      <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
-                  <F label="年月" k="year_month" type="month" form={form} setForm={setForm}/>
-                  <F label="勤務日数" k="work_days" type="number" form={form} setForm={setForm}/>
-                  <F label="勤務時間" k="work_hours" type="number" form={form} setForm={setForm}/>
-                  <F label="単価（円）" k="unit_wage" type="number" form={form} setForm={setForm}/>
-                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>工賃合計</label>
-                    <div className="input" style={{background:"#f8fafc",fontWeight:700,color:"#059669"}}>¥{fmt((form.work_hours||0)*(form.unit_wage||0))}</div>
-                  </div>
-                </div>
-                <F label="備考" k="note" type="textarea" span form={form} setForm={setForm}/>
-              </MD>
-            </div>
-          )}
 
-          {/* ── スタッフ管理 ── */}
+                    {/* ── スタッフ管理 ── */}
           {tab==="staff"&&isAdmin&&(
             <div className="fade-in">
               <PH title="スタッフ管理" sub={`${staffList.length}名`} onAdd={()=>openModal("スタッフ",{name:"",kana:"",role:"世話人",full_time:"true",tel:"",email:"",hourly_rate:"",night_rate:"",pin:"",hire_date:"",certifications:""})} addLabel="スタッフ追加"/>
@@ -4873,62 +6721,7 @@ export default function App() {
           )}
 
           {/* ── 送迎管理 ── */}
-          {tab==="transport"&&(
-            <div className="fade-in">
-              <PH title="送迎管理" sub="送迎記録・コスト分析"
-                onAdd={()=>openModal("送迎",{date:"",user_id:"",type:"送迎（往）",destination:"",driver:"",distance:"",cost:"",time:""})}
-                addLabel="送迎記録追加"
-                extra={isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(transport,"送迎記録")}><Icon name="download" size={13}/>CSV</button>}
-              />
-              {isAdmin&&<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(150px,1fr))",gap:12,marginBottom:16}}>
-                {[{l:"総回数",v:transport.length+"回",c:"#2563eb"},{l:"総コスト",v:"¥"+fmt(transport.reduce((s,t)=>s+t.cost,0)),c:"#059669"},{l:"総距離",v:transport.reduce((s,t)=>s+Number(t.distance),0).toFixed(1)+"km",c:"#d97706"}].map((k,i)=>(
-                  <div key={i} className="stat-card" style={{borderTop:`3px solid ${k.c}`,textAlign:"center"}}><div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div><div className="mono" style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div></div>
-                ))}
-              </div>}
-              <div className="card">
-                <table>
-                  <thead><tr><th>日付</th><th>利用者</th><th>種別</th><th>目的地</th><th>担当</th><th>距離</th><th>コスト</th>{isAdmin&&<th>操作</th>}</tr></thead>
-                  <tbody>
-                    {transport.slice(0,30).map((t,i)=>(
-                      <tr key={i} className="row-hover">
-                        <td className="mono" style={{fontSize:12}}>{t.date}</td>
-                        <td style={{fontWeight:600}}>{t.user_name}</td>
-                        <td><span className="tag" style={{background:"#eff6ff",color:"#2563eb"}}>{t.type}</span></td>
-                        <td>{t.destination}</td>
-                        <td style={{fontSize:12}}>{t.driver}</td>
-                        <td className="mono">{t.distance}km</td>
-                        <td className="mono" style={{fontWeight:700,color:"#059669"}}>¥{fmt(t.cost)}</td>
-                        {isAdmin&&<td><div style={{display:"flex",gap:4}}>
-                          <button className="btn btn-secondary btn-sm" onClick={()=>openEdit("送迎",t)}><Icon name="edit" size={12}/></button>
-                          <button className="btn btn-red btn-sm" onClick={()=>del("transport_log",t.id)}><Icon name="trash" size={12}/></button>
-                        </div></td>}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <MD name="送迎" table="transport_log" modal={modal} editId={editId} closeModal={closeModal} save={save}>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="日付" k="date" type="date" form={form} setForm={setForm}/>
-                  <F label="時刻" k="time" type="time" form={form} setForm={setForm}/>
-                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>利用者</label>
-                    <select className="input" value={form.user_id||""} onChange={e=>{const u=users.find(u=>u.id===parseInt(e.target.value));setForm(f=>({...f,user_id:e.target.value,user_name:u?.name||""}));}}>
-                      <option value="">選択...</option>{users.map(u=><option key={u.id} value={u.id}>{u.name}</option>)}
-                    </select>
-                  </div>
-                  <F label="種別" k="type" opts={["送迎（往）","送迎（復）","通院送迎","その他"]} form={form} setForm={setForm}/>
-                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当</label>
-                    <select className="input" value={form.driver||""} onChange={e=>setForm(f=>({...f,driver:e.target.value}))}>
-                      <option value="">選択...</option>{staffList.map(s=><option key={s.id}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <F label="目的地" k="destination" form={form} setForm={setForm}/>
-                  <F label="距離(km)" k="distance" type="number" form={form} setForm={setForm}/>
-                  <F label="コスト(円)" k="cost" type="number" form={form} setForm={setForm}/>
-                </div>
-              </MD>
-            </div>
-          )}
+          {tab==="transport"&&<TransportTab transport={transport} users={users} staffList={staffList} isAdmin={isAdmin} loadAll={loadAll} csv={csv}/>}
 
           {/* ── 国保連請求 ── */}
           {tab==="claims"&&isAdmin&&(
@@ -4991,6 +6784,16 @@ export default function App() {
                 <F label="摘要" k="description" type="textarea" span form={form} setForm={setForm}/>
               </MD>
             </div>
+          )}
+
+          {/* ── 立替払い管理（管理者） ── */}
+          {tab==="expenses"&&isAdmin&&(
+            <ExpenseAdminTab expenses={expenses} staffList={staffList} loadAll={loadAll} csv={csv}/>
+          )}
+
+          {/* ── 立替申請（スタッフ） ── */}
+          {tab==="my_expenses"&&!isAdmin&&(
+            <MyExpenseTab me={me} expenses={expenses} loadAll={loadAll}/>
           )}
 
           {/* ── 予定管理 ── */}
@@ -5179,13 +6982,26 @@ export default function App() {
             </div>
           )}
 
+          {/* ── データエクスポート ── */}
+          {tab==="export_all"&&isAdmin&&(
+            <ExportAllTab
+              users={users} staffList={staffList} attendance={attendance}
+              transport={transport} entries={entries} claims={claims}
+              srecs={srecs} plans={plans} monitors={monitors}
+              perfs={perfs} wages={wages} files={files}
+              scheds={scheds} msgs={msgs} salaries={salaries}
+              shifts={shifts} health={health} expenses={expenses}
+            />
+          )}
+
           {/* ── パスワード変更（管理者） ── */}
           {tab==="password"&&isAdmin&&(
             <div className="fade-in">
-              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>パスワード変更</div>
-              <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>管理者PINおよびスタッフPINの変更</div>
+              <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>設定</div>
+              <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>管理者PIN・スタッフPIN・打刻通知の設定</div>
               <AdminPinForm loadAll={loadAll}/>
               <StaffPinForm staffList={staffList} loadAll={loadAll}/>
+              <ClockNotifySettings staffList={staffList}/>
             </div>
           )}
 
@@ -5210,7 +7026,7 @@ export default function App() {
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>必須保存書類管理</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>法定・行政上の保管義務がある書類の整備状況</div>
-              <DocsTab today={today}/>
+              <DocsTab today={today} staffList={staffList}/>
             </div>
           )}
 
