@@ -3434,13 +3434,9 @@ function PinListCard({homes, corps}) {
 
   const fetchPins = async () => {
     setLoading(true);
-    // app_settingsからmaster_pin / admin_pin / sabikan_pin取得
     const {data:settings} = await supabase.from("app_settings").select("key,value").in("key",["master_pin","admin_pin","sabikan_pin"]);
     const getPin = (key) => settings?.find(s=>s.key===key)?.value || "（未設定）";
-
-    // 全ホームのスタッフPIN取得
     const {data:allStaff} = await supabase.from("staff_members").select("id,name,role,home_id,pin").order("home_id,id");
-
     setPinData({ settings: {master: getPin("master_pin"), admin: getPin("admin_pin"), sabikan: getPin("sabikan_pin")}, staff: allStaff||[] });
     setLoading(false);
   };
@@ -3577,13 +3573,15 @@ function MasterScreen({onBack}) {
       setHomes(hs2||[]);
     } else { setHomes(hs||[]); }
 
-    // 全ホームの集計（users・staff・attendance・expense件数）
-    const [u,st,att,exp,sr] = await Promise.all([
+    // 全ホームの集計
+    const [u,st,att,exp,sr,ac,sal] = await Promise.all([
       supabase.from("users").select("id,home_id,status"),
       supabase.from("staff_members").select("id,home_id"),
       supabase.from("attendance").select("id,home_id,date"),
       supabase.from("expense_claims").select("id,home_id,amount,status"),
       supabase.from("support_records").select("id,home_id,date"),
+      supabase.from("accounting_entries").select("id,home_id,category,amount,date"),
+      supabase.from("salary_records").select("id,home_id,year_month,total_payment,status"),
     ]);
     const thisMonth = localDate().slice(0,7);
     const allHomeIds = [...new Set([...((hs)||[]).map(h=>h.home_id).filter(Boolean),"default"])];
@@ -3595,6 +3593,12 @@ function MasterScreen({onBack}) {
       exp_pending: (exp.data||[]).filter(x=>x.home_id===hid&&(x.status==="申請中"||x.status==="承認済")).length,
       exp_amount: (exp.data||[]).filter(x=>x.home_id===hid).reduce((s,e)=>s+Number(e.amount||0),0),
       srec_month: (sr.data||[]).filter(x=>x.home_id===hid&&x.date?.startsWith(thisMonth)).length,
+      income_month: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="収入"&&x.date?.startsWith(thisMonth)).reduce((s,e)=>s+Number(e.amount||0),0),
+      expense_month: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="支出"&&x.date?.startsWith(thisMonth)).reduce((s,e)=>s+Number(e.amount||0),0),
+      income_total: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="収入").reduce((s,e)=>s+Number(e.amount||0),0),
+      expense_total: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="支出").reduce((s,e)=>s+Number(e.amount||0),0),
+      salary_month: (sal.data||[]).filter(x=>x.home_id===hid&&x.year_month===thisMonth).reduce((s,e)=>s+Number(e.total_payment||0),0),
+      salary_unpaid: (sal.data||[]).filter(x=>x.home_id===hid&&x.status!=="支払済").length,
     }));
     setAllStats(stats);
     setLoading(false);
@@ -3647,12 +3651,18 @@ function MasterScreen({onBack}) {
   // ─── ホームCRUD ──────────────────────────────────
   const saveHome = async() => {
     if(!homeForm.name){alert("ホーム名を入力してください");return;}
+    const cleanForm = {
+      ...homeForm,
+      capacity: Number(homeForm.capacity)||0,
+      corp_id: homeForm.corp_id ? Number(homeForm.corp_id) : null,
+      open_date: homeForm.open_date || null,
+    };
     if(homeModal==="add"){
       const home_id=genHomeId();
-      const {error}=await supabase.from("master_homes").insert({...homeForm,capacity:Number(homeForm.capacity)||0,home_id});
+      const {error}=await supabase.from("master_homes").insert({...cleanForm,home_id});
       if(error){alert("保存エラー: "+error.message);return;}
     } else {
-      const {error}=await supabase.from("master_homes").update({...homeForm,capacity:Number(homeForm.capacity)||0}).eq("id",editHomeId);
+      const {error}=await supabase.from("master_homes").update(cleanForm).eq("id",editHomeId);
       if(error){alert("更新エラー: "+error.message);return;}
     }
     setHomeModal(null);
@@ -3815,6 +3825,113 @@ function MasterScreen({onBack}) {
                 })}
               </div>
             )}
+
+            {/* ══ 収支サマリー ══ */}
+            <div style={{fontSize:13,fontWeight:800,color:"white",margin:"18px 0 10px",display:"flex",alignItems:"center",gap:6}}>💰 収支サマリー<span style={{fontSize:10,color:"#475569",fontWeight:400}}>（今月: {localDate().slice(0,7)}）</span></div>
+
+            {/* ホーム別収支カード */}
+            <div style={{display:"grid",gap:8,marginBottom:16}}>
+              {allStats.map((s,i)=>{
+                const home = homes.find(h=>h.home_id===s.home_id);
+                if(!home) return null;
+                const corp = corps.find(c=>c.id===home.corp_id);
+                const balance = s.income_month - s.expense_month;
+                const color = COLORS[i%COLORS.length];
+                return(
+                  <div key={s.home_id} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"12px 16px",borderLeft:`3px solid ${color}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div>
+                        <span style={{fontWeight:700,fontSize:13,color:"white"}}>{home.name}</span>
+                        {corp&&<span style={{fontSize:10,color:"#475569",marginLeft:6}}>{corp.name}</span>}
+                      </div>
+                      <span style={{fontSize:12,fontWeight:800,color:balance>=0?"#10b981":"#ef4444",fontFamily:"monospace"}}>
+                        {balance>=0?"+":""}{balance.toLocaleString("ja-JP")}円
+                      </span>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
+                      {[
+                        {l:"収入",v:s.income_month,c:"#10b981"},
+                        {l:"支出",v:s.expense_month,c:"#ef4444"},
+                        {l:"給与(今月)",v:s.salary_month,c:"#f59e0b"},
+                      ].map((k,j)=>(
+                        <div key={j} style={{background:"#0f172a",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
+                          <div style={{fontSize:9,color:"#475569",marginBottom:2}}>{k.l}</div>
+                          <div style={{fontSize:12,fontWeight:700,color:k.c,fontFamily:"monospace"}}>{k.v.toLocaleString("ja-JP")}円</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* 法人別収支集計 */}
+            {corps.length>0&&(()=>{
+              const corpStats = corps.map(corp=>{
+                const corpHomes = homes.filter(h=>h.corp_id===corp.id);
+                const corpHomeIds = corpHomes.map(h=>h.home_id);
+                const s = allStats.filter(s=>corpHomeIds.includes(s.home_id));
+                const totalIncome = s.reduce((a,b)=>a+b.income_month,0);
+                const totalExpense = s.reduce((a,b)=>a+b.expense_month,0);
+                const totalSalary = s.reduce((a,b)=>a+b.salary_month,0);
+                const totalBalance = totalIncome - totalExpense;
+                const totalUsers = s.reduce((a,b)=>a+b.users,0);
+                const fillRates = corpHomes.map(h=>{ const st=allStats.find(x=>x.home_id===h.home_id); return h.capacity>0&&st?st.users/h.capacity:null; }).filter(x=>x!==null);
+                const avgFill = fillRates.length>0?Math.round(fillRates.reduce((a,b)=>a+b,0)/fillRates.length*100):null;
+                // 経営アドバイス生成
+                const hints = [];
+                if(avgFill!==null&&avgFill<70) hints.push({level:"danger",msg:`平均充填率${avgFill}%と低水準です。入居促進・空床対策を検討してください。`});
+                else if(avgFill!==null&&avgFill<85) hints.push({level:"warn",msg:`平均充填率${avgFill}%。あと${Math.ceil(totalUsers*(0.9-avgFill/100))}名の入居で収益改善が見込めます。`});
+                else if(avgFill!==null) hints.push({level:"good",msg:`充填率${avgFill}%と良好です。現状維持に努めてください。`});
+                if(totalBalance<0) hints.push({level:"danger",msg:`今月の収支は${Math.abs(totalBalance).toLocaleString("ja-JP")}円の赤字です。支出項目の見直しを推奨します。`});
+                else if(totalBalance<totalIncome*0.05) hints.push({level:"warn",msg:`収益率が低めです（${totalIncome>0?Math.round(totalBalance/totalIncome*100):0}%）。コスト削減を検討してください。`});
+                else hints.push({level:"good",msg:`収支は${totalBalance.toLocaleString("ja-JP")}円の黒字で安定しています。`});
+                if(s.some(x=>x.salary_unpaid>0)) hints.push({level:"warn",msg:`未払い給与レコードがあります。給与支払い状況を確認してください。`});
+                if(s.some(x=>x.exp_pending>0)) hints.push({level:"warn",msg:`未精算の立替払いが${s.reduce((a,b)=>a+b.exp_pending,0)}件あります。`});
+                return {corp,totalIncome,totalExpense,totalSalary,totalBalance,totalUsers,avgFill,hints,homes:corpHomes.length};
+              });
+              return(
+                <div>
+                  <div style={{fontSize:13,fontWeight:800,color:"white",margin:"18px 0 10px",display:"flex",alignItems:"center",gap:6}}>🏢 法人別経営サマリー＆アドバイス</div>
+                  {corpStats.map(({corp,totalIncome,totalExpense,totalSalary,totalBalance,totalUsers,avgFill,hints,homes:homeCount})=>(
+                    <div key={corp.id} style={{background:"#1e293b",border:`1px solid ${totalBalance>=0?"#1e3a5f":"#4c1414"}`,borderRadius:12,padding:16,marginBottom:12}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:6}}>
+                        <div>
+                          <div style={{fontWeight:800,fontSize:14,color:"white"}}>{corp.name}</div>
+                          <div style={{fontSize:11,color:"#475569",marginTop:2}}>{homeCount}ホーム / 利用者{totalUsers}名</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:10,color:"#475569"}}>今月収支</div>
+                          <div style={{fontSize:20,fontWeight:800,color:totalBalance>=0?"#10b981":"#ef4444",fontFamily:"monospace"}}>{totalBalance>=0?"+":""}{totalBalance.toLocaleString("ja-JP")}円</div>
+                        </div>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
+                        {[
+                          {l:"収入合計",v:totalIncome,c:"#10b981"},
+                          {l:"支出合計",v:totalExpense,c:"#ef4444"},
+                          {l:"給与合計",v:totalSalary,c:"#f59e0b"},
+                          {l:"充填率",v:avgFill!=null?avgFill+"%":"—",c:avgFill>=85?"#10b981":avgFill>=70?"#f59e0b":"#ef4444",raw:true},
+                        ].map((k,j)=>(
+                          <div key={j} style={{background:"#0f172a",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
+                            <div style={{fontSize:9,color:"#475569",marginBottom:3}}>{k.l}</div>
+                            <div style={{fontSize:13,fontWeight:700,color:k.c,fontFamily:"monospace"}}>{k.raw?k.v:k.v.toLocaleString("ja-JP")+"円"}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* 経営アドバイスヒント */}
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {hints.map((h,j)=>(
+                          <div key={j} style={{display:"flex",gap:8,alignItems:"flex-start",background:h.level==="danger"?"#450a0a":h.level==="warn"?"#431407":"#052e16",borderRadius:7,padding:"7px 10px",border:`1px solid ${h.level==="danger"?"#7f1d1d":h.level==="warn"?"#7c2d12":"#14532d"}`}}>
+                            <span style={{fontSize:13,flexShrink:0}}>{h.level==="danger"?"🔴":h.level==="warn"?"🟡":"🟢"}</span>
+                            <span style={{fontSize:11,color:h.level==="danger"?"#fca5a5":h.level==="warn"?"#fdba74":"#86efac",lineHeight:1.6}}>{h.msg}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            })()}
           </div>
         )}
 
@@ -6169,6 +6286,55 @@ export default function App() {
                   ))}
                 </div>
               </div>
+
+              {/* 収支サマリー */}
+              {(()=>{
+                const thisMonth = today.slice(0,7);
+                const incMonth = entries.filter(e=>e.category==="収入"&&e.date?.startsWith(thisMonth)).reduce((s,e)=>s+Number(e.amount||0),0);
+                const expMonth = entries.filter(e=>e.category==="支出"&&e.date?.startsWith(thisMonth)).reduce((s,e)=>s+Number(e.amount||0),0);
+                const balMonth = incMonth - expMonth;
+                const incTotal = entries.filter(e=>e.category==="収入").reduce((s,e)=>s+Number(e.amount||0),0);
+                const expTotal = entries.filter(e=>e.category==="支出").reduce((s,e)=>s+Number(e.amount||0),0);
+                const balTotal = incTotal - expTotal;
+                const salaryMonth = salaries.filter(s=>s.year_month===thisMonth).reduce((s,e)=>s+Number(e.total_payment||0),0);
+                const expClaims = expenses.filter(e=>e.status==="申請中"||e.status==="承認済").length;
+                if(entries.length===0) return null;
+                const hints = [];
+                const fillRate = users.filter(u=>u.status==="在籍").length;
+                if(balMonth<0) hints.push({level:"danger",msg:`今月は${Math.abs(balMonth).toLocaleString("ja-JP")}円の赤字です。支出項目を確認してください。`});
+                else if(incMonth>0&&balMonth/incMonth<0.05) hints.push({level:"warn",msg:`収益率が${Math.round(balMonth/incMonth*100)}%と低めです。コスト管理を見直してください。`});
+                else if(incMonth>0) hints.push({level:"good",msg:`今月の収支は${balMonth.toLocaleString("ja-JP")}円の黒字です。`});
+                if(expClaims>0) hints.push({level:"warn",msg:`未精算の立替払いが${expClaims}件あります。`});
+                return(
+                  <div className="card" style={{marginTop:14}}>
+                    <div style={{fontWeight:700,fontSize:15,marginBottom:12}}>💰 収支サマリー<span style={{fontSize:11,color:"#94a3b8",fontWeight:400,marginLeft:8}}>{thisMonth}</span></div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:10,marginBottom:12}}>
+                      {[
+                        {l:"今月収入",v:incMonth,c:"#059669",icon:"📈"},
+                        {l:"今月支出",v:expMonth,c:"#ef4444",icon:"📉"},
+                        {l:"今月収支",v:balMonth,c:balMonth>=0?"#059669":"#ef4444",icon:"💹",signed:true},
+                        {l:"今月給与",v:salaryMonth,c:"#7c3aed",icon:"💼"},
+                        {l:"累計収入",v:incTotal,c:"#0891b2",icon:"📊"},
+                        {l:"累計収支",v:balTotal,c:balTotal>=0?"#059669":"#ef4444",icon:"🏦",signed:true},
+                      ].map((k,i)=>(
+                        <div key={i} className="stat-card" style={{borderLeft:`4px solid ${k.c}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
+                            <div style={{fontSize:11,color:"#64748b"}}>{k.l}</div>
+                            <div style={{fontSize:16}}>{k.icon}</div>
+                          </div>
+                          <div className="mono" style={{fontSize:16,fontWeight:800,color:k.c}}>{k.signed&&k.v>=0?"+":""}{k.v.toLocaleString("ja-JP")}円</div>
+                        </div>
+                      ))}
+                    </div>
+                    {hints.map((h,j)=>(
+                      <div key={j} style={{display:"flex",gap:8,alignItems:"flex-start",background:h.level==="danger"?"#fef2f2":h.level==="warn"?"#fffbeb":"#f0fdf4",borderRadius:8,padding:"8px 12px",border:`1px solid ${h.level==="danger"?"#fecaca":h.level==="warn"?"#fde68a":"#bbf7d0"}`,marginBottom:6}}>
+                      <span style={{fontSize:13,flexShrink:0}}>{h.level==="danger"?"🔴":h.level==="warn"?"🟡":"🟢"}</span>
+                        <span style={{fontSize:12,color:h.level==="danger"?"#dc2626":h.level==="warn"?"#d97706":"#15803d",lineHeight:1.6}}>{h.msg}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           )}
 
