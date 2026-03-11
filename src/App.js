@@ -3998,16 +3998,9 @@ function HomeCard({h, onEdit, onDelete, onCopy, copied, stats, onView}) {
           {h.home_id!=="default"&&<button style={{fontSize:11,padding:"4px 8px",background:"#450a0a",color:"#fca5a5",border:"none",borderRadius:6,cursor:"pointer"}} onClick={onDelete}>🗑</button>}
         </div>
       </div>
-      {h.home_id&&(
-        <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}>
-          <a href={window.location.origin+"?home="+h.home_id} target="_blank" rel="noreferrer"
-            style={{flex:1,fontSize:10,color:"#3b82f6",fontFamily:"monospace",padding:"3px 6px",background:"#0f172a",borderRadius:4,border:"1px solid #1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:"none",display:"block"}}>
-            🔗 {window.location.origin}?home={h.home_id}
-          </a>
-          <a href={window.location.origin+"?home="+h.home_id} target="_blank" rel="noreferrer"
-            style={{flexShrink:0,fontSize:11,padding:"4px 8px",background:"#1e3a8a",color:"#93c5fd",border:"1px solid #1d4ed8",borderRadius:6,cursor:"pointer",fontWeight:700,textDecoration:"none",whiteSpace:"nowrap"}}>
-            ↗ 開く
-          </a>
+      {h.home_id&&h.home_id!=="default"&&(
+        <div style={{fontSize:10,color:"#334155",fontFamily:"monospace",marginTop:4,padding:"3px 6px",background:"#0f172a",borderRadius:4,border:"1px solid #1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {window.location.origin}?home={h.home_id}
         </div>
       )}
     </div>
@@ -5640,8 +5633,10 @@ export default function App() {
   const save = async (tbl,extra={}) => {
     const p = {...form,...extra};
     if(tbl==="staff_members"){
-      if(!p.name||!p.name.trim()){alert("名前を入力してください");return;}
-      if(!p.hourly_rate||isNaN(Number(p.hourly_rate))||Number(p.hourly_rate)<=0){alert("時給を入力してください（必須）");return;}
+      if(!p.name||!p.name.trim()){alert("名前を入力してください（必須）");return;}
+      if(!p.role||!p.role.trim()){alert("役職を選択してください（必須）");return;}
+      if(!p.pin||!String(p.pin).trim()||String(p.pin).trim().length<4){alert("PINコードを4桁以上で入力してください（必須）");return;}
+      if(!p.hourly_rate||isNaN(Number(p.hourly_rate))||Number(p.hourly_rate)<=0){alert("基本時給を入力してください（必須）");return;}
     }
     let res;
     if(editId) res = await supabase.from(tbl).update(p).eq("id",editId);
@@ -6706,10 +6701,23 @@ export default function App() {
               </div>
               <MD name="スタッフ" table="staff_members" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="名前" k="name" form={form} setForm={setForm}/><F label="フリガナ" k="kana" form={form} setForm={setForm}/>
-                  <F label="電話" k="tel" form={form} setForm={setForm}/><F label="メール" k="email" type="email" form={form} setForm={setForm}/>
-                  <F label="役職" k="role" opts={["世話人","生活支援員","運転手","施設管理者","サービス管理責任者"]} form={form} setForm={setForm}/>
-                  <F label="雇用形態" k="full_time" opts={["true","false"]} form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>名前<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                    <input className="input" value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
+                  <F label="フリガナ" k="kana" form={form} setForm={setForm}/>
+                  <F label="電話" k="tel" form={form} setForm={setForm}/>
+                  <F label="メール" k="email" type="email" form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>役職<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                    <select className="input" value={form.role||""} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
+                      <option value="">選択してください</option>
+                      {["世話人","生活支援員","夜間支援員","運転手","施設管理者","サービス管理責任者","その他"].map(v=><option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>雇用形態<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                    <select className="input" value={form.full_time==="true"||form.full_time===true?"true":"false"} onChange={e=>setForm(f=>({...f,full_time:e.target.value}))}>
+                      <option value="true">常勤</option>
+                      <option value="false">非常勤</option>
+                    </select>
+                  </div>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>基本時給（円）<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
                     <input className="input" type="number" min={1} value={form.hourly_rate||""} onChange={e=>setForm(f=>({...f,hourly_rate:e.target.value}))} placeholder="例: 1100"/>
                     {form.hourly_rate&&Number(form.hourly_rate)>0&&!form.night_rate&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>夜勤時給未設定 → 自動: ¥{Math.floor(Number(form.hourly_rate)*1.25).toLocaleString()}（×1.25）</div>}
@@ -6717,7 +6725,9 @@ export default function App() {
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>夜勤時給（円）<span style={{fontSize:11,color:"#94a3b8",marginLeft:4}}>未入力で基本×1.25</span></label>
                     <input className="input" type="number" min={1} value={form.night_rate||""} onChange={e=>setForm(f=>({...f,night_rate:e.target.value}))} placeholder={form.hourly_rate?`自動: ¥${Math.floor(Number(form.hourly_rate||0)*1.25)}`:"例: 1375"}/>
                   </div>
-                  <F label="PINコード" k="pin" form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>PINコード<span style={{color:"#ef4444",marginLeft:3}}>*必須（4桁以上）</span></label>
+                    <input className="input" type="password" autoComplete="new-password" maxLength={8} value={form.pin||""} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="4〜8桁"/>
+                  </div>
                   <F label="入職日" k="hire_date" type="date" form={form} setForm={setForm}/>
                 </div>
                 <F label="保有資格（カンマ区切り）" k="certifications" span form={form} setForm={setForm}/>
