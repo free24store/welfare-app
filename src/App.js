@@ -1838,7 +1838,7 @@ ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
       return '<td style="border:1px solid #ccc;padding:2px;text-align:center;font-size:8px;"><b>'+wd+'日</b>'+(sm.total?"<br>"+Math.floor(sm.total/60)+"h":"")+'</td>';
     }).join("");
     const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>様式4 勤務体制一覧表 '+selMonth+'</title>'
-      +'<style>body{font-family:'Noto Sans JP',sans-serif;margin:0;padding:12px;font-size:9px;color:#1e293b;}'
+      +'<style>body{font-family:\'Noto Sans JP\',sans-serif;margin:0;padding:12px;font-size:9px;color:#1e293b;}'
       +'h2{font-size:14px;margin:0 0 2px;text-align:center;}'
       +'.meta{text-align:center;font-size:10px;color:#475569;margin-bottom:8px;}'
       +'table{border-collapse:collapse;}'
