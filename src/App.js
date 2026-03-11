@@ -408,7 +408,7 @@ function MySalaryTab({me, salaries, attendance}) {
   return (
     <div>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4,flexWrap:"wrap",gap:8}}>
-        <div style={{fontSize:18,fontWeight:700}}>給料・シフト確認</div>
+        <div style={{fontSize:18,fontWeight:700}}>給与関連情報</div>
         <div style={{display:"flex",alignItems:"center",gap:8}}>
           <label style={{fontSize:12,color:"#64748b"}}>年月</label>
           <input className="input" type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{width:150,fontSize:13}}/>
@@ -1311,54 +1311,62 @@ function BillingTab({claims, users, perfs, srecs, today}) {
 function SabikanMgmtTab() {
   const [list, setList] = useState([]);
   const [adding, setAdding] = useState(false);
-  const [editIdx, setEditIdx] = useState(null);
-  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
-
-  const KEY = "sabikan_members";
-  useEffect(()=>{
-    supabase.from("app_settings").select("value").eq("key",KEY).single().then(({data})=>{
-      try{ setList(JSON.parse(data?.value||"[]")); }catch(e){ setList([]); }
-    });
-  },[]);
-  const save = async(newList)=>{ setList(newList); await supabase.from("app_settings").upsert({key:KEY,value:JSON.stringify(newList)},{onConflict:"key"}); };
-  const del = (i)=>{ if(window.confirm("本当に削除しますか？この操作は元に戻せません")) save(list.filter((_,j)=>j!==i)); };
-  const submit = ()=>{
-    if(!form.name.trim()){alert("入力されていない項目があります。ご確認ください");return;}
-    if(editIdx!==null){ const n=[...list];n[editIdx]={...form};save(n);setEditIdx(null); }
-    else save([...list,{...form,id:Date.now()}]);
-    setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
-    setAdding(false);
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""});
+  const load = () => {
+    supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id").then(({data})=>setList(data||[]));
   };
-  const startEdit=(i)=>{ setForm({...list[i]});setEditIdx(i);setAdding(true); };
-  const cancel=()=>{ setAdding(false);setEditIdx(null);setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""}); };
-
+  useEffect(()=>{ load(); },[]);
+  const cancel = () => { setAdding(false); setEditId(null); setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""}); };
+  const submit = async () => {
+    if(!form.name.trim()){alert("名前を入力してください");return;}
+    if(!form.pin||String(form.pin).trim().length<4){alert("PINコードを4桁以上で入力してください");return;}
+    const data = {...form, home_id:HOME_ID, role:"サービス管理責任者"};
+    if(editId){ await supabase.from("staff_members").update(data).eq("id",editId); }
+    else { await supabase.from("staff_members").insert(data); }
+    cancel(); load();
+  };
+  const del = async (id) => {
+    if(!window.confirm("本当に削除しますか？")) return;
+    await supabase.from("staff_members").delete().eq("id",id);
+    load();
+  };
+  const startEdit = (s) => {
+    setForm({name:s.name||"",kana:s.kana||"",tel:s.tel||"",email:s.email||"",certifications:s.certifications||"",hire_date:s.hire_date||"",note:s.note||"",pin:s.pin||""});
+    setEditId(s.id); setAdding(true);
+  };
   return(
     <div className="fade-in">
       <PH title="サービス管理責任者管理" sub={`${list.length}名`} onAdd={()=>{cancel();setAdding(true);}} addLabel="新規登録"/>
+      <div className="card" style={{marginBottom:12,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
+        <div style={{fontSize:12,color:"#1e40af"}}>💡 スタッフ管理（役職: サービス管理責任者）と同じデータです。PINは個人ごとに設定してください。</div>
+      </div>
       {adding&&(
         <div className="card" style={{marginBottom:14,border:"2px solid #0284c7"}}>
-          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editIdx!==null?"✏️ 編集":"➕ 新規登録"}</div>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editId?"✏️ 編集":"➕ 新規登録"}</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginBottom:10}}>
             {[["名前 *","name","text"],["フリガナ","kana","text"],["電話","tel","tel"],["メール","email","email"],["入職日","hire_date","date"]].map(([label,k,type])=>(
               <div key={k}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
                 <input className="input" type={type} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/></div>
             ))}
+            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>PINコード <span style={{color:"#ef4444"}}>*必須（4桁以上）</span></label>
+              <input className="input" type="password" autoComplete="new-password" maxLength={8} value={form.pin||""} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="4〜8桁"/></div>
           </div>
           <div style={{marginBottom:10}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>保有資格（カンマ区切り）</label>
             <input className="input" value={form.certifications||""} onChange={e=>setForm(f=>({...f,certifications:e.target.value}))} placeholder="例: 社会福祉士, 精神保健福祉士"/></div>
           <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
             <textarea className="input" rows={2} value={form.note||""} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/></div>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editIdx!==null?"更新":"登録"}</button>
+            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editId?"更新":"登録"}</button>
             <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={cancel}>キャンセル</button>
           </div>
         </div>
       )}
       {list.length===0&&!adding
-        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>記録がありません</div></div>
+        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>サービス管理責任者が登録されていません</div></div>
         :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14,marginBottom:16}}>
-          {list.map((s,i)=>(
-            <div key={i} className="card">
+          {list.map((s)=>(
+            <div key={s.id} className="card">
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                 <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"white",flexShrink:0,fontWeight:700}}>📋</div>
                 <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{fontSize:12,color:"#64748b"}}>{s.kana}</div></div>
@@ -1368,25 +1376,20 @@ function SabikanMgmtTab() {
                 {s.email&&<div>✉️ {s.email}</div>}
                 {s.hire_date&&<div>📅 入職: {s.hire_date}</div>}
                 {s.certifications&&<div>🎓 {s.certifications}</div>}
-                {s.note&&<div style={{color:"#475569"}}>📝 {s.note}</div>}
+                {s.note&&<div>📝 {s.note}</div>}
+                <div>🔑 PIN: {s.pin?"設定済":"未設定"}</div>
               </div>
               <div style={{display:"flex",gap:8}}>
-                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(i)}><Icon name="edit" size={13}/>編集</button>
-                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(i)}><Icon name="trash" size={13}/></button>
+                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(s)}><Icon name="edit" size={13}/>編集</button>
+                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(s.id)}><Icon name="trash" size={13}/></button>
               </div>
             </div>
           ))}
         </div>
       }
-      <div className="card" style={{maxWidth:480,marginTop:8}}>
-        <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>🔑 ログインPINコード管理</div>
-        <SabikanPinResetForm/>
-        <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>※ PINはサービス管理責任者ログイン画面で使用します</div>
-      </div>
     </div>
   );
 }
-
 function SabikanPinResetForm() {
   const [newPin, setNewPin] = useState("");
   const [show, setShow] = useState(false);
@@ -1617,15 +1620,19 @@ function SelfPinForm({me,loadAll}) {
   );
 }
 
-function TodoTab({staffList, today, me, isAdmin}) {
-  const [todos, setTodos] = useState([]);       // マスターTODOリスト
-  const [records, setRecords] = useState([]);   // 日付別チェック記録
-  const [loaded, setLoaded] = useState(false);
+function TodoTab({staffList, today, me, isAdmin, attendance}) {
+  const [todos, setTodos]     = useState([]);
+  const [records, setRecords] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [loaded, setLoaded]   = useState(false);
   const [selDate, setSelDate] = useState(today);
-  const [viewMode, setViewMode] = useState("check"); // "check"|"manage"|"history"
+  const [viewMode, setViewMode] = useState("check");
   const [newTodo, setNewTodo] = useState({title:"",category:"業務",assignee:"全員",note:""});
-  const [adding, setAdding] = useState(false);
+  const [adding, setAdding]   = useState(false);
   const [histMonth, setHistMonth] = useState(today.slice(0,7));
+  const [clockConfirmed, setClockConfirmed] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitMsg, setSubmitMsg] = useState("");
 
   const CATS = ["業務","清掃","服薬確認","安全確認","書類","ルーティン","その他"];
   const DEFAULT_TODOS = [
@@ -1642,49 +1649,89 @@ function TodoTab({staffList, today, me, isAdmin}) {
     Promise.all([
       supabase.from("app_settings").select("value").eq("key","todo_master").single(),
       supabase.from("app_settings").select("value").eq("key","todo_records").single(),
-    ]).then(([t,r])=>{
-      if(t.data?.value){try{setTodos(JSON.parse(t.data.value));}catch(e){setTodos(DEFAULT_TODOS);}}
-      else setTodos(DEFAULT_TODOS);
-      if(r.data?.value){try{setRecords(JSON.parse(r.data.value));}catch(e){setRecords([]);}}
-      else setRecords([]);
+      supabase.from("app_settings").select("value").eq("key","todo_reports").single(),
+    ]).then(([t,r,rp])=>{
+      if(t.data?.value){try{setTodos(JSON.parse(t.data.value));}catch(e){setTodos(DEFAULT_TODOS);}} else setTodos(DEFAULT_TODOS);
+      if(r.data?.value){try{setRecords(JSON.parse(r.data.value));}catch(e){setRecords([]);}} else setRecords([]);
+      if(rp.data?.value){try{setReports(JSON.parse(rp.data.value));}catch(e){setReports([]);}} else setReports([]);
       setLoaded(true);
     });
   },[]);
 
-  const saveTodos = async(newT)=>{ setTodos(newT); await supabase.from("app_settings").upsert({key:"todo_master",value:JSON.stringify(newT)},{onConflict:"key"}); };
-  const saveRecords = async(newR)=>{ setRecords(newR); await supabase.from("app_settings").upsert({key:"todo_records",value:JSON.stringify(newR)},{onConflict:"key"}); };
+  const saveTodos   = async(v)=>{ setTodos(v);   await supabase.from("app_settings").upsert({key:"todo_master",  value:JSON.stringify(v)},{onConflict:"key"}); };
+  const saveRecords = async(v)=>{ setRecords(v); await supabase.from("app_settings").upsert({key:"todo_records", value:JSON.stringify(v)},{onConflict:"key"}); };
+  const saveReports = async(v)=>{ setReports(v); await supabase.from("app_settings").upsert({key:"todo_reports", value:JSON.stringify(v)},{onConflict:"key"}); };
 
-  const getCheck = (date, todoId) => records.find(r=>r.date===date&&r.todoId===todoId);
-  const toggleCheck = (todoId, staffName) => {
-    const existing = getCheck(selDate, todoId);
+  const getCheck = (date, tid) => records.find(r=>r.date===date&&r.todoId===tid);
+  const toggleCheck = (tid) => {
+    const existing = getCheck(selDate, tid);
+    const staffName = me?.name||"スタッフ";
+    const time = new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"});
     let newR;
-    if(existing) newR = records.map(r=>r.date===selDate&&r.todoId===todoId ? {...r,done:!r.done,staff:staffName,time:new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})} : r);
-    else newR = [...records, {date:selDate,todoId,done:true,staff:staffName,time:new Date().toLocaleTimeString("ja-JP",{hour:"2-digit",minute:"2-digit"})}];
+    if(existing) newR = records.map(r=>r.date===selDate&&r.todoId===tid ? {...r,done:!r.done,staff:staffName,time} : r);
+    else newR = [...records, {date:selDate,todoId:tid,done:true,staff:staffName,time}];
     saveRecords(newR);
+  };
+
+  const carryOver = () => {
+    const d = new Date(selDate); d.setDate(d.getDate()+1);
+    const tomorrow = d.toISOString().slice(0,10);
+    const undone = todos.filter(t=>!getCheck(selDate,t.id)?.done);
+    if(undone.length===0){alert("残タスクはありません");return;}
+    if(!window.confirm(`未完了の${undone.length}件を${tomorrow}に引き継ぎますか？`)) return;
+    const exist = records.filter(r=>r.date===tomorrow);
+    const toAdd = undone.filter(t=>!exist.find(r=>r.todoId===t.id)).map(t=>({date:tomorrow,todoId:t.id,done:false,staff:"",time:"",carriedOver:true}));
+    saveRecords([...records,...toAdd]);
+    alert(`${toAdd.length}件を${tomorrow}に引き継ぎました`);
+  };
+
+  const hasClockedIn = () => attendance?.some(a=>a.staff_id===me?.id && a.date===selDate && a.clock_in) || false;
+
+  const submitReport = async () => {
+    if(!clockConfirmed){alert("打刻確認のチェックを入れてください");return;}
+    setSubmitting(true);
+    const items = todos.map(t=>({title:t.title,done:getCheck(selDate,t.id)?.done||false,time:getCheck(selDate,t.id)?.time||""}));
+    const report = {
+      id:"r"+Date.now(), date:selDate, staff:me?.name||"スタッフ", staff_id:me?.id||null,
+      submitted_at:new Date().toLocaleString("ja-JP"), items,
+      done_count:items.filter(i=>i.done).length, total_count:items.length, status:"申請中", note:"",
+    };
+    const newReports = [...reports.filter(r=>!(r.date===selDate&&r.staff_id===me?.id)), report];
+    await saveReports(newReports);
+    setSubmitMsg("✅ 日報を申請しました");
+    setSubmitting(false); setClockConfirmed(false);
+    setTimeout(()=>setSubmitMsg(""),3000);
   };
 
   if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
 
-  const todayTodos = todos;
-  const checkedCount = todayTodos.filter(t=>getCheck(selDate,t.id)?.done).length;
-  const pct = todayTodos.length>0 ? Math.round(checkedCount/todayTodos.length*100) : 0;
-
-  // History
+  const checkedCount = todos.filter(t=>getCheck(selDate,t.id)?.done).length;
+  const pct = todos.length>0 ? Math.round(checkedCount/todos.length*100) : 0;
+  const todayReport = reports.find(r=>r.date===selDate&&r.staff_id===me?.id);
+  const pendingReports = reports.filter(r=>r.status==="申請中");
   const histDates = [...new Set(records.filter(r=>r.date.startsWith(histMonth)&&r.done).map(r=>r.date))].sort((a,b)=>b.localeCompare(a));
 
   return(
     <div>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap"}}>
-        {[["check","✅ チェック"],["manage","⚙️ TODO管理"],["history","📋 履歴"]].map(([v,l])=>(
+        {[
+          ["check","✅ タスクチェック"],
+          ["manage","⚙️ タスク管理"],
+          ["history","📋 履歴"],
+          ...(isAdmin
+            ?[["reports","📨 日報確認"+(pendingReports.length>0?` (${pendingReports.length})`:"")]]
+            :[["report","📤 日報申請"]]),
+        ].map(([v,l])=>(
           <button key={v} className="btn btn-sm" style={{background:viewMode===v?"#2563eb":"#f1f5f9",color:viewMode===v?"white":"#475569",border:"none"}} onClick={()=>setViewMode(v)}>{l}</button>
         ))}
       </div>
 
       {viewMode==="check"&&(
         <>
-          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12}}>
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:12,flexWrap:"wrap"}}>
             <input className="input" type="date" style={{flex:1,maxWidth:170}} value={selDate} onChange={e=>setSelDate(e.target.value)}/>
-            <div style={{fontSize:12,color:"#64748b"}}>{checkedCount}/{todayTodos.length} 完了</div>
+            <div style={{fontSize:12,color:"#64748b"}}>{checkedCount}/{todos.length} 完了</div>
+            <button className="btn btn-secondary btn-sm" onClick={carryOver}>→翌日へ引継ぎ</button>
           </div>
           <div style={{background:"#f1f5f9",borderRadius:8,height:8,marginBottom:14,overflow:"hidden"}}>
             <div style={{height:"100%",background:pct===100?"#059669":"#2563eb",width:pct+"%",borderRadius:8,transition:"width .3s"}}/>
@@ -1696,16 +1743,19 @@ function TodoTab({staffList, today, me, isAdmin}) {
                 <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",letterSpacing:"0.05em",marginBottom:6}}>{cat.toUpperCase()}</div>
                 <div style={{display:"grid",gap:6}}>
                   {catTodos.map(todo=>{
-                    const rec = getCheck(selDate, todo.id);
+                    const rec = getCheck(selDate,todo.id);
                     const done = rec?.done||false;
                     return(
-                      <div key={todo.id} onClick={()=>toggleCheck(todo.id, me?.name||"管理者")}
+                      <div key={todo.id} onClick={()=>toggleCheck(todo.id)}
                         style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:done?"#f0fdf4":"white",border:`1px solid ${done?"#bbf7d0":"#e2e8f0"}`,cursor:"pointer",transition:"all .15s"}}>
                         <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${done?"#059669":"#cbd5e1"}`,background:done?"#059669":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                           {done&&<span style={{color:"white",fontSize:12,fontWeight:700}}>✓</span>}
                         </div>
                         <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:13,fontWeight:500,color:done?"#059669":"#0f172a",textDecoration:done?"line-through":"none"}}>{todo.title}</div>
+                          <div style={{fontSize:13,fontWeight:500,color:done?"#059669":"#0f172a",textDecoration:done?"line-through":"none"}}>
+                            {todo.title}
+                            {rec?.carriedOver&&!done&&<span style={{fontSize:10,color:"#f59e0b",marginLeft:6,background:"#fef3c7",borderRadius:4,padding:"1px 5px"}}>繰越</span>}
+                          </div>
                           {todo.assignee!=="全員"&&<div style={{fontSize:11,color:"#94a3b8"}}>{todo.assignee}</div>}
                           {todo.note&&<div style={{fontSize:11,color:"#94a3b8"}}>{todo.note}</div>}
                         </div>
@@ -1720,33 +1770,32 @@ function TodoTab({staffList, today, me, isAdmin}) {
         </>
       )}
 
-      {viewMode==="manage"&&isAdmin&&(
+      {viewMode==="manage"&&(
         <>
-          <button className="btn btn-primary btn-sm" style={{marginBottom:12}} onClick={()=>setAdding(true)}>＋ TODO追加</button>
+          <button className="btn btn-primary btn-sm" style={{marginBottom:12}} onClick={()=>setAdding(true)}>＋ タスク追加</button>
           {adding&&(
             <div className="card" style={{marginBottom:12,background:"#f0f9ff",border:"1px solid #bae6fd"}}>
-              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>新規TODO</div>
+              <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>新規タスク</div>
               <div style={{display:"grid",gap:8}}>
-                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>タイトル</label><input className="input" value={newTodo.title} onChange={e=>setNewTodo(v=>({...v,title:e.target.value}))} placeholder="例：服薬確認"/></div>
+                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>タイトル</label>
+                  <input className="input" value={newTodo.title} onChange={e=>setNewTodo(v=>({...v,title:e.target.value}))} placeholder="例：服薬確認"/></div>
                 <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>カテゴリ</label>
                   <select className="input" value={newTodo.category} onChange={e=>setNewTodo(v=>({...v,category:e.target.value}))}>
-                    {CATS.map(c=><option key={c}>{c}</option>)}
-                  </select>
-                </div>
+                    {CATS.map(cat=><option key={cat}>{cat}</option>)}
+                  </select></div>
                 <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当</label>
                   <select className="input" value={newTodo.assignee} onChange={e=>setNewTodo(v=>({...v,assignee:e.target.value}))}>
                     <option>全員</option>
                     {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
-                </div>
-                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label><input className="input" value={newTodo.note} onChange={e=>setNewTodo(v=>({...v,note:e.target.value}))}/></div>
+                  </select></div>
+                <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
+                  <input className="input" value={newTodo.note} onChange={e=>setNewTodo(v=>({...v,note:e.target.value}))}/></div>
               </div>
               <div style={{display:"flex",gap:8,marginTop:10}}>
                 <button className="btn btn-primary btn-sm" onClick={()=>{
                   if(!newTodo.title.trim()){alert("タイトルを入力してください");return;}
-                  saveTodos([...todos,{...newTodo,id:"c"+Date.now()}]);
-                  setNewTodo({title:"",category:"業務",assignee:"全員",note:""});
-                  setAdding(false);
+                  saveTodos([...todos,{...newTodo,id:"c"+Date.now(),addedBy:me?.name||""}]);
+                  setNewTodo({title:"",category:"業務",assignee:"全員",note:""}); setAdding(false);
                 }}>追加</button>
                 <button className="btn btn-secondary btn-sm" onClick={()=>setAdding(false)}>キャンセル</button>
               </div>
@@ -1757,10 +1806,12 @@ function TodoTab({staffList, today, me, isAdmin}) {
               <div key={todo.id} style={{display:"flex",alignItems:"center",gap:8,padding:"10px 12px",background:"white",borderRadius:10,border:"1px solid #e2e8f0"}}>
                 <div style={{flex:1,minWidth:0}}>
                   <div style={{fontSize:13,fontWeight:600}}>{todo.title}</div>
-                  <div style={{fontSize:11,color:"#94a3b8"}}>{todo.category} · {todo.assignee}</div>
+                  <div style={{fontSize:11,color:"#94a3b8"}}>{todo.category} · {todo.assignee}{todo.addedBy?" · 追加:"+todo.addedBy:""}</div>
                   {todo.note&&<div style={{fontSize:11,color:"#94a3b8"}}>{todo.note}</div>}
                 </div>
-                <button className="btn btn-red btn-sm" onClick={()=>{if(window.confirm("本当に削除しますか？この操作は元に戻せません"))saveTodos(todos.filter((_,j)=>j!==i));}}>削除</button>
+                {(isAdmin||(todo.addedBy&&todo.addedBy===me?.name))&&(
+                  <button className="btn btn-red btn-sm" onClick={()=>{if(window.confirm("本当に削除しますか？この操作は元に戻せません"))saveTodos(todos.filter((_,j)=>j!==i));}}>削除</button>
+                )}
               </div>
             ))}
           </div>
@@ -1775,8 +1826,8 @@ function TodoTab({staffList, today, me, isAdmin}) {
           {histDates.length===0
             ?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この月の記録はありません</div>
             :histDates.map(date=>{
-              const dayRecs = records.filter(r=>r.date===date&&r.done);
-              const dayPct = Math.round(dayRecs.length/todos.length*100);
+              const dayRecs=records.filter(r=>r.date===date&&r.done);
+              const dayPct=Math.round(dayRecs.length/todos.length*100);
               return(
                 <div key={date} className="card" style={{marginBottom:10}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -1785,7 +1836,7 @@ function TodoTab({staffList, today, me, isAdmin}) {
                   </div>
                   <div style={{display:"grid",gap:4}}>
                     {todos.map(todo=>{
-                      const rec = records.find(r=>r.date===date&&r.todoId===todo.id&&r.done);
+                      const rec=records.find(r=>r.date===date&&r.todoId===todo.id&&r.done);
                       return(
                         <div key={todo.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"3px 0",borderBottom:"1px solid #f8fafc"}}>
                           <span style={{color:rec?"#059669":"#94a3b8"}}>{rec?"✅":"⬜"} {todo.title}</span>
@@ -1799,6 +1850,95 @@ function TodoTab({staffList, today, me, isAdmin}) {
             })
           }
         </>
+      )}
+
+      {viewMode==="report"&&!isAdmin&&(
+        <div>
+          <div style={{fontWeight:700,fontSize:15,marginBottom:4}}>📤 日報申請</div>
+          <div style={{fontSize:12,color:"#64748b",marginBottom:14}}>対象日: {selDate}</div>
+          {todayReport&&(
+            <div className="card" style={{background:"#f0fdf4",border:"1px solid #bbf7d0",marginBottom:12}}>
+              <div style={{fontWeight:700,color:"#059669",marginBottom:4}}>✅ 申請済み</div>
+              <div style={{fontSize:12,color:"#64748b"}}>申請日時: {todayReport.submitted_at}</div>
+              <div style={{fontSize:12,color:"#64748b"}}>完了: {todayReport.done_count}/{todayReport.total_count}件</div>
+              <div style={{fontSize:12,fontWeight:600,marginTop:4,color:todayReport.status==="承認"?"#059669":todayReport.status==="差戻し"?"#ef4444":"#d97706"}}>
+                ステータス: {todayReport.status}
+              </div>
+              {todayReport.admin_note&&<div style={{fontSize:12,color:"#64748b",marginTop:4}}>管理者コメント: {todayReport.admin_note}</div>}
+            </div>
+          )}
+          <div className="card" style={{marginBottom:12}}>
+            <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>📋 タスク完了状況</div>
+            <div style={{display:"grid",gap:6}}>
+              {todos.map(todo=>{
+                const rec=getCheck(selDate,todo.id); const done=rec?.done||false;
+                return(
+                  <div key={todo.id} style={{display:"flex",justifyContent:"space-between",alignItems:"center",fontSize:12,padding:"6px 0",borderBottom:"1px solid #f1f5f9"}}>
+                    <span style={{color:done?"#059669":"#94a3b8"}}>{done?"✅":"⬜"} {todo.title}</span>
+                    {done&&<span style={{fontSize:11,color:"#94a3b8"}}>{rec.time}</span>}
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{marginTop:10,fontSize:13,fontWeight:600,color:pct===100?"#059669":"#d97706"}}>完了率: {checkedCount}/{todos.length}件 ({pct}%)</div>
+          </div>
+          <div className="card" style={{marginBottom:12,background:hasClockedIn()?"#f0fdf4":"#fef9ec",border:`1px solid ${hasClockedIn()?"#bbf7d0":"#fde68a"}`}}>
+            <div style={{fontWeight:600,fontSize:13,marginBottom:8}}>⏰ 打刻確認</div>
+            {hasClockedIn()
+              ?<div style={{fontSize:12,color:"#059669",marginBottom:10}}>✅ 本日の打刻が確認されました</div>
+              :<div style={{fontSize:12,color:"#d97706",marginBottom:10}}>⚠️ 本日の打刻が見つかりません。申請前に打刻を確認してください。</div>}
+            <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:13}}>
+              <input type="checkbox" checked={clockConfirmed} onChange={e=>setClockConfirmed(e.target.checked)} style={{width:16,height:16,accentColor:"#059669"}}/>
+              <span style={{fontWeight:600}}>打刻を確認しました（必須）</span>
+            </label>
+          </div>
+          {submitMsg&&<div style={{background:"#f0fdf4",border:"1px solid #bbf7d0",borderRadius:8,padding:"10px 14px",marginBottom:12,color:"#059669",fontWeight:600}}>{submitMsg}</div>}
+          <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px",fontSize:14}}
+            onClick={submitReport} disabled={submitting||!clockConfirmed}>
+            {submitting?"送信中...":"📨 日報を申請する"}
+          </button>
+        </div>
+      )}
+
+      {viewMode==="reports"&&isAdmin&&(
+        <div>
+          <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>📨 日報確認</div>
+          {reports.length===0
+            ?<div style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>申請された日報はありません</div>
+            :[...reports].sort((a,b)=>(b.submitted_at||"").localeCompare(a.submitted_at||"")).map(rpt=>(
+              <div key={rpt.id} className="card" style={{marginBottom:12,borderLeft:`4px solid ${rpt.status==="承認"?"#059669":rpt.status==="差戻し"?"#ef4444":"#f59e0b"}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                  <div>
+                    <div style={{fontWeight:700,fontSize:14}}>{rpt.staff}</div>
+                    <div style={{fontSize:12,color:"#64748b"}}>{rpt.date} · 申請: {rpt.submitted_at}</div>
+                  </div>
+                  <span style={{fontSize:12,fontWeight:700,padding:"3px 10px",borderRadius:20,background:rpt.status==="承認"?"#dcfce7":rpt.status==="差戻し"?"#fee2e2":"#fef3c7",color:rpt.status==="承認"?"#059669":rpt.status==="差戻し"?"#dc2626":"#d97706"}}>
+                    {rpt.status}
+                  </span>
+                </div>
+                <div style={{fontSize:12,color:"#475569",marginBottom:8}}>完了: {rpt.done_count}/{rpt.total_count}件</div>
+                <div style={{display:"grid",gap:3,marginBottom:10}}>
+                  {(rpt.items||[]).map((item,i)=>(
+                    <div key={i} style={{fontSize:11,color:item.done?"#059669":"#94a3b8"}}>{item.done?"✅":"⬜"} {item.title}</div>
+                  ))}
+                </div>
+                {rpt.status==="申請中"&&(
+                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                    <button className="btn btn-primary btn-sm" onClick={()=>{
+                      const note=window.prompt("承認コメント（任意）",""); if(note===null) return;
+                      saveReports(reports.map(r=>r.id===rpt.id?{...r,status:"承認",admin_note:note,reviewed_at:new Date().toLocaleString("ja-JP")}:r));
+                    }}>✅ 承認</button>
+                    <button className="btn btn-red btn-sm" onClick={()=>{
+                      const note=window.prompt("差戻しの理由を入力してください",""); if(!note) return;
+                      saveReports(reports.map(r=>r.id===rpt.id?{...r,status:"差戻し",admin_note:note,reviewed_at:new Date().toLocaleString("ja-JP")}:r));
+                    }}>↩ 差戻し</button>
+                  </div>
+                )}
+                {rpt.admin_note&&<div style={{fontSize:12,color:"#475569",marginTop:6,padding:"6px 10px",background:"#f8fafc",borderRadius:6}}>💬 {rpt.admin_note}</div>}
+              </div>
+            ))
+          }
+        </div>
       )}
     </div>
   );
@@ -3587,9 +3727,9 @@ function MasterScreen({onBack}) {
   `;
 
   const TABS=[
-    {id:"dashboard",label:"📊 比較ダッシュボード"},
-    {id:"corps",label:"🏢 法人・ホーム管理"},
-    {id:"viewer",label:"🔍 ホーム別データ閲覧"},
+    {id:"dashboard",label:"📊 ダッシュボード"},
+    {id:"corps",label:"🏢 法人・ホーム"},
+    {id:"viewer",label:"🔍 データ閲覧"},
     {id:"settings",label:"⚙️ 設定"},
   ];
 
@@ -3603,11 +3743,11 @@ function MasterScreen({onBack}) {
   );
 
   return(
-    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#0f172a",color:"#f1f5f9"}}>
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",height:"100dvh",background:"#0f172a",color:"#f1f5f9",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <style>{CSS_M}</style>
 
       {/* ヘッダー */}
-      <div style={{background:"#0f172a",borderBottom:"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
+      <div style={{background:"#0f172a",borderBottom:"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#1e293b,#334155)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,border:"1px solid #334155"}}>🛡️</div>
           <div>
@@ -3619,12 +3759,18 @@ function MasterScreen({onBack}) {
       </div>
 
       {/* タブ */}
-      <div style={{padding:"10px 16px",display:"flex",gap:6,overflowX:"auto",background:"#0f172a",borderBottom:"1px solid #1e293b"}}>
-        {TABS.map(t=>(
-          <button key={t.id} className="mtab"
-            style={{background:masterTab===t.id?"white":"#1e293b",color:masterTab===t.id?"#0f172a":"#64748b"}}
-            onClick={()=>setMasterTab(t.id)}>{t.label}</button>
-        ))}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",background:"#0f172a",borderBottom:"1px solid #1e293b",flexShrink:0}}>
+        {TABS.map(t=>{
+          const icon=t.label.slice(0,2); const text=t.label.slice(3);
+          return(
+            <button key={t.id} className="mtab"
+              style={{background:masterTab===t.id?"#1e40af":"transparent",color:masterTab===t.id?"white":"#64748b",borderRadius:0,padding:"8px 4px",display:"flex",flexDirection:"column",alignItems:"center",gap:2,fontSize:9,borderBottom:masterTab===t.id?"2px solid #3b82f6":"2px solid transparent"}}
+              onClick={()=>setMasterTab(t.id)}>
+              <span style={{fontSize:16}}>{icon}</span>
+              <span style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%",padding:"0 2px"}}>{text}</span>
+            </button>
+          );
+        })}
       </div>
 
       <div style={{padding:"14px 16px",maxWidth:1100,margin:"0 auto"}}>
@@ -3998,9 +4144,16 @@ function HomeCard({h, onEdit, onDelete, onCopy, copied, stats, onView}) {
           {h.home_id!=="default"&&<button style={{fontSize:11,padding:"4px 8px",background:"#450a0a",color:"#fca5a5",border:"none",borderRadius:6,cursor:"pointer"}} onClick={onDelete}>🗑</button>}
         </div>
       </div>
-      {h.home_id&&h.home_id!=="default"&&(
-        <div style={{fontSize:10,color:"#334155",fontFamily:"monospace",marginTop:4,padding:"3px 6px",background:"#0f172a",borderRadius:4,border:"1px solid #1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-          {window.location.origin}?home={h.home_id}
+      {h.home_id&&(
+        <div style={{display:"flex",alignItems:"center",gap:4,marginTop:4}}>
+          <a href={window.location.origin+"?home="+h.home_id} target="_blank" rel="noreferrer"
+            style={{flex:1,fontSize:10,color:"#3b82f6",fontFamily:"monospace",padding:"3px 6px",background:"#0f172a",borderRadius:4,border:"1px solid #1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",textDecoration:"none",display:"block"}}>
+            🔗 {window.location.origin}?home={h.home_id}
+          </a>
+          <a href={window.location.origin+"?home="+h.home_id} target="_blank" rel="noreferrer"
+            style={{flexShrink:0,fontSize:11,padding:"4px 8px",background:"#1e3a8a",color:"#93c5fd",border:"1px solid #1d4ed8",borderRadius:6,cursor:"pointer",fontWeight:700,textDecoration:"none",whiteSpace:"nowrap"}}>
+            ↗ 開く
+          </a>
         </div>
       )}
     </div>
@@ -4622,7 +4775,11 @@ function UserLoginScreen({onBack, onLogin}) {
   const [selId, setSelId] = useState("");
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
-  useEffect(()=>{ supabase.from("users").select("id,name,access_code,room,unit,status").eq("home_id",HOME_ID).eq("status","在籍").order("unit,room").then(({data})=>setUsers(data||[])); },[]);
+  useEffect(()=>{
+    supabase.from("users").select("id,name,access_code,room,unit,status")
+      .eq("home_id",HOME_ID).eq("status","在籍").order("unit").order("room")
+      .then(({data})=>setUsers(data||[]));
+  },[]);
   const login = () => {
     const u = selId ? users.find(x=>x.id===parseInt(selId)) : null;
     if(!u){ setErr("お名前を選択してください"); return; }
@@ -4641,7 +4798,7 @@ function UserLoginScreen({onBack, onLogin}) {
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:24}}>名前を選んでログイン</div>
         <div style={{textAlign:"left",marginBottom:10}}>
           <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:4}}>お名前</label>
-          <select className="input" style={{fontSize:15}} value={selId} autoComplete="off" onChange={e=>{setSelId(e.target.value);setErr("");}}>  
+          <select className="input" style={{fontSize:15}} value={selId} autoComplete="off" onChange={e=>{setSelId(e.target.value);setErr("");}}>
             <option value="">名前を選択してください</option>
             {units.map(unit=>(
               <optgroup key={unit} label={"── "+unit}>
@@ -4719,10 +4876,10 @@ function UserPortalScreen({user, onBack}) {
   ];
 
   return(
-    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#f0fdf4",display:"flex",flexDirection:"column"}}>
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",height:"100dvh",background:"#f0fdf4",display:"flex",flexDirection:"column",overflow:"hidden"}}>
       <style>{CSS}</style>
       {/* Header */}
-      <header style={{background:"linear-gradient(135deg,#059669,#0d9488)",padding:"14px 20px",paddingTop:"calc(14px + env(safe-area-inset-top))",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0}}>
+      <header style={{background:"linear-gradient(135deg,#059669,#0d9488)",padding:"14px 20px",paddingTop:"calc(14px + env(safe-area-inset-top))",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,position:"sticky",top:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <div style={{fontSize:22}}>🏡</div>
           <div>
@@ -5328,7 +5485,7 @@ function UserMsgScreen({onBack}) {
   const [err,setErr]=useState("");
   const [users,setUsers]=useState([]);
   useEffect(()=>{
-    supabase.from("users").select("id,name,access_code").then(({data})=>setUsers(data||[]));
+    supabase.from("users").select("id,name,access_code").eq("home_id",HOME_ID).then(({data})=>setUsers(data||[]));
   },[]);
   const send = async () => {
     const u=users.find(x=>x.access_code===code);
@@ -5496,6 +5653,8 @@ export default function App() {
   const [shifts, setShifts] = useState([]);
   const [health, setHealth] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [currentHome, setCurrentHome] = useState(null);
+  const [currentCorp, setCurrentCorp] = useState(null);
 
   const [selUser, setSelUser] = useState(null);
   const [modal, setModal] = useState(null);
@@ -5535,6 +5694,18 @@ export default function App() {
   const unread = msgs.filter(m=>!m.is_read).length;
 
   useEffect(() => { if(auth==="app") loadAll(); }, [auth]);
+
+  useEffect(()=>{
+    const fetchHomeInfo = async () => {
+      const {data:home} = await supabase.from("master_homes").select("*").eq("home_id",HOME_ID).single();
+      setCurrentHome(home||null);
+      if(home?.corp_id){
+        const {data:corp} = await supabase.from("master_corporations").select("*").eq("id",home.corp_id).single();
+        setCurrentCorp(corp||null);
+      }
+    };
+    fetchHomeInfo();
+  },[]);
 
   // 退勤打刻忘れチェック（5分おきにブラウザ側で検知 → Supabaseに通知リクエスト記録）
   useEffect(()=>{
@@ -5615,8 +5786,8 @@ export default function App() {
     setStaffList(data||[]); setAuth("staff_pin");
   };
   const preloadSabikan = async () => {
-    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_members").single();
-    try{ setSabikanList(JSON.parse(data?.value||"[]")); }catch(e){ setSabikanList([]); }
+    const {data} = await supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id");
+    setSabikanList(data||[]);
     setAuth("sabikan_pin");
   };
   const loginStaff = () => {
@@ -5633,10 +5804,11 @@ export default function App() {
   };
   const loginSabikan = async () => {
     setPinErr("");
-    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_pin").single();
-    const pin = data?.value || "5678";
-    if(pin===sabikanPin){setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");}
-    else setPinErr("PINコードが正しくありません");
+    if(!selSabikan){setPinErr("担当者を選択してください");return;}
+    if(!selSabikan.pin){setPinErr("PINが設定されていません。管理者へお問い合わせください");return;}
+    if(String(selSabikan.pin)===String(sabikanPin)){
+      setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");
+    } else { setPinErr("PINコードが正しくありません"); }
   };
   const logout = () => {setAuth("select");setIsAdmin(false);setIsSabikan(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");setSelSabikan(null);};
 
@@ -5647,8 +5819,10 @@ export default function App() {
   const save = async (tbl,extra={}) => {
     const p = {...form,...extra};
     if(tbl==="staff_members"){
-      if(!p.name||!p.name.trim()){alert("名前を入力してください");return;}
-      if(!p.hourly_rate||isNaN(Number(p.hourly_rate))||Number(p.hourly_rate)<=0){alert("時給を入力してください（必須）");return;}
+      if(!p.name||!p.name.trim()){alert("名前を入力してください（必須）");return;}
+      if(!p.role||!p.role.trim()){alert("役職を選択してください（必須）");return;}
+      if(!p.pin||!String(p.pin).trim()||String(p.pin).trim().length<4){alert("PINコードを4桁以上で入力してください（必須）");return;}
+      if(!p.hourly_rate||isNaN(Number(p.hourly_rate))||Number(p.hourly_rate)<=0){alert("基本時給を入力してください（必須）");return;}
     }
     let res;
     if(editId) res = await supabase.from(tbl).update(p).eq("id",editId);
@@ -5712,7 +5886,7 @@ export default function App() {
             setLogoTapTimer(t);
           }}
         >🏠</div>
-        <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>グループホーム管理システム</div>
+        <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div>
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:32}}>powered by SOMME合同会社</div>
         <div style={{display:"grid",gap:12}}>
           <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏠 利用者ログイン</button>
@@ -5733,7 +5907,7 @@ export default function App() {
           <option value="">スタッフを選択...</option>
           {staffList.map(s=><option key={s.id} value={s.id}>{s.name}（{s.role}）</option>)}
         </select>
-        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={staffPin} onChange={e=>setStaffPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginStaff()}/>
+        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={staffPin} onChange={e=>setStaffPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginStaff()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8}} onClick={loginStaff}><Icon name="check" size={15}/>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setStaffPin("");setPinErr("");setMe(null);}}>← 戻る</button>
@@ -5747,7 +5921,7 @@ export default function App() {
       <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
         <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#7c3aed,#4c1d95)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><Icon name="shield" size={22}/></div>
         <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>管理者ログイン</div>
-        <input className="input" type="password" maxLength={6} placeholder="管理者PIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginAdmin()}/>
+        <input className="input" type="password" maxLength={6} placeholder="管理者PIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginAdmin()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8}} onClick={loginAdmin}><Icon name="check" size={15}/>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setAdminPin("");setPinErr("");}}>← 戻る</button>
@@ -5760,11 +5934,11 @@ export default function App() {
       <style>{CSS}</style>
       <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
         <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>サービス管理責任者ログイン</div>
-        <select className="input" style={{marginBottom:10,textAlign:"center"}} onChange={e=>{const s=sabikanList.find(sb=>String(sb.id)===e.target.value);setSelSabikan(s||null);}}>
+        <select className="input" style={{marginBottom:10,textAlign:"center"}} value={selSabikan?.id||""} autoComplete="off" onChange={e=>{const s=sabikanList.find(sb=>String(sb.id)===e.target.value);setSelSabikan(s||null);}}>
           <option value="">担当者を選択...</option>
           {sabikanList.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={sabikanPin} onChange={e=>setSabikanPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginSabikan()}/>
+        <input className="input" type="password" maxLength={8} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={sabikanPin} onChange={e=>setSabikanPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginSabikan()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8,background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontSize:15,fontWeight:600,display:"flex",alignItems:"center",gap:8}} onClick={loginSabikan}><Icon name="check" size={15}/>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setSabikanPin("");setPinErr("");setSelSabikan(null);}}>← 戻る</button>
@@ -5779,7 +5953,7 @@ export default function App() {
         <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#0f172a,#334155)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:26}}>🛡️</div>
         <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4}}>マスター管理</div>
         <div style={{fontSize:12,color:"#94a3b8",marginBottom:20}}>Master Console</div>
-        <input className="input" type="password" maxLength={8} placeholder="マスターPIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={masterPin} onChange={e=>setMasterPin(e.target.value)} onKeyDown={async e=>{
+        <input className="input" type="password" maxLength={8} placeholder="マスターPIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={masterPin} onChange={e=>setMasterPin(e.target.value)} onKeyDown={async e=>{
           if(e.key==="Enter"){
             const {data} = await supabase.from("app_settings").select("value").eq("key","master_pin").single();
             const correctPin = data?.value||"999999";
@@ -5828,7 +6002,6 @@ export default function App() {
     ]},
     {g:"スタッフ",items:[
       {id:"staff",label:"スタッフ管理",icon:"staff"},
-      {id:"sabikan_mgmt",label:"サービス管理責任者管理",icon:"staff"},
       {id:"att_admin",label:"勤怠管理",icon:"clock"},
       {id:"shift_mgmt",label:"シフト管理表",icon:"calendar"},
       {id:"salary",label:"給与計算・支払管理",icon:"wage"},
@@ -5861,10 +6034,10 @@ export default function App() {
   ];
   const staffTabs = [
     {g:"業務",items:[
-      {id:"todo",label:"TODO・ルーティン",icon:"check"},
+      {id:"todo",label:"TODO管理",icon:"check"},
       {id:"attendance",label:"勤怠打刻",icon:"clock"},
       {id:"shift_mgmt",label:"シフト確認",icon:"calendar"},
-      {id:"my_salary",label:"給料・シフト確認",icon:"wage"},
+      {id:"my_salary",label:"給与関連情報",icon:"wage"},
       {id:"shift_req",label:"シフト希望・訂正",icon:"calendar"},
       {id:"medication",label:"お薬管理",icon:"hint"},
       {id:"srecs",label:"支援記録入力",icon:"book"},
@@ -5920,7 +6093,7 @@ export default function App() {
             </button>
           )}
           <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏠</div>
-          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>グループホーム管理システム</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.name}`}</div></div>
+          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.name}`}</div></div>
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {unread>0&&<span style={{background:"#ef4444",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 8px"}}>📩 {unread}</span>}
@@ -6046,8 +6219,8 @@ export default function App() {
                 </div>
               </div>
               <div className="card">
-                <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>☑️ 本日のTODO・ルーティン</div>
-                <TodoTab staffList={staffList} today={today} me={me} isAdmin={isAdmin}/>
+                <div style={{fontWeight:700,fontSize:15,marginBottom:14}}>☑️ 本日のタスク</div>
+                <TodoTab staffList={staffList} today={today} me={me} isAdmin={isAdmin} attendance={attendance}/>
               </div>
               <div className="card" style={{marginTop:14}}>
                 <div style={{fontWeight:700,fontSize:15,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -6713,10 +6886,23 @@ export default function App() {
               </div>
               <MD name="スタッフ" table="staff_members" modal={modal} editId={editId} closeModal={closeModal} save={save}>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10}}>
-                  <F label="名前" k="name" form={form} setForm={setForm}/><F label="フリガナ" k="kana" form={form} setForm={setForm}/>
-                  <F label="電話" k="tel" form={form} setForm={setForm}/><F label="メール" k="email" type="email" form={form} setForm={setForm}/>
-                  <F label="役職" k="role" opts={["世話人","生活支援員","運転手","施設管理者","サービス管理責任者"]} form={form} setForm={setForm}/>
-                  <F label="雇用形態" k="full_time" opts={["true","false"]} form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>名前<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                    <input className="input" value={form.name||""} onChange={e=>setForm(f=>({...f,name:e.target.value}))}/></div>
+                  <F label="フリガナ" k="kana" form={form} setForm={setForm}/>
+                  <F label="電話" k="tel" form={form} setForm={setForm}/>
+                  <F label="メール" k="email" type="email" form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>役職<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                    <select className="input" value={form.role||""} onChange={e=>setForm(f=>({...f,role:e.target.value}))}>
+                      <option value="">選択してください</option>
+                      {["世話人","生活支援員","夜間支援員","運転手","施設管理者","サービス管理責任者","その他"].map(v=><option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </div>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>雇用形態<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                    <select className="input" value={form.full_time==="true"||form.full_time===true?"true":"false"} onChange={e=>setForm(f=>({...f,full_time:e.target.value}))}>
+                      <option value="true">常勤</option>
+                      <option value="false">非常勤</option>
+                    </select>
+                  </div>
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>基本時給（円）<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
                     <input className="input" type="number" min={1} value={form.hourly_rate||""} onChange={e=>setForm(f=>({...f,hourly_rate:e.target.value}))} placeholder="例: 1100"/>
                     {form.hourly_rate&&Number(form.hourly_rate)>0&&!form.night_rate&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>夜勤時給未設定 → 自動: ¥{Math.floor(Number(form.hourly_rate)*1.25).toLocaleString()}（×1.25）</div>}
@@ -6724,16 +6910,15 @@ export default function App() {
                   <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>夜勤時給（円）<span style={{fontSize:11,color:"#94a3b8",marginLeft:4}}>未入力で基本×1.25</span></label>
                     <input className="input" type="number" min={1} value={form.night_rate||""} onChange={e=>setForm(f=>({...f,night_rate:e.target.value}))} placeholder={form.hourly_rate?`自動: ¥${Math.floor(Number(form.hourly_rate||0)*1.25)}`:"例: 1375"}/>
                   </div>
-                  <F label="PINコード" k="pin" form={form} setForm={setForm}/>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>PINコード<span style={{color:"#ef4444",marginLeft:3}}>*必須（4桁以上）</span></label>
+                    <input className="input" type="password" autoComplete="new-password" maxLength={8} value={form.pin||""} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="4〜8桁"/>
+                  </div>
                   <F label="入職日" k="hire_date" type="date" form={form} setForm={setForm}/>
                 </div>
                 <F label="保有資格（カンマ区切り）" k="certifications" span form={form} setForm={setForm}/>
               </MD>
             </div>
           )}
-
-          {/* ── サービス管理責任者管理 ── */}
-          {tab==="sabikan_mgmt"&&isAdmin&&<SabikanMgmtTab/>}
 
           {/* ── 勤怠管理（管理者） ── */}
           {tab==="att_admin"&&isAdmin&&<AttAdminTab attendance={attendance} today={today} loadAll={loadAll} csv={csv}/>}
@@ -6774,7 +6959,7 @@ export default function App() {
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>TODO・ルーティン</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>本日のチェックリスト</div>
-              <TodoTab staffList={staffList} today={today} me={me} isAdmin={false}/>
+              <TodoTab staffList={staffList} today={today} me={me} isAdmin={false} attendance={attendance}/>
             </div>
           )}
 
@@ -6783,7 +6968,7 @@ export default function App() {
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>TODO・ルーティン</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>チェックリスト管理・履歴</div>
-              <TodoTab staffList={staffList} today={today} me={me} isAdmin={isAdmin}/>
+              <TodoTab staffList={staffList} today={today} me={me} isAdmin={isAdmin} attendance={attendance}/>
             </div>
           )}
 
