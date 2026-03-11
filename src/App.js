@@ -1311,35 +1311,43 @@ function BillingTab({claims, users, perfs, srecs, today}) {
 function SabikanMgmtTab() {
   const [list, setList] = useState([]);
   const [adding, setAdding] = useState(false);
-  const [editIdx, setEditIdx] = useState(null);
-  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
+  const [editId, setEditId] = useState(null);
+  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""});
 
-  const KEY = "sabikan_members";
-  useEffect(()=>{
-    supabase.from("app_settings").select("value").eq("key",KEY).single().then(({data})=>{
-      try{ setList(JSON.parse(data?.value||"[]")); }catch(e){ setList([]); }
-    });
-  },[]);
-  const save = async(newList)=>{ setList(newList); await supabase.from("app_settings").upsert({key:KEY,value:JSON.stringify(newList)},{onConflict:"key"}); };
-  const del = (i)=>{ if(window.confirm("本当に削除しますか？この操作は元に戻せません")) save(list.filter((_,j)=>j!==i)); };
-  const submit = ()=>{
-    if(!form.name.trim()){alert("入力されていない項目があります。ご確認ください");return;}
-    if(editIdx!==null){ const n=[...list];n[editIdx]={...form};save(n);setEditIdx(null); }
-    else save([...list,{...form,id:Date.now()}]);
-    setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
-    setAdding(false);
+  const load = () => {
+    supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id").then(({data})=>setList(data||[]));
   };
-  const startEdit=(i)=>{ setForm({...list[i]});setEditIdx(i);setAdding(true); };
-  const cancel=()=>{ setAdding(false);setEditIdx(null);setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""}); };
+  useEffect(()=>{ load(); },[]);
+
+  const cancel = () => { setAdding(false); setEditId(null); setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""}); };
+  const submit = async () => {
+    if(!form.name.trim()){alert("名前を入力してください");return;}
+    const data = {...form, home_id:HOME_ID, role:"サービス管理責任者", full_time:"true"};
+    if(editId){
+      await supabase.from("staff_members").update(data).eq("id",editId);
+    } else {
+      await supabase.from("staff_members").insert(data);
+    }
+    cancel(); load();
+  };
+  const del = async (id) => {
+    if(!window.confirm("本当に削除しますか？")) return;
+    await supabase.from("staff_members").delete().eq("id",id);
+    load();
+  };
+  const startEdit = (s) => { setForm({name:s.name||"",kana:s.kana||"",tel:s.tel||"",email:s.email||"",certifications:s.certifications||"",hire_date:s.hire_date||"",note:s.note||"",pin:s.pin||""}); setEditId(s.id); setAdding(true); };
 
   return(
     <div className="fade-in">
       <PH title="サービス管理責任者管理" sub={`${list.length}名`} onAdd={()=>{cancel();setAdding(true);}} addLabel="新規登録"/>
+      <div className="card" style={{marginBottom:14,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
+        <div style={{fontSize:12,color:"#1e40af"}}>👆 staff_membersテーブルで管理されます。PINは各自設定してください。ログイン時は個人PINで認証します。</div>
+      </div>
       {adding&&(
         <div className="card" style={{marginBottom:14,border:"2px solid #0284c7"}}>
-          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editIdx!==null?"✏️ 編集":"➕ 新規登録"}</div>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editId?"✏️ 編集":"➕ 新規登録"}</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginBottom:10}}>
-            {[["名前 *","name","text"],["フリガナ","kana","text"],["電話","tel","tel"],["メール","email","email"],["入職日","hire_date","date"]].map(([label,k,type])=>(
+            {[["名前 *","name","text"],["フリガナ","kana","text"],["電話","tel","tel"],["メール","email","email"],["入職日","hire_date","date"],["PIN（4〜8桁）","pin","password"]].map(([label,k,type])=>(
               <div key={k}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
                 <input className="input" type={type} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/></div>
             ))}
@@ -1349,16 +1357,16 @@ function SabikanMgmtTab() {
           <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
             <textarea className="input" rows={2} value={form.note||""} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/></div>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editIdx!==null?"更新":"登録"}</button>
+            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editId?"更新":"登録"}</button>
             <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={cancel}>キャンセル</button>
           </div>
         </div>
       )}
       {list.length===0&&!adding
-        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>記録がありません</div></div>
+        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>サービス管理責任者が登録されていません</div></div>
         :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14,marginBottom:16}}>
-          {list.map((s,i)=>(
-            <div key={i} className="card">
+          {list.map((s)=>(
+            <div key={s.id} className="card">
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                 <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"white",flexShrink:0,fontWeight:700}}>📋</div>
                 <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{fontSize:12,color:"#64748b"}}>{s.kana}</div></div>
@@ -1369,20 +1377,16 @@ function SabikanMgmtTab() {
                 {s.hire_date&&<div>📅 入職: {s.hire_date}</div>}
                 {s.certifications&&<div>🎓 {s.certifications}</div>}
                 {s.note&&<div style={{color:"#475569"}}>📝 {s.note}</div>}
+                <div>🔑 PIN: {s.pin?"設定済":"未設定"}</div>
               </div>
               <div style={{display:"flex",gap:8}}>
-                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(i)}><Icon name="edit" size={13}/>編集</button>
-                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(i)}><Icon name="trash" size={13}/></button>
+                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(s)}><Icon name="edit" size={13}/>編集</button>
+                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(s.id)}><Icon name="trash" size={13}/></button>
               </div>
             </div>
           ))}
         </div>
       }
-      <div className="card" style={{maxWidth:480,marginTop:8}}>
-        <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>🔑 ログインPINコード管理</div>
-        <SabikanPinResetForm/>
-        <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>※ PINはサービス管理責任者ログイン画面で使用します</div>
-      </div>
     </div>
   );
 }
@@ -3425,40 +3429,6 @@ function SparkLine({data, color="#2563eb", height=40, width=120}) {
   );
 }
 
-function PinListCard({homes, corps}) {
-  const [pinData, setPinData] = React.useState(null);
-  const [loading, setLoading] = React.useState(false);
-  const fetchPins = async () => {
-    setLoading(true);
-    const {data:settings} = await supabase.from("app_settings").select("key,value").in("key",["master_pin","admin_pin","sabikan_pin"]);
-    const getPin = (key) => settings?.find(s=>s.key===key)?.value || "（未設定）";
-    const {data:allStaff} = await supabase.from("staff_members").select("id,name,role,home_id,pin").order("home_id,id");
-    setPinData({ settings: {master: getPin("master_pin"), admin: getPin("admin_pin"), sabikan: getPin("sabikan_pin")}, staff: allStaff||[] });
-    setLoading(false);
-  };
-  const downloadCSV = () => {
-    if(!pinData) return;
-    const rows = [["区分","法人名","ホーム名","名前","役職","PIN"],["マスター","","","","マスター管理者",pinData.settings.master],["管理者","","","","管理者",pinData.settings.admin],["サービス管理責任者","","","","サービス管理責任者",pinData.settings.sabikan]];
-    pinData.staff.forEach(s => { const home=homes.find(h=>h.home_id===s.home_id); const corp=corps.find(c=>c.id===home?.corp_id); rows.push(["スタッフ",corp?.name||"",home?.name||s.home_id,s.name,s.role,s.pin||"（未設定）"]); });
-    const csv = rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(",")).join("\n");
-    const blob = new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
-    const url=URL.createObjectURL(blob); const a=document.createElement("a"); a.href=url; a.download="PIN一覧_"+new Date().toLocaleDateString("ja-JP").replace(/\//g,"")+".csv"; a.click(); URL.revokeObjectURL(url);
-  };
-  return (
-    <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:12,padding:18,marginTop:12}}>
-      <div style={{fontWeight:700,fontSize:13,color:"white",marginBottom:10}}>🔐 PIN一覧</div>
-      <div style={{fontSize:12,color:"#64748b",marginBottom:12}}>全ホームの管理者・スタッフPINを一覧確認・CSV出力できます</div>
-      {!pinData&&<button style={{background:"#3b82f6",color:"white",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={fetchPins} disabled={loading}>{loading?"読み込み中...":"🔍 PIN一覧を取得"}</button>}
-      {pinData&&(<><table style={{width:"100%",borderCollapse:"collapse",fontSize:12,marginBottom:14}}><thead><tr style={{borderBottom:"1px solid #334155"}}>{["区分","法人名","ホーム名","名前","役職","PIN"].map(h=>(<th key={h} style={{padding:"6px 8px",textAlign:"left",color:"#64748b",fontWeight:600,whiteSpace:"nowrap"}}>{h}</th>))}</tr></thead><tbody>
-        <tr><td style={{padding:"6px 8px",color:"#f1f5f9"}}>マスター</td><td colSpan={3} style={{padding:"6px 8px",color:"#94a3b8"}}>—</td><td style={{padding:"6px 8px",color:"#94a3b8"}}>マスター管理者</td><td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{pinData.settings.master}</td></tr>
-        <tr><td style={{padding:"6px 8px",color:"#f1f5f9"}}>管理者</td><td colSpan={3} style={{padding:"6px 8px",color:"#94a3b8"}}>—</td><td style={{padding:"6px 8px",color:"#94a3b8"}}>管理者</td><td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{pinData.settings.admin}</td></tr>
-        <tr><td style={{padding:"6px 8px",color:"#f1f5f9"}}>サービス管理責任者</td><td colSpan={3} style={{padding:"6px 8px",color:"#94a3b8"}}>—</td><td style={{padding:"6px 8px",color:"#94a3b8"}}>サービス管理責任者</td><td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{pinData.settings.sabikan}</td></tr>
-        {pinData.staff.map(s=>{ const home=homes.find(h=>h.home_id===s.home_id); const corp=corps.find(c=>c.id===home?.corp_id); return(<tr key={s.id}><td style={{padding:"6px 8px",color:"#94a3b8"}}>スタッフ</td><td style={{padding:"6px 8px",color:"#94a3b8"}}>{corp?.name||"—"}</td><td style={{padding:"6px 8px",color:"#94a3b8"}}>{home?.name||s.home_id}</td><td style={{padding:"6px 8px",color:"#f1f5f9",fontWeight:600}}>{s.name}</td><td style={{padding:"6px 8px",color:"#94a3b8"}}>{s.role}</td><td style={{padding:"6px 8px",color:"#fbbf24",fontFamily:"monospace",fontWeight:700}}>{s.pin||"（未設定）"}</td></tr>); })}
-      </tbody></table><div style={{display:"flex",gap:8}}><button style={{background:"#059669",color:"white",border:"none",borderRadius:8,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer"}} onClick={downloadCSV}>⬇ CSVダウンロード</button><button style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:8,padding:"8px 14px",fontSize:13,cursor:"pointer"}} onClick={()=>setPinData(null)}>閉じる</button></div></>)}
-    </div>
-  );
-}
-
 // ═══════════════════════════════════════════════════════
 //  MasterScreen
 // ═══════════════════════════════════════════════════════
@@ -3506,15 +3476,13 @@ function MasterScreen({onBack}) {
       setHomes(hs2||[]);
     } else { setHomes(hs||[]); }
 
-    // 全ホームの集計
-    const [u,st,att,exp,sr,ac,sal] = await Promise.all([
+    // 全ホームの集計（users・staff・attendance・expense件数）
+    const [u,st,att,exp,sr] = await Promise.all([
       supabase.from("users").select("id,home_id,status"),
       supabase.from("staff_members").select("id,home_id"),
       supabase.from("attendance").select("id,home_id,date"),
       supabase.from("expense_claims").select("id,home_id,amount,status"),
       supabase.from("support_records").select("id,home_id,date"),
-      supabase.from("accounting_entries").select("id,home_id,category,amount,date"),
-      supabase.from("salary_records").select("id,home_id,year_month,total_payment,status"),
     ]);
     const thisMonth = localDate().slice(0,7);
     const allHomeIds = [...new Set([...((hs)||[]).map(h=>h.home_id).filter(Boolean),"default"])];
@@ -3526,12 +3494,6 @@ function MasterScreen({onBack}) {
       exp_pending: (exp.data||[]).filter(x=>x.home_id===hid&&(x.status==="申請中"||x.status==="承認済")).length,
       exp_amount: (exp.data||[]).filter(x=>x.home_id===hid).reduce((s,e)=>s+Number(e.amount||0),0),
       srec_month: (sr.data||[]).filter(x=>x.home_id===hid&&x.date?.startsWith(thisMonth)).length,
-      income_month: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="収入"&&x.date?.startsWith(thisMonth)).reduce((s,e)=>s+Number(e.amount||0),0),
-      expense_month: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="支出"&&x.date?.startsWith(thisMonth)).reduce((s,e)=>s+Number(e.amount||0),0),
-      income_total: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="収入").reduce((s,e)=>s+Number(e.amount||0),0),
-      expense_total: (ac.data||[]).filter(x=>x.home_id===hid&&x.category==="支出").reduce((s,e)=>s+Number(e.amount||0),0),
-      salary_month: (sal.data||[]).filter(x=>x.home_id===hid&&x.year_month===thisMonth).reduce((s,e)=>s+Number(e.total_payment||0),0),
-      salary_unpaid: (sal.data||[]).filter(x=>x.home_id===hid&&x.status!=="支払済").length,
     }));
     setAllStats(stats);
     setLoading(false);
@@ -3584,18 +3546,12 @@ function MasterScreen({onBack}) {
   // ─── ホームCRUD ──────────────────────────────────
   const saveHome = async() => {
     if(!homeForm.name){alert("ホーム名を入力してください");return;}
-    const cleanForm = {
-      ...homeForm,
-      capacity: Number(homeForm.capacity)||0,
-      corp_id: homeForm.corp_id ? Number(homeForm.corp_id) : null,
-      open_date: homeForm.open_date || null,
-    };
     if(homeModal==="add"){
       const home_id=genHomeId();
-      const {error}=await supabase.from("master_homes").insert({...cleanForm,home_id});
+      const {error}=await supabase.from("master_homes").insert({...homeForm,capacity:Number(homeForm.capacity)||0,home_id});
       if(error){alert("保存エラー: "+error.message);return;}
     } else {
-      const {error}=await supabase.from("master_homes").update(cleanForm).eq("id",editHomeId);
+      const {error}=await supabase.from("master_homes").update({...homeForm,capacity:Number(homeForm.capacity)||0}).eq("id",editHomeId);
       if(error){alert("更新エラー: "+error.message);return;}
     }
     setHomeModal(null);
@@ -3758,96 +3714,6 @@ function MasterScreen({onBack}) {
                 })}
               </div>
             )}
-
-            <div style={{fontSize:13,fontWeight:800,color:"white",margin:"18px 0 10px",display:"flex",alignItems:"center",gap:6}}>💰 収支サマリー<span style={{fontSize:10,color:"#475569",fontWeight:400}}>（今月: {localDate().slice(0,7)}）</span></div>
-            <div style={{display:"grid",gap:8,marginBottom:16}}>
-              {allStats.map((s,i)=>{
-                const home = homes.find(h=>h.home_id===s.home_id);
-                if(!home) return null;
-                const corp = corps.find(c=>c.id===home.corp_id);
-                const balance = s.income_month - s.expense_month;
-                const color = COLORS[i%COLORS.length];
-                return(
-                  <div key={s.home_id} style={{background:"#1e293b",border:"1px solid #334155",borderRadius:10,padding:"12px 16px",borderLeft:`3px solid ${color}`}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div>
-                        <span style={{fontWeight:700,fontSize:13,color:"white"}}>{home.name}</span>
-                        {corp&&<span style={{fontSize:10,color:"#475569",marginLeft:6}}>{corp.name}</span>}
-                      </div>
-                      <span style={{fontSize:12,fontWeight:800,color:balance>=0?"#10b981":"#ef4444",fontFamily:"monospace"}}>{balance>=0?"+":""}{balance.toLocaleString("ja-JP")}円</span>
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:6}}>
-                      {[{l:"収入",v:s.income_month,c:"#10b981"},{l:"支出",v:s.expense_month,c:"#ef4444"},{l:"給与(今月)",v:s.salary_month,c:"#f59e0b"}].map((k,j)=>(
-                        <div key={j} style={{background:"#0f172a",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
-                          <div style={{fontSize:9,color:"#475569",marginBottom:2}}>{k.l}</div>
-                          <div style={{fontSize:12,fontWeight:700,color:k.c,fontFamily:"monospace"}}>{k.v.toLocaleString("ja-JP")}円</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {corps.length>0&&(()=>{
-              const corpStats = corps.map(corp=>{
-                const corpHomes = homes.filter(h=>h.corp_id===corp.id);
-                const corpHomeIds = corpHomes.map(h=>h.home_id);
-                const s = allStats.filter(s=>corpHomeIds.includes(s.home_id));
-                const totalIncome = s.reduce((a,b)=>a+b.income_month,0);
-                const totalExpense = s.reduce((a,b)=>a+b.expense_month,0);
-                const totalSalary = s.reduce((a,b)=>a+b.salary_month,0);
-                const totalBalance = totalIncome - totalExpense;
-                const totalUsers = s.reduce((a,b)=>a+b.users,0);
-                const fillRates = corpHomes.map(h=>{ const st=allStats.find(x=>x.home_id===h.home_id); return h.capacity>0&&st?st.users/h.capacity:null; }).filter(x=>x!==null);
-                const avgFill = fillRates.length>0?Math.round(fillRates.reduce((a,b)=>a+b,0)/fillRates.length*100):null;
-                const hints = [];
-                if(avgFill!==null&&avgFill<70) hints.push({level:"danger",msg:`平均充填率${avgFill}%と低水準です。入居促進・空床対策を検討してください。`});
-                else if(avgFill!==null&&avgFill<85) hints.push({level:"warn",msg:`平均充填率${avgFill}%。入居促進でさらなる収益改善が見込めます。`});
-                else if(avgFill!==null) hints.push({level:"good",msg:`充填率${avgFill}%と良好です。現状維持に努めてください。`});
-                if(totalBalance<0) hints.push({level:"danger",msg:`今月の収支は${Math.abs(totalBalance).toLocaleString("ja-JP")}円の赤字です。支出項目の見直しを推奨します。`});
-                else if(totalIncome>0&&totalBalance/totalIncome<0.05) hints.push({level:"warn",msg:`収益率が${Math.round(totalBalance/totalIncome*100)}%と低めです。コスト削減を検討してください。`});
-                else if(totalIncome>0) hints.push({level:"good",msg:`収支は${totalBalance.toLocaleString("ja-JP")}円の黒字で安定しています。`});
-                if(s.some(x=>x.salary_unpaid>0)) hints.push({level:"warn",msg:`未払い給与レコードがあります。給与支払い状況を確認してください。`});
-                if(s.some(x=>x.exp_pending>0)) hints.push({level:"warn",msg:`未精算の立替払いが${s.reduce((a,b)=>a+b.exp_pending,0)}件あります。`});
-                return {corp,totalIncome,totalExpense,totalSalary,totalBalance,totalUsers,avgFill,hints,homeCount:corpHomes.length};
-              });
-              return(
-                <div>
-                  <div style={{fontSize:13,fontWeight:800,color:"white",margin:"18px 0 10px"}}>🏢 法人別経営サマリー＆アドバイス</div>
-                  {corpStats.map(({corp,totalIncome,totalExpense,totalSalary,totalBalance,totalUsers,avgFill,hints,homeCount})=>(
-                    <div key={corp.id} style={{background:"#1e293b",border:`1px solid ${totalBalance>=0?"#1e3a5f":"#4c1414"}`,borderRadius:12,padding:16,marginBottom:12}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12,flexWrap:"wrap",gap:6}}>
-                        <div>
-                          <div style={{fontWeight:800,fontSize:14,color:"white"}}>{corp.name}</div>
-                          <div style={{fontSize:11,color:"#475569",marginTop:2}}>{homeCount}ホーム / 利用者{totalUsers}名</div>
-                        </div>
-                        <div style={{textAlign:"right"}}>
-                          <div style={{fontSize:10,color:"#475569"}}>今月収支</div>
-                          <div style={{fontSize:20,fontWeight:800,color:totalBalance>=0?"#10b981":"#ef4444",fontFamily:"monospace"}}>{totalBalance>=0?"+":""}{totalBalance.toLocaleString("ja-JP")}円</div>
-                        </div>
-                      </div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6,marginBottom:12}}>
-                        {[{l:"収入合計",v:totalIncome,c:"#10b981"},{l:"支出合計",v:totalExpense,c:"#ef4444"},{l:"給与合計",v:totalSalary,c:"#f59e0b"},{l:"充填率",v:avgFill!=null?avgFill+"%":"—",c:avgFill>=85?"#10b981":avgFill>=70?"#f59e0b":"#ef4444",raw:true}].map((k,j)=>(
-                          <div key={j} style={{background:"#0f172a",borderRadius:7,padding:"8px 6px",textAlign:"center"}}>
-                            <div style={{fontSize:9,color:"#475569",marginBottom:3}}>{k.l}</div>
-                            <div style={{fontSize:13,fontWeight:700,color:k.c,fontFamily:"monospace"}}>{k.raw?k.v:k.v.toLocaleString("ja-JP")+"円"}</div>
-                          </div>
-                        ))}
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                        {hints.map((h,j)=>(
-                          <div key={j} style={{display:"flex",gap:8,alignItems:"flex-start",background:h.level==="danger"?"#450a0a":h.level==="warn"?"#431407":"#052e16",borderRadius:7,padding:"7px 10px",border:`1px solid ${h.level==="danger"?"#7f1d1d":h.level==="warn"?"#7c2d12":"#14532d"}`}}>
-                            <span style={{fontSize:13,flexShrink:0}}>{h.level==="danger"?"🔴":h.level==="warn"?"🟡":"🟢"}</span>
-                            <span style={{fontSize:11,color:h.level==="danger"?"#fca5a5":h.level==="warn"?"#fdba74":"#86efac",lineHeight:1.6}}>{h.msg}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
           </div>
         )}
 
@@ -4760,7 +4626,7 @@ function UserLoginScreen({onBack, onLogin}) {
   const [selId, setSelId] = useState("");
   const [code, setCode] = useState("");
   const [err, setErr] = useState("");
-  useEffect(()=>{ supabase.from("users").select("id,name,access_code,room,unit,status").eq("home_id",HOME_ID).eq("status","在籍").then(({data})=>setUsers(data||[])); },[]);
+  useEffect(()=>{ supabase.from("users").select("id,name,access_code,room,unit,status").eq("status","在籍").then(({data})=>setUsers(data||[])); },[]);
   const login = () => {
     const u = selId ? users.find(x=>x.id===parseInt(selId)) : null;
     if(!u){ setErr("お名前を選択してください"); return; }
@@ -5452,7 +5318,7 @@ function UserMsgScreen({onBack}) {
   const [err,setErr]=useState("");
   const [users,setUsers]=useState([]);
   useEffect(()=>{
-    supabase.from("users").select("id,name,access_code").eq("home_id",HOME_ID).then(({data})=>setUsers(data||[]));
+    supabase.from("users").select("id,name,access_code").then(({data})=>setUsers(data||[]));
   },[]);
   const send = async () => {
     const u=users.find(x=>x.access_code===code);
@@ -5620,8 +5486,6 @@ export default function App() {
   const [shifts, setShifts] = useState([]);
   const [health, setHealth] = useState([]);
   const [expenses, setExpenses] = useState([]);
-  const [currentHome, setCurrentHome] = useState(null);
-  const [currentCorp, setCurrentCorp] = useState(null);
 
   const [selUser, setSelUser] = useState(null);
   const [modal, setModal] = useState(null);
@@ -5661,18 +5525,6 @@ export default function App() {
   const unread = msgs.filter(m=>!m.is_read).length;
 
   useEffect(() => { if(auth==="app") loadAll(); }, [auth]);
-
-  useEffect(()=>{
-    const fetchHomeInfo = async () => {
-      const {data:home} = await supabase.from("master_homes").select("*").eq("home_id",HOME_ID).single();
-      setCurrentHome(home||null);
-      if(home?.corp_id){
-        const {data:corp} = await supabase.from("master_corporations").select("*").eq("id",home.corp_id).single();
-        setCurrentCorp(corp||null);
-      }
-    };
-    fetchHomeInfo();
-  },[]);
 
   // 退勤打刻忘れチェック（5分おきにブラウザ側で検知 → Supabaseに通知リクエスト記録）
   useEffect(()=>{
@@ -5753,8 +5605,8 @@ export default function App() {
     setStaffList(data||[]); setAuth("staff_pin");
   };
   const preloadSabikan = async () => {
-    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_members").single();
-    try{ setSabikanList(JSON.parse(data?.value||"[]")); }catch(e){ setSabikanList([]); }
+    const {data} = await supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id");
+    setSabikanList(data||[]);
     setAuth("sabikan_pin");
   };
   const loginStaff = () => {
@@ -5771,10 +5623,13 @@ export default function App() {
   };
   const loginSabikan = async () => {
     setPinErr("");
-    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_pin").single();
-    const pin = data?.value || "5678";
-    if(pin===sabikanPin){setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");}
-    else setPinErr("PINコードが正しくありません");
+    if(!selSabikan){setPinErr("担当者を選択してください");return;}
+    if(!selSabikan.pin){setPinErr("PINが設定されていません。管理者へお問い合わせください");return;}
+    if(String(selSabikan.pin)===String(sabikanPin)){
+      setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");
+    } else {
+      setPinErr("PINコードが正しくありません");
+    }
   };
   const logout = () => {setAuth("select");setIsAdmin(false);setIsSabikan(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");setSelSabikan(null);};
 
@@ -5850,7 +5705,7 @@ export default function App() {
             setLogoTapTimer(t);
           }}
         >🏠</div>
-        <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div>
+        <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4,whiteSpace:"nowrap"}}>グループホーム管理システム</div>
         <div style={{fontSize:13,color:"#94a3b8",marginBottom:32}}>powered by SOMME合同会社</div>
         <div style={{display:"grid",gap:12}}>
           <button style={{width:"100%",justifyContent:"center",padding:"14px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:8,cursor:"pointer",display:"flex",alignItems:"center",gap:8,fontWeight:600}} onClick={()=>setAuth("user_login")}>🏠 利用者ログイン</button>
@@ -6058,7 +5913,7 @@ export default function App() {
             </button>
           )}
           <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏠</div>
-          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.name}`}</div></div>
+          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>グループホーム管理システム</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.name}`}</div></div>
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {unread>0&&<span style={{background:"#ef4444",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 8px"}}>📩 {unread}</span>}
