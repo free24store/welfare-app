@@ -1311,43 +1311,35 @@ function BillingTab({claims, users, perfs, srecs, today}) {
 function SabikanMgmtTab() {
   const [list, setList] = useState([]);
   const [adding, setAdding] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""});
+  const [editIdx, setEditIdx] = useState(null);
+  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
 
-  const load = () => {
-    supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id").then(({data})=>setList(data||[]));
+  const KEY = "sabikan_members";
+  useEffect(()=>{
+    supabase.from("app_settings").select("value").eq("key",KEY).single().then(({data})=>{
+      try{ setList(JSON.parse(data?.value||"[]")); }catch(e){ setList([]); }
+    });
+  },[]);
+  const save = async(newList)=>{ setList(newList); await supabase.from("app_settings").upsert({key:KEY,value:JSON.stringify(newList)},{onConflict:"key"}); };
+  const del = (i)=>{ if(window.confirm("本当に削除しますか？この操作は元に戻せません")) save(list.filter((_,j)=>j!==i)); };
+  const submit = ()=>{
+    if(!form.name.trim()){alert("入力されていない項目があります。ご確認ください");return;}
+    if(editIdx!==null){ const n=[...list];n[editIdx]={...form};save(n);setEditIdx(null); }
+    else save([...list,{...form,id:Date.now()}]);
+    setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""});
+    setAdding(false);
   };
-  useEffect(()=>{ load(); },[]);
-
-  const cancel = () => { setAdding(false); setEditId(null); setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""}); };
-  const submit = async () => {
-    if(!form.name.trim()){alert("名前を入力してください");return;}
-    const data = {...form, home_id:HOME_ID, role:"サービス管理責任者", full_time:"true"};
-    if(editId){
-      await supabase.from("staff_members").update(data).eq("id",editId);
-    } else {
-      await supabase.from("staff_members").insert(data);
-    }
-    cancel(); load();
-  };
-  const del = async (id) => {
-    if(!window.confirm("本当に削除しますか？")) return;
-    await supabase.from("staff_members").delete().eq("id",id);
-    load();
-  };
-  const startEdit = (s) => { setForm({name:s.name||"",kana:s.kana||"",tel:s.tel||"",email:s.email||"",certifications:s.certifications||"",hire_date:s.hire_date||"",note:s.note||"",pin:s.pin||""}); setEditId(s.id); setAdding(true); };
+  const startEdit=(i)=>{ setForm({...list[i]});setEditIdx(i);setAdding(true); };
+  const cancel=()=>{ setAdding(false);setEditIdx(null);setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:""}); };
 
   return(
     <div className="fade-in">
       <PH title="サービス管理責任者管理" sub={`${list.length}名`} onAdd={()=>{cancel();setAdding(true);}} addLabel="新規登録"/>
-      <div className="card" style={{marginBottom:14,background:"#eff6ff",border:"1px solid #bfdbfe"}}>
-        <div style={{fontSize:12,color:"#1e40af"}}>👆 staff_membersテーブルで管理されます。PINは各自設定してください。ログイン時は個人PINで認証します。</div>
-      </div>
       {adding&&(
         <div className="card" style={{marginBottom:14,border:"2px solid #0284c7"}}>
-          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editId?"✏️ 編集":"➕ 新規登録"}</div>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editIdx!==null?"✏️ 編集":"➕ 新規登録"}</div>
           <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginBottom:10}}>
-            {[["名前 *","name","text"],["フリガナ","kana","text"],["電話","tel","tel"],["メール","email","email"],["入職日","hire_date","date"],["PIN（4〜8桁）","pin","password"]].map(([label,k,type])=>(
+            {[["名前 *","name","text"],["フリガナ","kana","text"],["電話","tel","tel"],["メール","email","email"],["入職日","hire_date","date"]].map(([label,k,type])=>(
               <div key={k}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
                 <input className="input" type={type} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/></div>
             ))}
@@ -1357,16 +1349,16 @@ function SabikanMgmtTab() {
           <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
             <textarea className="input" rows={2} value={form.note||""} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/></div>
           <div style={{display:"flex",gap:8}}>
-            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editId?"更新":"登録"}</button>
+            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editIdx!==null?"更新":"登録"}</button>
             <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={cancel}>キャンセル</button>
           </div>
         </div>
       )}
       {list.length===0&&!adding
-        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>サービス管理責任者が登録されていません</div></div>
+        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>記録がありません</div></div>
         :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14,marginBottom:16}}>
-          {list.map((s)=>(
-            <div key={s.id} className="card">
+          {list.map((s,i)=>(
+            <div key={i} className="card">
               <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
                 <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"white",flexShrink:0,fontWeight:700}}>📋</div>
                 <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{fontSize:12,color:"#64748b"}}>{s.kana}</div></div>
@@ -1377,16 +1369,20 @@ function SabikanMgmtTab() {
                 {s.hire_date&&<div>📅 入職: {s.hire_date}</div>}
                 {s.certifications&&<div>🎓 {s.certifications}</div>}
                 {s.note&&<div style={{color:"#475569"}}>📝 {s.note}</div>}
-                <div>🔑 PIN: {s.pin?"設定済":"未設定"}</div>
               </div>
               <div style={{display:"flex",gap:8}}>
-                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(s)}><Icon name="edit" size={13}/>編集</button>
-                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(s.id)}><Icon name="trash" size={13}/></button>
+                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(i)}><Icon name="edit" size={13}/>編集</button>
+                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(i)}><Icon name="trash" size={13}/></button>
               </div>
             </div>
           ))}
         </div>
       }
+      <div className="card" style={{maxWidth:480,marginTop:8}}>
+        <div style={{fontWeight:600,fontSize:13,marginBottom:10}}>🔑 ログインPINコード管理</div>
+        <SabikanPinResetForm/>
+        <div style={{fontSize:11,color:"#94a3b8",marginTop:8}}>※ PINはサービス管理責任者ログイン画面で使用します</div>
+      </div>
     </div>
   );
 }
@@ -4650,7 +4646,7 @@ function UserLoginScreen({onBack, onLogin}) {
         </div>
         <div style={{textAlign:"left",marginBottom:10}}>
           <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:4}}>アクセスコード</label>
-          <input className="input" type="password" maxLength={8} placeholder="コードを入力" style={{textAlign:"center",fontSize:22,letterSpacing:8}} value={code} onChange={e=>{setCode(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&login()}/>
+          <input className="input" type="password" maxLength={8} placeholder="コードを入力" style={{textAlign:"center",fontSize:22,letterSpacing:8}} autoComplete="new-password" value={code} onChange={e=>{setCode(e.target.value);setErr("");}} onKeyDown={e=>e.key==="Enter"&&login()}/>
         </div>
         {err&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8,textAlign:"left"}}>{err}</div>}
         <button style={{width:"100%",padding:"13px",fontSize:15,background:"linear-gradient(135deg,#059669,#0d9488)",color:"white",border:"none",borderRadius:12,cursor:"pointer",fontWeight:700,marginBottom:10,marginTop:6}} onClick={login}>ログイン</button>
@@ -5605,8 +5601,8 @@ export default function App() {
     setStaffList(data||[]); setAuth("staff_pin");
   };
   const preloadSabikan = async () => {
-    const {data} = await supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id");
-    setSabikanList(data||[]);
+    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_members").single();
+    try{ setSabikanList(JSON.parse(data?.value||"[]")); }catch(e){ setSabikanList([]); }
     setAuth("sabikan_pin");
   };
   const loginStaff = () => {
@@ -5623,13 +5619,10 @@ export default function App() {
   };
   const loginSabikan = async () => {
     setPinErr("");
-    if(!selSabikan){setPinErr("担当者を選択してください");return;}
-    if(!selSabikan.pin){setPinErr("PINが設定されていません。管理者へお問い合わせください");return;}
-    if(String(selSabikan.pin)===String(sabikanPin)){
-      setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");
-    } else {
-      setPinErr("PINコードが正しくありません");
-    }
+    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_pin").single();
+    const pin = data?.value || "5678";
+    if(pin===sabikanPin){setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");}
+    else setPinErr("PINコードが正しくありません");
   };
   const logout = () => {setAuth("select");setIsAdmin(false);setIsSabikan(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");setSelSabikan(null);};
 
@@ -5726,7 +5719,7 @@ export default function App() {
           <option value="">スタッフを選択...</option>
           {staffList.map(s=><option key={s.id} value={s.id}>{s.name}（{s.role}）</option>)}
         </select>
-        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={staffPin} onChange={e=>setStaffPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginStaff()}/>
+        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={staffPin} onChange={e=>setStaffPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginStaff()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8}} onClick={loginStaff}><Icon name="check" size={15}/>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setStaffPin("");setPinErr("");setMe(null);}}>← 戻る</button>
@@ -5740,7 +5733,7 @@ export default function App() {
       <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
         <div style={{width:48,height:48,borderRadius:14,background:"linear-gradient(135deg,#7c3aed,#4c1d95)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px"}}><Icon name="shield" size={22}/></div>
         <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>管理者ログイン</div>
-        <input className="input" type="password" maxLength={6} placeholder="管理者PIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginAdmin()}/>
+        <input className="input" type="password" maxLength={6} placeholder="管理者PIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={adminPin} onChange={e=>setAdminPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginAdmin()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button className="btn btn-purple" style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8}} onClick={loginAdmin}><Icon name="check" size={15}/>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setAdminPin("");setPinErr("");}}>← 戻る</button>
@@ -5753,11 +5746,11 @@ export default function App() {
       <style>{CSS}</style>
       <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
         <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>サービス管理責任者ログイン</div>
-        <select className="input" style={{marginBottom:10,textAlign:"center"}} onChange={e=>{const s=sabikanList.find(sb=>String(sb.id)===e.target.value);setSelSabikan(s||null);}}>
+        <select className="input" style={{marginBottom:10,textAlign:"center"}} value={selSabikan?.id||""} autoComplete="off" onChange={e=>{const s=sabikanList.find(sb=>String(sb.id)===e.target.value);setSelSabikan(s||null);}}>
           <option value="">担当者を選択...</option>
           {sabikanList.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={sabikanPin} onChange={e=>setSabikanPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginSabikan()}/>
+        <input className="input" type="password" maxLength={8} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={sabikanPin} onChange={e=>setSabikanPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginSabikan()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8,background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontSize:15,fontWeight:600,display:"flex",alignItems:"center",gap:8}} onClick={loginSabikan}><Icon name="check" size={15}/>ログイン</button>
         <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setSabikanPin("");setPinErr("");setSelSabikan(null);}}>← 戻る</button>
@@ -5772,7 +5765,7 @@ export default function App() {
         <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#0f172a,#334155)",display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 14px",fontSize:26}}>🛡️</div>
         <div style={{fontWeight:800,fontSize:16,color:"#0f172a",marginBottom:4}}>マスター管理</div>
         <div style={{fontSize:12,color:"#94a3b8",marginBottom:20}}>Master Console</div>
-        <input className="input" type="password" maxLength={8} placeholder="マスターPIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} value={masterPin} onChange={e=>setMasterPin(e.target.value)} onKeyDown={async e=>{
+        <input className="input" type="password" maxLength={8} placeholder="マスターPIN" style={{textAlign:"center",fontSize:24,letterSpacing:10,marginBottom:8}} autoComplete="new-password" value={masterPin} onChange={e=>setMasterPin(e.target.value)} onKeyDown={async e=>{
           if(e.key==="Enter"){
             const {data} = await supabase.from("app_settings").select("value").eq("key","master_pin").single();
             const correctPin = data?.value||"999999";
