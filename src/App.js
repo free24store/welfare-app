@@ -7,6 +7,7 @@ const supabase = createClient(
 );
 
 const localDate = () => { const n = new Date(); return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0"); };
+const getNightRate = (s) => Number(s?.night_rate||0) > 0 ? Number(s.night_rate) : Math.floor(Number(s?.hourly_rate||0)*1.25);
 
 const Icon = ({ name, size = 18 }) => {
   const icons = {
@@ -126,7 +127,7 @@ const NEWS = [
 
 // 給与明細PDF生成（印刷用HTMLをウィンドウで開く）
 function generatePayslip(r, staffInfo, attRows) {
-  const nightRate = Math.floor((staffInfo?.hourly_rate||r.hourly_rate||0) * 1.25);
+  const nightRate = getNightRate(staffInfo||r);
   const dayRate = staffInfo?.hourly_rate || r.hourly_rate || 0;
   // 勤務明細行
   const attHtml = attRows.length > 0 ? attRows.map(a => {
@@ -1632,8 +1633,9 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
   };
   // スタッフの月次サマリー計算
   const calcStaffSummary=(staffId)=>{
-    const rate=Number(staffList.find(s=>s.id===staffId)?.hourly_rate||0);
-    const nightRate=Math.floor(rate*1.25);
+    const staff=staffList.find(s=>s.id===staffId)||{};
+    const rate=Number(staff.hourly_rate||0);
+    const nightRate=getNightRate(staff);
     let summary={total:0,day:0,night:0,early:0,late:0,training:0,pay:0};
     days.forEach(d=>{
       const c=shiftData[skey(staffId,d)]||{};
@@ -1653,11 +1655,12 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
   };
   const fh=(m)=>Math.floor(m/60)+"h"+(m%60?""+m%60+"m":"");
 
-  // CSVダウンロード
+  // CSVダウンロード（内部管理用）
   const downloadCSV=()=>{
+    const WDAYL=["日","月","火","水","木","金","土"];
     const header=["日付","曜日",...staffList.map(s=>s.name+" シフト"),...staffList.map(s=>s.name+" 時間"),"配置数"];
     const rows=days.map(d=>{
-      const wd=["日","月","火","水","木","金","土"][new Date(d.replace(/-/g,"/")).getDay()];
+      const wd=WDAYL[new Date(d.replace(/-/g,"/")).getDay()];
       const shifts=staffList.map(s=>{const c=shiftData[skey(s.id,d)]||{};return c.shift||"";});
       const hours=staffList.map(s=>{
         const c=shiftData[skey(s.id,d)]||{};
@@ -1670,15 +1673,58 @@ function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
       const wc=staffList.filter(s=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
       return [d,wd,...shifts,...hours,wc];
     });
-    // 月計行
     const totals=staffList.map(s=>{const sm=calcStaffSummary(s.id);return fh(sm.total);});
     const pays=staffList.map(s=>{const sm=calcStaffSummary(s.id);return "¥"+sm.pay.toLocaleString();});
-    rows.push(["月計合計","", ...staffList.map(s=>{const ct=countShifts(s.id);return Object.entries(ct).filter(([k,v])=>v>0).map(([k,v])=>k+v+"日").join("/");}), ...totals, ""]);
+    rows.push(["月計","", ...staffList.map(s=>{const ct=countShifts(s.id);return Object.entries(ct).filter(([k,v])=>v>0).map(([k,v])=>k+v+"日").join("/");}), ...totals, ""]);
     rows.push(["給与見込","","", ...pays,""]);
     const csv=[header,...rows].map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(",")).join("\n");
-    const blob=new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8;"});
-    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=selMonth+"_シフト表.csv";a.click();
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=selMonth+"_シフト表（内部管理）.csv";a.click();
   };
+
+  // 様式4準拠CSV（行政提出用）
+  const downloadCSV4=()=>{
+    const WDAYL=["日","月","火","水","木","金","土"];
+    const rows=[];
+    rows.push(["従業者の勤務体制及び勤務形態一覧表（様式4）"]);
+    rows.push(["対象期間: "+selMonth.replace("-","年")+"月","","事業所名:",""]);
+    rows.push([]);
+    const staffHeader=["氏名","職種・資格","雇用形態"];
+    days.forEach(d=>{
+      const wd=WDAYL[new Date(d.replace(/-/g,"/")).getDay()];
+      staffHeader.push(Number(d.slice(8))+"日("+wd+")");
+    });
+    staffHeader.push("勤務日数","公休日数","総勤務時間","日勤時間","夜勤時間","早番時間","遅番時間");
+    rows.push(staffHeader);
+    staffList.forEach(s=>{
+      const ft=s.full_time==="true"?"常勤":"非常勤";
+      const row=[s.name, s.role||"", ft];
+      days.forEach(d=>{
+        const c=shiftData[skey(s.id,d)]||{};
+        if(!c.shift){row.push(""); return;}
+        if(["公休","有休"].includes(c.shift)){row.push(c.shift); return;}
+        if(c.shift==="欠勤"){row.push("欠"); return;}
+        row.push(c.start&&c.end?c.shift+"("+c.start+"〜"+c.end+")":c.shift);
+      });
+      const sm=calcStaffSummary(s.id);
+      const ct=countShifts(s.id);
+      const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+      const offDays=(ct["公休"]||0)+(ct["有休"]||0);
+      const hm=(m)=>m?Math.floor(m/60)+":"+String(m%60).padStart(2,"0"):"";
+      row.push(workDays, offDays, hm(sm.total)||"0:00", hm(sm.day), hm(sm.night), hm(sm.early), hm(sm.late));
+      rows.push(row);
+    });
+    rows.push([]);
+    const countRow=["配置数合計","",""];
+    days.forEach(d=>{
+      const wc=staffList.filter(s=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+      countRow.push(wc>0?wc+"名":"");
+    });
+    rows.push(countRow);
+    const csv=rows.map(r=>r.map(v=>'"'+String(v||"").replace(/"/g,'""')+'"').join(",")).join("\n");
+    const blob=new Blob(["\uFEFF"+csv],{type:"text/csv;charset=utf-8;"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download=selMonth+"_様式4_勤務体制一覧表.csv";a.click();
+  }
 
   // 印刷用HTML
   const printShift=()=>{
@@ -1726,7 +1772,7 @@ ${sm.day?`<p>日勤: ${fh(sm.day)}</p>`:""}
 ${sm.night?`<p>夜勤: ${fh(sm.night)}</p>`:""}
 ${sm.early?`<p>早番: ${fh(sm.early)}</p>`:""}
 ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
-<p>給与見込: <b>¥${sm.pay.toLocaleString()}</b>（時給¥${Number(r?.hourly_rate||0).toLocaleString()}）</p>
+<p>給与見込: <b>¥${sm.pay.toLocaleString()}</b>（基本¥${Number(r?.hourly_rate||0).toLocaleString()} / 夜勤¥${getNightRate(r||{}).toLocaleString()}）</p>
 </div>`;}).join("")}
 </div>
 <div style="text-align:center;margin-top:16px;">
@@ -1734,6 +1780,107 @@ ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
 <button onclick="window.close()" style="padding:10px 16px;background:#f1f5f9;color:#475569;border:none;border-radius:6px;cursor:pointer;font-size:13px;margin-left:8px;">閉じる</button>
 </div></body></html>`;
     const w=window.open("","_blank","width=1000,height=900");
+    if(w){w.document.write(html);w.document.close();}
+  };
+
+  // 様式4 PDF（行政提出用）
+  const printShift4=()=>{
+    const WDAYL=["日","月","火","水","木","金","土"];
+    const [yr,mo]=selMonth.split("-");
+    const dayRows=days.map(d=>{
+      const wd=WDAYL[new Date(d.replace(/-/g,"/")).getDay()];
+      const isHol=wd==="日"||wd==="土";
+      const cells=staffList.map(s=>{
+        const c=shiftData[skey(s.id,d)]||{};
+        if(!c.shift) return '<td style="border:1px solid #ccc;padding:2px;text-align:center;font-size:8px;'+(isHol?"background:#fafafa;":"")+'">' + '</td>';
+        const st=SHIFT_TYPES.find(t=>t.label===c.shift)||{};
+        const bg=["公休","有休"].includes(c.shift)?"#f1f5f9":c.shift==="欠勤"?"#fef2f2":(st.bg||"white");
+        const col=["公休","有休"].includes(c.shift)?"#64748b":c.shift==="欠勤"?"#ef4444":(st.color||"#1e293b");
+        const label=["公休","有休"].includes(c.shift)?c.shift:c.shift==="欠勤"?"欠":(st.short||c.shift);
+        const time=c.start&&c.end&&!["公休","有休","欠勤"].includes(c.shift)?'<br><span style="font-size:7px">'+c.start+'〜'+c.end+'</span>':"";
+        return '<td style="border:1px solid #ccc;padding:2px;text-align:center;font-size:8px;background:'+bg+';color:'+col+';font-weight:700;">'+label+time+'</td>';
+      });
+      const wc=staffList.filter(s=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+      const dayStyle=wd==="日"?"color:#ef4444;":wd==="土"?"color:#2563eb;":"";
+      return '<tr style="'+(isHol?"background:#fafafa":"")+'">'
+        +'<td style="border:1px solid #ccc;padding:2px 4px;font-weight:600;text-align:center;font-size:9px;white-space:nowrap;'+dayStyle+'">'+Number(d.slice(8))+'日<br>'+wd+'</td>'
+        +cells.join("")
+        +'<td style="border:1px solid #ccc;padding:2px;text-align:center;font-weight:700;font-size:9px;color:'+(wc>0?"#059669":"#94a3b8")+'">'+(wc>0?wc+"名":"")+'</td></tr>';
+    }).join("");
+    const summaryRows=staffList.map(s=>{
+      const sm=calcStaffSummary(s.id);
+      const ct=countShifts(s.id);
+      const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+      const offDays=(ct["公休"]||0)+(ct["有休"]||0);
+      const hm=(m)=>m?Math.floor(m/60)+"h"+String(m%60).padStart(2,"0")+"m":"—";
+      const rate=Number(s.hourly_rate||0);
+      const nrate=getNightRate(s);
+      return '<tr>'
+        +'<td style="border:1px solid #ccc;padding:3px 6px;font-weight:700;font-size:9px;">'+s.name+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;">'+(s.role||"")+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;">'+(s.full_time==="true"?"常勤":"非常勤")+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;font-weight:700;">'+workDays+'日</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;">'+offDays+'日</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;font-weight:700;color:#0369a1;">'+hm(sm.total)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;color:#2563eb;">'+hm(sm.day)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;color:#7c3aed;">'+hm(sm.night)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;color:#059669;">'+hm(sm.early)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;color:#d97706;">'+hm(sm.late)+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;">¥'+rate.toLocaleString()+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;color:#7c3aed;">¥'+nrate.toLocaleString()+'</td>'
+        +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:9px;font-weight:700;color:#059669;">'+(sm.pay?"¥"+sm.pay.toLocaleString():"—")+'</td></tr>';
+    }).join("");
+    const totalPay=staffList.reduce((sum,s)=>sum+calcStaffSummary(s.id).pay,0);
+    const staffTH=staffList.map(s=>'<th style="min-width:44px;max-width:56px;font-size:8px;background:#1e3a8a;color:white;padding:3px;text-align:center;">'+s.name+'</th>').join("");
+    const tfootCells=staffList.map(s=>{
+      const sm=calcStaffSummary(s.id);
+      const wd=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
+      return '<td style="border:1px solid #ccc;padding:2px;text-align:center;font-size:8px;"><b>'+wd+'日</b>'+(sm.total?"<br>"+Math.floor(sm.total/60)+"h":"")+'</td>';
+    }).join("");
+    const html='<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>様式4 勤務体制一覧表 '+selMonth+'</title>'
+      +'<style>body{font-family:'Noto Sans JP',sans-serif;margin:0;padding:12px;font-size:9px;color:#1e293b;}'
+      +'h2{font-size:14px;margin:0 0 2px;text-align:center;}'
+      +'.meta{text-align:center;font-size:10px;color:#475569;margin-bottom:8px;}'
+      +'table{border-collapse:collapse;}'
+      +'th{background:#1e3a8a;color:white;padding:4px 3px;text-align:center;font-size:9px;white-space:nowrap;}'
+      +'.sign-area{display:flex;gap:16px;margin-top:12px;font-size:10px;}'
+      +'.sign-box{border:1px solid #ccc;padding:8px 20px;text-align:center;min-width:100px;}'
+      +'@media print{button{display:none;}body{padding:6px;}}'
+      +'</style></head><body>'
+      +'<h2>従業者の勤務体制及び勤務形態一覧表</h2>'
+      +'<div class="meta">'+yr+'年'+mo+'月分　／　様式第4号（第3条関係）</div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:9px;margin-bottom:6px;">'
+      +'<div>事業所名：＿＿＿＿＿＿＿＿＿＿＿＿＿＿</div>'
+      +'<div>作成日：　　　年　　月　　日　　確認印：</div></div>'
+      +'<div style="overflow-x:auto;"><table style="width:100%;">'
+      +'<thead><tr><th style="width:42px;background:#1e3a8a;color:white;padding:4px;">日付</th>'
+      +staffTH
+      +'<th style="width:32px;background:#1e3a8a;color:white;padding:4px;">配置数</th></tr></thead>'
+      +'<tbody>'+dayRows+'</tbody>'
+      +'<tfoot><tr style="background:#f0f9ff;">'
+      +'<td style="border:1px solid #ccc;padding:3px 4px;font-weight:700;font-size:9px;text-align:center;">月計</td>'
+      +tfootCells
+      +'<td style="border:1px solid #ccc;"></td></tr></tfoot>'
+      +'</table></div>'
+      +'<table style="width:100%;margin-top:14px;">'
+      +'<thead><tr><th>氏名</th><th>職種</th><th>雇用形態</th><th>勤務日数</th><th>公休日数</th>'
+      +'<th>総勤務時間</th><th>日勤</th><th>夜勤</th><th>早番</th><th>遅番</th>'
+      +'<th>基本時給</th><th>夜勤時給</th><th>給与見込</th></tr></thead>'
+      +'<tbody>'+summaryRows+'</tbody>'
+      +'<tfoot><tr style="background:#f0fdf4;font-weight:700;">'
+      +'<td colspan="12" style="border:1px solid #ccc;padding:3px 6px;text-align:right;font-size:9px;">合計給与見込</td>'
+      +'<td style="border:1px solid #ccc;padding:3px;text-align:center;font-size:10px;color:#059669;">¥'+totalPay.toLocaleString()+'</td>'
+      +'</tr></tfoot></table>'
+      +'<div class="sign-area">'
+      +'<div class="sign-box">管理者確認印</div>'
+      +'<div class="sign-box">サービス管理責任者</div>'
+      +'<div class="sign-box">提出日：　　年　月　日</div>'
+      +'</div>'
+      +'<div style="text-align:center;margin-top:12px;">'
+      +'<button onclick="window.print()" style="padding:10px 28px;background:#1e3a8a;color:white;border:none;border-radius:8px;font-size:13px;cursor:pointer;margin-right:8px;">🖨️ 印刷・PDF保存</button>'
+      +'<button onclick="window.close()" style="padding:10px 16px;background:#f1f5f9;color:#475569;border:none;border-radius:6px;cursor:pointer;font-size:13px;">閉じる</button>'
+      +'</div></body></html>';
+    const w=window.open("","_blank","width=1100,height=900");
     if(w){w.document.write(html);w.document.close();}
   };
 
@@ -1748,9 +1895,21 @@ ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
           <button className="btn btn-sm" style={{background:viewMode==="list"?"#2563eb":"#f1f5f9",color:viewMode==="list"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("list")}>📋 スタッフ別</button>
           <button className="btn btn-sm" style={{background:viewMode==="summary"?"#2563eb":"#f1f5f9",color:viewMode==="summary"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("summary")}>💰 給与集計</button>
         </div>
-        {isAdmin&&<div style={{display:"flex",gap:6,marginLeft:"auto"}}>
-          <button className="btn btn-secondary btn-sm" onClick={downloadCSV}><Icon name="download" size={13}/>CSV</button>
-          <button className="btn btn-secondary btn-sm" onClick={printShift}>🖨️ 印刷</button>
+        {isAdmin&&<div style={{display:"flex",gap:6,marginLeft:"auto",flexWrap:"wrap",alignItems:"flex-end"}}>
+          <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"center"}}>
+            <div style={{fontSize:9,color:"#94a3b8"}}>内部管理</div>
+            <div style={{display:"flex",gap:4}}>
+              <button className="btn btn-secondary btn-sm" onClick={downloadCSV}><Icon name="download" size={13}/>CSV</button>
+              <button className="btn btn-secondary btn-sm" onClick={printShift}>🖨️ 印刷</button>
+            </div>
+          </div>
+          <div style={{display:"flex",flexDirection:"column",gap:3,alignItems:"center"}}>
+            <div style={{fontSize:9,color:"#1d4ed8",fontWeight:700}}>🏛 行政提出（様式4）</div>
+            <div style={{display:"flex",gap:4}}>
+              <button className="btn btn-sm" style={{background:"#1d4ed8",color:"white",fontSize:12,padding:"4px 10px"}} onClick={downloadCSV4}><Icon name="download" size={13}/>CSV</button>
+              <button className="btn btn-sm" style={{background:"#1d4ed8",color:"white",fontSize:12,padding:"4px 10px"}} onClick={printShift4}>🖨️ PDF</button>
+            </div>
+          </div>
         </div>}
       </div>
       <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
@@ -1921,7 +2080,7 @@ ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
                   const sm=calcStaffSummary(s.id);
                   const workDays=days.filter(d=>{const c=shiftData[skey(s.id,d)];return c?.shift&&!["公休","有休","欠勤"].includes(c.shift);}).length;
                   const rate=Number(s.hourly_rate||0);
-                  const nightRate=Math.floor(rate*1.25);
+                  const nightRate=getNightRate(s);
                   return(
                     <tr key={s.id} className="row-hover">
                       <td style={{fontWeight:700}}>{s.name}</td>
@@ -4446,7 +4605,7 @@ export default function App() {
           {/* ── スタッフ管理 ── */}
           {tab==="staff"&&isAdmin&&(
             <div className="fade-in">
-              <PH title="スタッフ管理" sub={`${staffList.length}名`} onAdd={()=>openModal("スタッフ",{name:"",kana:"",role:"世話人",full_time:"true",tel:"",email:"",hourly_rate:"",pin:"",hire_date:"",certifications:""})} addLabel="スタッフ追加"/>
+              <PH title="スタッフ管理" sub={`${staffList.length}名`} onAdd={()=>openModal("スタッフ",{name:"",kana:"",role:"世話人",full_time:"true",tel:"",email:"",hourly_rate:"",night_rate:"",pin:"",hire_date:"",certifications:""})} addLabel="スタッフ追加"/>
               <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14}}>
                 {staffList.map(s=>(
                   <div key={s.id} className="card">
@@ -4456,7 +4615,7 @@ export default function App() {
                       <span className="tag" style={{background:s.full_time?"#eff6ff":"#f5f3ff",color:s.full_time?"#2563eb":"#7c3aed"}}>{s.full_time?"常勤":"非常勤"}</span>
                     </div>
                     <div style={{fontSize:12,color:"#64748b",lineHeight:2,marginBottom:8}}>
-                      <div>📞 {s.tel}</div><div className="mono">時給 ¥{fmt(s.hourly_rate)}</div><div>🔑 PIN: {s.pin}</div>
+                      <div>📞 {s.tel}</div><div className="mono">基本時給 ¥{fmt(s.hourly_rate)} / 夜勤 ¥{getNightRate(s).toLocaleString()}</div><div>🔑 PIN: {s.pin}</div>
                     </div>
                     <div style={{display:"flex",gap:8}}>
                       <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>openEdit("スタッフ",s)}><Icon name="edit" size={13}/>編集</button>
@@ -4471,9 +4630,12 @@ export default function App() {
                   <F label="電話" k="tel" form={form} setForm={setForm}/><F label="メール" k="email" type="email" form={form} setForm={setForm}/>
                   <F label="役職" k="role" opts={["世話人","生活支援員","運転手","施設管理者","サービス管理責任者"]} form={form} setForm={setForm}/>
                   <F label="雇用形態" k="full_time" opts={["true","false"]} form={form} setForm={setForm}/>
-                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>時給（円）<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>基本時給（円）<span style={{color:"#ef4444",marginLeft:3}}>*必須</span></label>
                     <input className="input" type="number" min={1} value={form.hourly_rate||""} onChange={e=>setForm(f=>({...f,hourly_rate:e.target.value}))} placeholder="例: 1100"/>
-                    {form.hourly_rate&&Number(form.hourly_rate)>0&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>夜勤時給: ¥{Math.floor(Number(form.hourly_rate)*1.25).toLocaleString()}（×1.25）</div>}
+                    {form.hourly_rate&&Number(form.hourly_rate)>0&&!form.night_rate&&<div style={{fontSize:11,color:"#64748b",marginTop:3}}>夜勤時給未設定 → 自動: ¥{Math.floor(Number(form.hourly_rate)*1.25).toLocaleString()}（×1.25）</div>}
+                  </div>
+                  <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>夜勤時給（円）<span style={{fontSize:11,color:"#94a3b8",marginLeft:4}}>未入力で基本×1.25</span></label>
+                    <input className="input" type="number" min={1} value={form.night_rate||""} onChange={e=>setForm(f=>({...f,night_rate:e.target.value}))} placeholder={form.hourly_rate?`自動: ¥${Math.floor(Number(form.hourly_rate||0)*1.25)}`:"例: 1375"}/>
                   </div>
                   <F label="PINコード" k="pin" form={form} setForm={setForm}/>
                   <F label="入職日" k="hire_date" type="date" form={form} setForm={setForm}/>
