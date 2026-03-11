@@ -2569,114 +2569,246 @@ ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
 }
 
 function CleaningTab({staffList}) {
-  const _tn=new Date();const today=_tn.getFullYear()+"-"+String(_tn.getMonth()+1).padStart(2,"0")+"-"+String(_tn.getDate()).padStart(2,"0");
-  const [records, setRecords] = useState([]); // [{date, shift, staff, done, note}]
+  const _tn=new Date();
+  const today=_tn.getFullYear()+"-"+String(_tn.getMonth()+1).padStart(2,"0")+"-"+String(_tn.getDate()).padStart(2,"0");
+  const [records, setRecords] = useState([]);
+  const [locations, setLocations] = useState(["事務所","トイレ（共用）","浴室","廊下・階段","台所・食堂","各居室","玄関","駐車場・外周"]);
   const [loaded, setLoaded] = useState(false);
   const [selDate, setSelDate] = useState(today);
-  const [viewMode, setViewMode] = useState("input"); // "input" | "history"
+  const [selShift, setSelShift] = useState("日勤");
+  const [viewMode, setViewMode] = useState("input");
   const [histMonth, setHistMonth] = useState(today.slice(0,7));
+  const [showLocMgr, setShowLocMgr] = useState(false);
+  const [newLocName, setNewLocName] = useState("");
+  const [editLocIdx, setEditLocIdx] = useState(null);
+  const [editLocVal, setEditLocVal] = useState("");
 
   useEffect(()=>{
     supabase.from("app_settings").select("value").eq("key","cleaning_records").single().then(({data})=>{
       if(data?.value){try{setRecords(JSON.parse(data.value));}catch(e){setRecords([]);}}
       else setRecords([]);
+    });
+    supabase.from("app_settings").select("value").eq("key","cleaning_locations").single().then(({data})=>{
+      if(data?.value){try{setLocations(JSON.parse(data.value));}catch(e){}}
       setLoaded(true);
     });
   },[]);
 
-  const saveRecords = async(newR)=>{
+  const saveRecords = async(newR) => {
     setRecords(newR);
     await supabase.from("app_settings").upsert({key:"cleaning_records",value:JSON.stringify(newR)},{onConflict:"key"});
   };
+  const saveLocations = async(locs) => {
+    setLocations(locs);
+    await supabase.from("app_settings").upsert({key:"cleaning_locations",value:JSON.stringify(locs)},{onConflict:"key"});
+  };
 
-  const getRecord = (date, shift) => records.find(r=>r.date===date&&r.shift===shift)||{date,shift,staff:"",done:false,note:""};
+  // record構造: {date, shift, staff, note, checks:{loc:bool}, allDone:bool}
+  const getRecord = (date, shift) => records.find(r=>r.date===date&&r.shift===shift)||{date,shift,staff:"",note:"",checks:{},allDone:false};
 
-  const updateRecord = (date, shift, field, value) => {
+  const updateField = (date, shift, field, value) => {
     const existing = records.find(r=>r.date===date&&r.shift===shift);
     let newR;
     if(existing) newR = records.map(r=>r.date===date&&r.shift===shift?{...r,[field]:value}:r);
-    else newR = [...records,{date,shift,staff:"",done:false,note:"",[field]:value}];
+    else newR = [...records,{date,shift,staff:"",note:"",checks:{},allDone:false,[field]:value}];
     saveRecords(newR);
+  };
+
+  const toggleCheck = (date, shift, loc) => {
+    const rec = getRecord(date, shift);
+    const newChecks = {...(rec.checks||{}), [loc]: !(rec.checks||{})[loc]};
+    const allDone = locations.every(l=>newChecks[l]);
+    const existing = records.find(r=>r.date===date&&r.shift===shift);
+    let newR;
+    if(existing) newR = records.map(r=>r.date===date&&r.shift===shift?{...r,checks:newChecks,allDone}:r);
+    else newR = [...records,{date,shift,staff:"",note:"",checks:newChecks,allDone}];
+    saveRecords(newR);
+  };
+
+  const addLocation = () => {
+    if(!newLocName.trim()) return;
+    saveLocations([...locations, newLocName.trim()]);
+    setNewLocName("");
+  };
+  const deleteLocation = (idx) => {
+    if(!window.confirm(locations[idx]+"を削除しますか？")) return;
+    saveLocations(locations.filter((_,i)=>i!==idx));
+  };
+  const saveEditLoc = (idx) => {
+    if(!editLocVal.trim()) return;
+    const updated = locations.map((l,i)=>i===idx?editLocVal.trim():l);
+    saveLocations(updated); setEditLocIdx(null); setEditLocVal("");
   };
 
   if(!loaded) return <div style={{padding:20,color:"#94a3b8"}}>読み込み中...</div>;
 
-  const shifts = [{key:"日勤",label:"日勤（事務所掃除）",color:"#2563eb"},{key:"夜勤",label:"夜勤（GH掃除）",color:"#7c3aed"}];
+  const SHIFTS = [{key:"日勤",color:"#2563eb"},{key:"夜勤",color:"#7c3aed"}];
+  const histRecords = records.filter(r=>r.date?.startsWith(histMonth)).sort((a,b)=>b.date.localeCompare(a.date)||a.shift.localeCompare(b.shift));
 
-  // History: records for selected month
-  const histRecords = records
-    .filter(r=>r.date.startsWith(histMonth))
-    .sort((a,b)=>b.date.localeCompare(a.date));
+  const rec = getRecord(selDate, selShift);
+  const checkedCount = locations.filter(l=>(rec.checks||{})[l]).length;
+  const shiftColor = selShift==="夜勤"?"#7c3aed":"#2563eb";
 
   return(
     <div className="fade-in">
-      <PH title="掃除当番表" sub="日付ごとの担当・実施記録"/>
+      <PH title="掃除当番表" sub="担当・箇所別チェックリスト" extra={
+        <button className="btn btn-secondary btn-sm" onClick={()=>setShowLocMgr(v=>!v)}>
+          {showLocMgr?"✕ 閉じる":"⚙️ 清掃箇所管理"}
+        </button>
+      }/>
+
+      {/* ── 清掃箇所マスター管理 ── */}
+      {showLocMgr&&(
+        <div className="card" style={{marginBottom:14,background:"#f0f9ff",border:"1px solid #bae6fd"}}>
+          <div style={{fontWeight:700,fontSize:14,marginBottom:10}}>⚙️ 清掃箇所の管理</div>
+          <div style={{display:"grid",gap:6,marginBottom:10}}>
+            {locations.map((loc,idx)=>(
+              <div key={idx} style={{display:"flex",gap:6,alignItems:"center"}}>
+                {editLocIdx===idx?(
+                  <>
+                    <input className="input" value={editLocVal} onChange={e=>setEditLocVal(e.target.value)} style={{flex:1,fontSize:13}} onKeyDown={e=>e.key==="Enter"&&saveEditLoc(idx)}/>
+                    <button className="btn btn-primary btn-sm" onClick={()=>saveEditLoc(idx)}>保存</button>
+                    <button className="btn btn-secondary btn-sm" onClick={()=>setEditLocIdx(null)}>✕</button>
+                  </>
+                ):(
+                  <>
+                    <div style={{flex:1,fontSize:13,padding:"6px 10px",background:"white",border:"1px solid #e2e8f0",borderRadius:8}}>
+                      <span style={{fontSize:11,color:"#94a3b8",marginRight:6}}>{idx+1}.</span>{loc}
+                    </div>
+                    <button className="btn btn-secondary btn-sm" onClick={()=>{setEditLocIdx(idx);setEditLocVal(loc);}}>✏️</button>
+                    <button className="btn btn-red btn-sm" onClick={()=>deleteLocation(idx)}>🗑</button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:6}}>
+            <input className="input" value={newLocName} onChange={e=>setNewLocName(e.target.value)} placeholder="新しい清掃箇所を入力" style={{flex:1}} onKeyDown={e=>e.key==="Enter"&&addLocation()}/>
+            <button className="btn btn-primary" onClick={addLocation}>追加</button>
+          </div>
+        </div>
+      )}
+
+      {/* タブ切り替え */}
       <div style={{display:"flex",gap:8,marginBottom:16}}>
-        <button className="btn btn-sm" style={{background:viewMode==="input"?"#2563eb":"#f1f5f9",color:viewMode==="input"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("input")}>📝 入力</button>
-        <button className="btn btn-sm" style={{background:viewMode==="history"?"#2563eb":"#f1f5f9",color:viewMode==="history"?"white":"#475569",border:"none"}} onClick={()=>setViewMode("history")}>📋 履歴</button>
+        {["input","history"].map(m=>(
+          <button key={m} className="btn btn-sm" style={{background:viewMode===m?"#2563eb":"#f1f5f9",color:viewMode===m?"white":"#475569",border:"none"}} onClick={()=>setViewMode(m)}>
+            {m==="input"?"📝 入力":"📋 履歴"}
+          </button>
+        ))}
       </div>
 
+      {/* ── 入力モード ── */}
       {viewMode==="input"&&(
         <>
-          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14}}>
-            <input className="input" type="date" style={{flex:1,maxWidth:180}} value={selDate} onChange={e=>setSelDate(e.target.value)}/>
-            <span style={{fontSize:12,color:"#94a3b8"}}>の記録</span>
+          {/* 日付・シフト選択 */}
+          <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14,flexWrap:"wrap"}}>
+            <input className="input" type="date" style={{maxWidth:180}} value={selDate} onChange={e=>setSelDate(e.target.value)}/>
+            <div style={{display:"flex",gap:6}}>
+              {SHIFTS.map(s=>(
+                <button key={s.key} className="btn btn-sm" style={{background:selShift===s.key?s.color:"#f1f5f9",color:selShift===s.key?"white":s.color,border:"1px solid "+(selShift===s.key?s.color:"#e2e8f0"),fontWeight:700}} onClick={()=>setSelShift(s.key)}>
+                  {s.key==="日勤"?"☀️":"🌙"} {s.key}
+                </button>
+              ))}
+            </div>
           </div>
-          <div style={{display:"grid",gap:12}}>
-            {shifts.map(({key,label,color})=>{
-              const rec = getRecord(selDate, key);
-              return(
-                <div key={key} className="card" style={{borderLeft:`4px solid ${color}`}}>
-                  <div style={{fontWeight:700,fontSize:14,color,marginBottom:12}}>{label}</div>
-                  <div style={{display:"grid",gap:10}}>
-                    <div>
-                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当者</label>
-                      <select className="input" value={rec.staff||""} onChange={e=>updateRecord(selDate,key,"staff",e.target.value)}>
-                        <option value="">選択...</option>
-                        {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
-                      <input className="input" value={rec.note||""} onChange={e=>updateRecord(selDate,key,"note",e.target.value)} placeholder="特記事項があれば"/>
-                    </div>
-                    <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",padding:"8px 12px",background:rec.done?"#f0fdf4":"#f8fafc",borderRadius:8,border:`1px solid ${rec.done?"#bbf7d0":"#e2e8f0"}`}}>
-                      <input type="checkbox" checked={rec.done||false} onChange={e=>updateRecord(selDate,key,"done",e.target.checked)} style={{width:16,height:16}}/>
-                      <span style={{fontSize:13,fontWeight:600,color:rec.done?"#059669":"#64748b"}}>{rec.done?"✅ 実施済み":"未実施"}</span>
+
+          <div className="card" style={{borderLeft:`4px solid ${shiftColor}`}}>
+            <div style={{fontWeight:700,fontSize:14,color:shiftColor,marginBottom:12}}>
+              {selShift==="日勤"?"☀️":"🌙"} {selShift}　{selDate}
+            </div>
+
+            {/* 担当者・備考 */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:14}}>
+              <div>
+                <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>担当者</label>
+                <select className="input" value={rec.staff||""} onChange={e=>updateField(selDate,selShift,"staff",e.target.value)}>
+                  <option value="">選択...</option>
+                  {staffList.map(s=><option key={s.id} value={s.name}>{s.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
+                <input className="input" value={rec.note||""} onChange={e=>updateField(selDate,selShift,"note",e.target.value)} placeholder="特記事項があれば"/>
+              </div>
+            </div>
+
+            {/* 清掃箇所チェックリスト */}
+            <div style={{marginBottom:10}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                <label style={{fontSize:12,color:"#64748b",fontWeight:600}}>清掃箇所チェック</label>
+                <span style={{fontSize:12,fontWeight:700,color:checkedCount===locations.length&&locations.length>0?"#059669":"#64748b"}}>
+                  {checkedCount} / {locations.length} 完了
+                </span>
+              </div>
+              {/* 進捗バー */}
+              <div style={{height:6,background:"#f1f5f9",borderRadius:3,marginBottom:10}}>
+                <div style={{height:"100%",width:locations.length>0?(checkedCount/locations.length*100)+"%":"0%",background:checkedCount===locations.length&&locations.length>0?"#059669":shiftColor,borderRadius:3,transition:"width .3s"}}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:6}}>
+                {locations.map(loc=>{
+                  const done = !!(rec.checks||{})[loc];
+                  return(
+                    <label key={loc} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:done?"#f0fdf4":"#f8fafc",border:"1px solid "+(done?"#bbf7d0":"#e2e8f0"),borderRadius:8,cursor:"pointer",transition:"all .15s"}}>
+                      <input type="checkbox" checked={done} onChange={()=>toggleCheck(selDate,selShift,loc)} style={{width:15,height:15,accentColor:shiftColor}}/>
+                      <span style={{fontSize:12,fontWeight:600,color:done?"#059669":"#475569",textDecoration:done?"line-through":"none"}}>{loc}</span>
                     </label>
-                  </div>
-                </div>
-              );
-            })}
+                  );
+                })}
+              </div>
+              {locations.length===0&&<div style={{textAlign:"center",padding:"16px",color:"#94a3b8",fontSize:12}}>清掃箇所が未設定です。「清掃箇所管理」から追加してください。</div>}
+            </div>
+
+            {/* 全完了バッジ */}
+            {checkedCount===locations.length&&locations.length>0&&(
+              <div style={{textAlign:"center",padding:"10px",background:"#f0fdf4",borderRadius:8,border:"1px solid #bbf7d0",color:"#059669",fontWeight:700,fontSize:13}}>
+                ✅ 全箇所の清掃完了！
+              </div>
+            )}
           </div>
         </>
       )}
 
+      {/* ── 履歴モード ── */}
       {viewMode==="history"&&(
         <>
           <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:14}}>
-            <input className="input" type="month" style={{flex:1,maxWidth:180}} value={histMonth} onChange={e=>setHistMonth(e.target.value)}/>
+            <input className="input" type="month" style={{maxWidth:180}} value={histMonth} onChange={e=>setHistMonth(e.target.value)}/>
             <span style={{fontSize:12,color:"#94a3b8"}}>{histRecords.length}件</span>
           </div>
           {histRecords.length===0
             ?<div className="card" style={{textAlign:"center",padding:"30px",color:"#94a3b8"}}>この月の記録はありません</div>
-            :<div className="card" style={{overflowX:"auto"}}>
-              <table>
-                <thead><tr>
-                  <th>日付</th><th>区分</th><th>担当</th><th>実施</th><th>備考</th>
-                </tr></thead>
-                <tbody>
-                  {histRecords.map((r,i)=>(
-                    <tr key={i}>
-                      <td style={{whiteSpace:"nowrap"}}>{r.date}</td>
-                      <td><span style={{fontSize:12,fontWeight:600,color:r.shift==="日勤"?"#2563eb":"#7c3aed"}}>{r.shift}</span></td>
-                      <td>{r.staff||<span style={{color:"#94a3b8"}}>未定</span>}</td>
-                      <td style={{textAlign:"center"}}>{r.done?"✅":"❌"}</td>
-                      <td style={{fontSize:12,color:"#64748b"}}>{r.note}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            :<div style={{display:"grid",gap:8}}>
+              {histRecords.map((r,i)=>{
+                const cnt = Object.values(r.checks||{}).filter(Boolean).length;
+                const tot = locations.length;
+                const sc = r.shift==="夜勤"?"#7c3aed":"#2563eb";
+                return(
+                  <div key={i} className="card" style={{borderLeft:`3px solid ${sc}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:6}}>
+                      <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                        <span style={{fontWeight:700,fontSize:13}}>{r.date}</span>
+                        <span style={{fontSize:12,fontWeight:700,color:sc,padding:"2px 8px",background:sc+"15",borderRadius:6}}>{r.shift==="夜勤"?"🌙":"☀️"} {r.shift}</span>
+                        {r.staff&&<span style={{fontSize:12,color:"#475569"}}>👤 {r.staff}</span>}
+                      </div>
+                      <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                        <span style={{fontSize:12,color:cnt===tot&&tot>0?"#059669":"#64748b",fontWeight:600}}>{cnt}/{tot}箇所</span>
+                        {cnt===tot&&tot>0?<span style={{fontSize:12,color:"#059669",fontWeight:700}}>✅ 完了</span>:<span style={{fontSize:12,color:"#d97706"}}>⏳ 途中</span>}
+                      </div>
+                    </div>
+                    {Object.keys(r.checks||{}).length>0&&(
+                      <div style={{marginTop:8,display:"flex",flexWrap:"wrap",gap:4}}>
+                        {locations.map(loc=>(
+                          <span key={loc} style={{fontSize:10,padding:"2px 7px",borderRadius:6,background:(r.checks||{})[loc]?"#f0fdf4":"#fef2f2",color:(r.checks||{})[loc]?"#059669":"#ef4444",border:"1px solid "+(r.checks||{})[loc]?"#bbf7d0":"#fecaca"}}>
+                            {(r.checks||{})[loc]?"✓":"✗"} {loc}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    {r.note&&<div style={{fontSize:11,color:"#64748b",marginTop:4}}>📝 {r.note}</div>}
+                  </div>
+                );
+              })}
             </div>
           }
         </>
@@ -2684,7 +2816,6 @@ function CleaningTab({staffList}) {
     </div>
   );
 }
-
 
 function SuppliesTab() {
   const [items,setItems]=useState([]);
