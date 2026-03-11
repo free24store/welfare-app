@@ -6,6 +6,9 @@ const supabase = createClient(
   "sb_publishable_PS9o6e0oUYuzYL6NxKVpQw_YUyHNua9"
 );
 
+// ホームID: URLパラメータ ?home=XXX から取得。未指定は "default"（つながり）
+const HOME_ID = new URLSearchParams(window.location.search).get("home") || "default";
+
 const localDate = () => { const n = new Date(); return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0"); };
 const getNightRate = (s) => Number(s?.night_rate||0) > 0 ? Number(s.night_rate) : Math.floor(Number(s?.hourly_rate||0)*1.25);
 
@@ -238,7 +241,7 @@ function SalaryAdminTab({staffList, salaries, attendance, loadAll, today, isMobi
     const hours = mins / 60;
     const gross = Math.round(hours * rate) + Number(extraPay || 0);
     const net = gross - Number(deduct || 0);
-    const {error} = await supabase.from("salary_records").upsert({
+    const {error} = await supabase.from("salary_records").upsert({home_id:HOME_ID,
       staff_id: s.id, staff_name: s.name, year_month: ym,
       hourly_rate: rate, work_minutes: mins,
       extra_pay: Number(extraPay || 0), deduction: Number(deduct || 0),
@@ -534,7 +537,7 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
     setMsg("");
     if (!dateFrom) { setMsg("日付を入力してください"); return; }
     const isCorr = type === "打刻訂正";
-    await supabase.from("shift_requests").insert({
+    await supabase.from("shift_requests").insert({home_id:HOME_ID,
       staff_id: me?.id,
       staff_name: me?.name,
       type,
@@ -705,7 +708,7 @@ function TransportTab({transport, users, staffList, isAdmin, loadAll, csv}) {
     setSaving(true);
     const d=Number(dist)||Number(tForm.distance)||0;
     const c=Number(tForm.cost)||Number(autoCost)||0;
-    await supabase.from("transport_log").insert({...tForm,distance:d,cost:c,before_km:beforeKm||null,after_km:afterKm||null});
+    await supabase.from("transport_log").insert({...tForm,home_id:HOME_ID,distance:d,cost:c,before_km:beforeKm||null,after_km:afterKm||null});
     setTForm({date:localDate(),user_id:"",user_name:"",type:"送迎（往）",destination:"",driver:"",distance:"",cost:"",time:"",note:""});
     setBeforeImg(null);setAfterImg(null);setBeforeKm("");setAfterKm("");setOcrResult(null);
     setSaving(false);loadAll();
@@ -3149,6 +3152,7 @@ function MyExpenseTab({me, expenses, loadAll}) {
     setSending(true);setMsg("");
     // まず仮insertしてIDを取得
     const {data:inserted, error} = await supabase.from("expense_claims").insert({
+      home_id: HOME_ID,
       staff_id: me?.id,
       staff_name: me?.name,
       date: form.date,
@@ -3443,7 +3447,15 @@ function MasterScreen({onBack}) {
     setLoading(true);
     // ホーム一覧
     const {data:hs} = await supabase.from("master_homes").select("*").order("id");
-    setHomes(hs||[]);
+    // "default"ホームが未登録なら自動登録
+    const defaults = (hs||[]).find(h=>h.home_id==="default");
+    if(!defaults){
+      await supabase.from("master_homes").insert({name:"グループホームつながり",company:"SOMME合同会社",home_id:"default",capacity:0});
+      const {data:hs2} = await supabase.from("master_homes").select("*").order("id");
+      setHomes(hs2||[]);
+    } else {
+      setHomes(hs||[]);
+    }
     // 全テーブルの件数サマリー
     const [u,st,att,exp,sr,sal,tr,acc,cl,mo,pr,wr,sc,msg,pl,hlt] = await Promise.all([
       supabase.from("users").select("id,status,unit,created_at"),
@@ -3475,10 +3487,16 @@ function MasterScreen({onBack}) {
 
   useEffect(()=>{ loadMasterData(); },[]);
 
+  const genHomeId = () => {
+    const chars="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+    return Array.from({length:10},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
+  };
+
   const saveHome = async() => {
     if(!homeForm.name){return;}
     if(homeModal==="add"){
-      await supabase.from("master_homes").insert({...homeForm, capacity:Number(homeForm.capacity)||0});
+      const home_id = genHomeId();
+      await supabase.from("master_homes").insert({...homeForm, capacity:Number(homeForm.capacity)||0, home_id});
     } else {
       await supabase.from("master_homes").update({...homeForm, capacity:Number(homeForm.capacity)||0}).eq("id",editHomeId);
     }
@@ -3751,6 +3769,21 @@ function MasterScreen({onBack}) {
                       {h.open_date&&<div>📅 開設: {h.open_date}</div>}
                       {h.note&&<div>📝 {h.note}</div>}
                     </div>
+                    {/* URL発行エリア */}
+                    {h.home_id ? (
+                      <div style={{marginBottom:8}}>
+                        <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>🔗 管理画面URL</div>
+                        <div style={{display:"flex",gap:4,alignItems:"center"}}>
+                          <div style={{flex:1,fontSize:10,padding:"5px 8px",background:"#0f172a",borderRadius:6,color:"#94a3b8",wordBreak:"break-all",fontFamily:"monospace",border:"1px solid #334155"}}>
+                            {window.location.origin}?home={h.home_id}
+                          </div>
+                          <button className="m-btn" style={{background:"#1d4ed8",color:"white",fontSize:10,padding:"5px 8px",flexShrink:0}} onClick={()=>{navigator.clipboard.writeText(window.location.origin+"?home="+h.home_id);alert("URLをコピーしました！");}}>📋</button>
+                          <a href={window.location.origin+"?home="+h.home_id} target="_blank" rel="noreferrer"><button className="m-btn" style={{background:"#064e3b",color:"#6ee7b7",fontSize:10,padding:"5px 8px"}}>↗️</button></a>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{fontSize:10,color:"#ef4444",marginBottom:8}}>⚠️ URLが未発行です（再保存で発行）</div>
+                    )}
                     <div style={{display:"flex",gap:6}}>
                       <button className="m-btn" style={{background:"#334155",color:"#94a3b8",fontSize:11,padding:"5px 10px",flex:1}} onClick={()=>{setHomeForm({name:h.name,company:h.company||"",unit:h.unit||"",address:h.address||"",capacity:String(h.capacity||""),tel:h.tel||"",open_date:h.open_date||"",note:h.note||""});setEditHomeId(h.id);setHomeModal("edit");}}>✏️ 編集</button>
                       <button className="m-btn" style={{background:"#450a0a",color:"#fca5a5",fontSize:11,padding:"5px 10px"}} onClick={()=>deleteHome(h.id)}>🗑</button>
@@ -4592,9 +4625,9 @@ function UserPortalScreen({user, onBack}) {
   useEffect(()=>{
     Promise.all([
       supabase.from("app_settings").select("value").eq("key","user_notices").single(),
-      supabase.from("user_messages").select("*").eq("user_id",user.id).order("created_at",{ascending:false}),
-      supabase.from("support_plans").select("*").eq("user_id",user.id).order("created_at",{ascending:false}).limit(3),
-      supabase.from("health_records").select("*").eq("user_id",user.id).order("date",{ascending:false}).limit(7),
+      supabase.from("user_messages").select("*").eq("home_id",HOME_ID).eq("user_id",user.id).order("created_at",{ascending:false}),
+      supabase.from("support_plans").select("*").eq("home_id",HOME_ID).eq("user_id",user.id).order("created_at",{ascending:false}).limit(3),
+      supabase.from("health_records").select("*").eq("home_id",HOME_ID).eq("user_id",user.id).order("date",{ascending:false}).limit(7),
       supabase.from("app_settings").select("value").eq("key","medication_data").single(),
     ]).then(([n,m,p,h,med])=>{
       if(n.data?.value){try{setNotices(JSON.parse(n.data.value));}catch(e){setNotices([]);}}
@@ -4607,9 +4640,9 @@ function UserPortalScreen({user, onBack}) {
 
   const sendMsg = async() => {
     if(!msgText.trim()){alert("メッセージを入力してください");return;}
-    await supabase.from("user_messages").insert({user_id:user.id,user_name:user.name,access_code:user.access_code,message:msgText,category:msgCat,is_read:false});
+    await supabase.from("user_messages").insert({home_id:HOME_ID,user_id:user.id,user_name:user.name,access_code:user.access_code,message:msgText,category:msgCat,is_read:false});
     setSent(true); setMsgText("");
-    const {data} = await supabase.from("user_messages").select("*").eq("user_id",user.id).order("created_at",{ascending:false});
+    const {data} = await supabase.from("user_messages").select("*").eq("home_id",HOME_ID).eq("user_id",user.id).order("created_at",{ascending:false});
     setMyMsgs(data||[]);
   };
 
@@ -5239,7 +5272,7 @@ function UserMsgScreen({onBack}) {
   const send = async () => {
     const u=users.find(x=>x.access_code===code);
     if(!u){setErr("アクセスコードが正しくありません");return;}
-    await supabase.from("user_messages").insert({user_id:u.id,user_name:u.name,access_code:code,message:msg,category:cat,is_read:false});
+    await supabase.from("user_messages").insert({home_id:HOME_ID,user_id:u.id,user_name:u.name,access_code:code,message:msg,category:cat,is_read:false});
     setSent(true);
   };
   return (
@@ -5455,7 +5488,7 @@ export default function App() {
       const matched=SHIFT_ENDS.find(s=>s.end===hm);
       if(!matched) return;
       const todayStr=localDate();
-      const {data:att}=await supabase.from("attendance").select("*").eq("date",todayStr).is("clock_out",null).not("clock_in",null,"is",null);
+      const {data:att}=await supabase.from("attendance").select("*").eq("home_id",HOME_ID).eq("date",todayStr).is("clock_out",null).not("clock_in",null,"is",null);
       if(!att||att.length===0) return;
       // app_settingsから通知設定取得
       const {data:cfg}=await supabase.from("app_settings").select("value").eq("key","clock_notify_settings").single();
@@ -5487,24 +5520,24 @@ export default function App() {
   const loadAll = async () => {
     setLoading(true);
     const [u,t,e,c,a,sr,sp,mo,pr,wr,fr,sc,um,st,sal,shf,hl,ex] = await Promise.all([
-      supabase.from("users").select("*").order("id"),
-      supabase.from("transport_log").select("*").order("date",{ascending:false}),
-      supabase.from("accounting_entries").select("*").order("date",{ascending:false}),
-      supabase.from("claim_data").select("*").order("id"),
-      supabase.from("attendance").select("*").order("date",{ascending:false}),
-      supabase.from("support_records").select("*").order("date",{ascending:false}),
-      supabase.from("support_plans").select("*").order("created_at",{ascending:false}),
-      supabase.from("monitoring").select("*").order("date",{ascending:false}),
-      supabase.from("performance_records").select("*").order("date",{ascending:false}),
-      supabase.from("wage_records").select("*").order("year_month",{ascending:false}),
-      supabase.from("file_records").select("*").order("date",{ascending:false}),
-      supabase.from("schedules").select("*").order("start_date",{ascending:false}),
-      supabase.from("user_messages").select("*").order("created_at",{ascending:false}),
-      supabase.from("staff_members").select("*").order("id"),
-      supabase.from("salary_records").select("*").order("year_month",{ascending:false}),
-      supabase.from("shift_requests").select("*").order("created_at",{ascending:false}),
-      supabase.from("health_records").select("*").order("date",{ascending:false}),
-      supabase.from("expense_claims").select("*").order("date",{ascending:false}),
+      supabase.from("users").select("*").eq("home_id",HOME_ID).order("id"),
+      supabase.from("transport_log").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("accounting_entries").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("claim_data").select("*").eq("home_id",HOME_ID).order("id"),
+      supabase.from("attendance").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("support_records").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("support_plans").select("*").eq("home_id",HOME_ID).order("created_at",{ascending:false}),
+      supabase.from("monitoring").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("performance_records").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("wage_records").select("*").eq("home_id",HOME_ID).order("year_month",{ascending:false}),
+      supabase.from("file_records").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("schedules").select("*").eq("home_id",HOME_ID).order("start_date",{ascending:false}),
+      supabase.from("user_messages").select("*").eq("home_id",HOME_ID).order("created_at",{ascending:false}),
+      supabase.from("staff_members").select("*").eq("home_id",HOME_ID).order("id"),
+      supabase.from("salary_records").select("*").eq("home_id",HOME_ID).order("year_month",{ascending:false}),
+      supabase.from("shift_requests").select("*").eq("home_id",HOME_ID).order("created_at",{ascending:false}),
+      supabase.from("health_records").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
+      supabase.from("expense_claims").select("*").eq("home_id",HOME_ID).order("date",{ascending:false}),
     ]);
     setUsers(u.data||[]); setTransport(t.data||[]); setEntries(e.data||[]);
     setClaims(c.data||[]); setAttendance(a.data||[]); setSrecs(sr.data||[]);
@@ -5517,7 +5550,7 @@ export default function App() {
   };
 
   const preloadStaff = async () => {
-    const {data} = await supabase.from("staff_members").select("*").order("id");
+    const {data} = await supabase.from("staff_members").select("*").eq("home_id",HOME_ID).order("id");
     setStaffList(data||[]); setAuth("staff_pin");
   };
   const preloadSabikan = async () => {
@@ -5578,7 +5611,7 @@ export default function App() {
 
   const clockIn = async () => {
     if(attendance.find(a=>a.staff_id===me?.id&&a.date===today&&!a.clock_out)){alert("本日はすでに出勤打刻済みです");return;}
-    await supabase.from("attendance").insert({staff_id:me.id,staff_name:me.name,clock_in:new Date().toISOString(),date:today});
+    await supabase.from("attendance").insert({home_id:HOME_ID,staff_id:me.id,staff_name:me.name,clock_in:new Date().toISOString(),date:today});
     loadAll();
   };
   const clockOut = async () => {
