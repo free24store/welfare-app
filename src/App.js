@@ -6,6 +6,8 @@ const supabase = createClient(
   "sb_publishable_PS9o6e0oUYuzYL6NxKVpQw_YUyHNua9"
 );
 
+const localDate = () => { const n = new Date(); return n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0")+"-"+String(n.getDate()).padStart(2,"0"); };
+
 const Icon = ({ name, size = 18 }) => {
   const icons = {
     home: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>,
@@ -185,13 +187,13 @@ function generatePayslip(r, staffInfo, attRows) {
 
 function SalaryAdminTab({staffList, salaries, attendance, loadAll, today, isMobile}) {
   const [selStaff, setSelStaff] = useState("");
-  const [ym, setYm] = useState((today||new Date().toISOString().slice(0,10)).slice(0,7));
+  const [ym, setYm] = useState((today||localDate()).slice(0,7));
   const [baseHour, setBaseHour] = useState("");
   const [extraPay, setExtraPay] = useState("0");
   const [deduct, setDeduct] = useState("0");
   const [note, setNote] = useState("");
   const [payDate, setPayDate] = useState("");
-  const [filterYm, setFilterYm] = useState((today||new Date().toISOString().slice(0,10)).slice(0,7));
+  const [filterYm, setFilterYm] = useState((today||localDate()).slice(0,7));
   const [msg, setMsg] = useState("");
 
   const calcHours = (staffId, yearMonth) => {
@@ -447,7 +449,7 @@ function MySalaryTab({me, salaries, attendance}) {
 
 function ShiftReqTab({me, shifts, loadAll, today}) {
   const [type, setType] = useState("希望休");
-  const _today = today || new Date().toISOString().slice(0,10);
+  const _today = today || localDate();
   const [dateFrom, setDateFrom] = useState(_today);
   const [dateTo, setDateTo] = useState(_today);
   const [reason, setReason] = useState("");
@@ -563,7 +565,7 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
 
 function BillingTab({claims, users, perfs, srecs, today}) {
   const [activeSection, setActiveSection] = useState("menu");
-  const [selMonth, setSelMonth] = useState((today||new Date().toISOString().slice(0,10)).slice(0,7));
+  const [selMonth, setSelMonth] = useState((today||localDate()).slice(0,7));
   const [selUser, setSelUser] = useState("全員");
   const [printMode, setPrintMode] = useState(false);
 
@@ -1552,7 +1554,7 @@ function AttendanceEditModal({rec, onClose, onSave}) {
 }
 
 function ShiftMgmtTab({staffList, isAdmin, attendance=[], me}) {
-  const today = new Date().toISOString().slice(0,10);
+  const _tn=new Date();const today=_tn.getFullYear()+"-"+String(_tn.getMonth()+1).padStart(2,"0")+"-"+String(_tn.getDate()).padStart(2,"0");
   const [selMonth, setSelMonth] = useState(today.slice(0,7));
   const [shiftData, setShiftData] = useState({});
   const [loaded, setLoaded] = useState(false);
@@ -1991,7 +1993,7 @@ ${sm.late?`<p>遅番: ${fh(sm.late)}</p>`:""}
 }
 
 function CleaningTab({staffList}) {
-  const today = new Date().toISOString().slice(0,10);
+  const _tn=new Date();const today=_tn.getFullYear()+"-"+String(_tn.getMonth()+1).padStart(2,"0")+"-"+String(_tn.getDate()).padStart(2,"0");
   const [records, setRecords] = useState([]); // [{date, shift, staff, done, note}]
   const [loaded, setLoaded] = useState(false);
   const [selDate, setSelDate] = useState(today);
@@ -2469,7 +2471,7 @@ function UserPortalScreen({user, onBack}) {
   const [plans, setPlans] = useState([]);
   const [health, setHealth] = useState([]);
   const [myMedData, setMyMedData] = useState({meds:[],notebook:[],logs:[]});
-  const today = new Date().toISOString().slice(0,10);
+  const _tn=new Date();const today=_tn.getFullYear()+"-"+String(_tn.getMonth()+1).padStart(2,"0")+"-"+String(_tn.getDate()).padStart(2,"0");
 
   useEffect(()=>{
     Promise.all([
@@ -2745,7 +2747,7 @@ function UserPortalScreen({user, onBack}) {
 // ── 管理者：お知らせ管理（利用者ポータル用） ──
 // ── お薬管理（管理者・スタッフ用） ──
 function MedicationTab({users, isAdmin}) {
-  const today = new Date().toISOString().slice(0,10);
+  const _tn=new Date();const today=_tn.getFullYear()+"-"+String(_tn.getMonth()+1).padStart(2,"0")+"-"+String(_tn.getDate()).padStart(2,"0");
   const [selUser, setSelUser] = useState("");
   const [medData, setMedData] = useState({}); // keyed by userId
   const [loaded, setLoaded] = useState(false);
@@ -3049,7 +3051,7 @@ function NoticeManagerTab() {
   const [notices, setNotices] = useState([]);
   const [loaded, setLoaded] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [form, setForm] = useState({title:"",body:"",date:new Date().toISOString().slice(0,10),important:false});
+  const [form, setForm] = useState({title:"",body:"",date:localDate(),important:false});
 
   useEffect(()=>{
     supabase.from("app_settings").select("value").eq("key","user_notices").single().then(({data})=>{
@@ -3081,7 +3083,7 @@ function NoticeManagerTab() {
             <button className="btn btn-primary btn-sm" onClick={()=>{
               if(!form.title.trim()){alert("タイトルを入力してください");return;}
               save([{...form,id:Date.now()},...notices]);
-              setForm({title:"",body:"",date:new Date().toISOString().slice(0,10),important:false});
+              setForm({title:"",body:"",date:localDate(),important:false});
               setAdding(false);
             }}>投稿</button>
             <button className="btn btn-secondary btn-sm" onClick={()=>setAdding(false)}>キャンセル</button>
@@ -3284,7 +3286,7 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({});
-  const [fDate, setFDate] = useState(new Date().toISOString().slice(0,10));
+  const [fDate, setFDate] = useState(localDate());
   const [fUser, setFUser] = useState("");
   const [fUnit, setFUnit] = useState("全棟");
   const [fCat, setFCat] = useState("全て");
@@ -3313,7 +3315,7 @@ export default function App() {
   },[]);
   const isMobile = winW < 1024;
 
-  const today = new Date().toISOString().slice(0,10);
+  const _tn=new Date();const today=_tn.getFullYear()+"-"+String(_tn.getMonth()+1).padStart(2,"0")+"-"+String(_tn.getDate()).padStart(2,"0");
   const fmt = n => Number(n||0).toLocaleString("ja-JP");
   const unread = msgs.filter(m=>!m.is_read).length;
 
@@ -3338,13 +3340,14 @@ export default function App() {
       supabase.from("staff_members").select("*").order("id"),
       supabase.from("salary_records").select("*").order("year_month",{ascending:false}),
       supabase.from("shift_requests").select("*").order("created_at",{ascending:false}),
+      supabase.from("health_records").select("*").order("date",{ascending:false}),
     ]);
     setUsers(u.data||[]); setTransport(t.data||[]); setEntries(e.data||[]);
     setClaims(c.data||[]); setAttendance(a.data||[]); setSrecs(sr.data||[]);
     setPlans(sp.data||[]); setMonitors(mo.data||[]); setPerfs(pr.data||[]);
     setWages(wr.data||[]); setFiles(fr.data||[]); setScheds(sc.data||[]);
     setMsgs(um.data||[]); setStaffList(st.data||[]);
-    setSalaries(sal.data||[]); setShifts(shf.data||[]);
+    setSalaries(sal.data||[]); setShifts(shf.data||[]); setHealth(hl.data||[]);
     setLoading(false);
   };
 
@@ -3359,9 +3362,9 @@ export default function App() {
   };
   const loginStaff = () => {
     setPinErr("");
-    const f = staffList.find(s=>s.pin===staffPin);
-    if(f){setMe(f);setIsAdmin(false);setAuth("app");setTab("attendance");}
-    else setPinErr("PINコードが違います");
+    if(!me){setPinErr("スタッフを選択してください");return;}
+    if(String(me.pin)!==String(staffPin)){setPinErr("PINコードが違います");return;}
+    setIsAdmin(false);setAuth("app");setTab("attendance");
   };
   const loginAdmin = async () => {
     setPinErr("");
@@ -3457,14 +3460,14 @@ export default function App() {
       <style>{CSS}</style>
       <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
         <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>スタッフログイン</div>
-        <select className="input" style={{marginBottom:10,textAlign:"center"}} onChange={e=>{const s=staffList.find(st=>st.id===parseInt(e.target.value));setMe(s);}}>
+        <select className="input" style={{marginBottom:10,textAlign:"center"}} value={me?.id||""} onChange={e=>{const s=staffList.find(st=>st.id===parseInt(e.target.value));setMe(s||null);}}>
           <option value="">スタッフを選択...</option>
           {staffList.map(s=><option key={s.id} value={s.id}>{s.name}（{s.role}）</option>)}
         </select>
         <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={staffPin} onChange={e=>setStaffPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginStaff()}/>
         {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
         <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8}} onClick={loginStaff}><Icon name="check" size={15}/>ログイン</button>
-        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setStaffPin("");setPinErr("");}}>← 戻る</button>
+        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setStaffPin("");setPinErr("");setMe(null);}}>← 戻る</button>
       </div>
     </div>
   );
