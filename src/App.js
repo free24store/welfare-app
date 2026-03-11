@@ -1308,79 +1308,6 @@ function BillingTab({claims, users, perfs, srecs, today}) {
   );
 }
 
-function SabikanMgmtTab() {
-  const [list, setList] = useState([]);
-  const [adding, setAdding] = useState(false);
-  const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""});
-  const load = () => { supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id").then(({data})=>setList(data||[])); };
-  useEffect(()=>{ load(); },[]);
-  const cancel = () => { setAdding(false); setEditId(null); setForm({name:"",kana:"",tel:"",email:"",certifications:"",hire_date:"",note:"",pin:""}); };
-  const submit = async () => {
-    if(!form.name.trim()){alert("名前を入力してください");return;}
-    if(!form.pin||String(form.pin).trim().length<4){alert("PINコードを4桁以上で入力してください");return;}
-    const data = {...form, home_id:HOME_ID, role:"サービス管理責任者"};
-    if(editId){ await supabase.from("staff_members").update(data).eq("id",editId); }
-    else { await supabase.from("staff_members").insert(data); }
-    cancel(); load();
-  };
-  const del = async (id) => { if(!window.confirm("本当に削除しますか？")) return; await supabase.from("staff_members").delete().eq("id",id); load(); };
-  const startEdit = (s) => { setForm({name:s.name||"",kana:s.kana||"",tel:s.tel||"",email:s.email||"",certifications:s.certifications||"",hire_date:s.hire_date||"",note:s.note||"",pin:s.pin||""}); setEditId(s.id); setAdding(true); };
-
-  return(
-    <div className="fade-in">
-      <PH title="サービス管理責任者管理" sub={`${list.length}名`} onAdd={()=>{cancel();setAdding(true);}} addLabel="新規登録"/>
-      <div className="card" style={{marginBottom:12,background:"#eff6ff",border:"1px solid #bfdbfe"}}><div style={{fontSize:12,color:"#1e40af"}}>💡 staff_membersテーブルで管理。PINは個人ごとに設定してください。</div></div>
-      {adding&&(
-        <div className="card" style={{marginBottom:14,border:"2px solid #0284c7"}}>
-          <div style={{fontWeight:700,fontSize:14,marginBottom:12,color:"#0369a1"}}>{editId?"✏️ 編集":"➕ 新規登録"}</div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:10,marginBottom:10}}>
-            {[["名前 *","name","text"],["フリガナ","kana","text"],["電話","tel","tel"],["メール","email","email"],["入職日","hire_date","date"]].map(([label,k,type])=>(
-              <div key={k}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>{label}</label>
-                <input className="input" type={type} value={form[k]||""} onChange={e=>setForm(f=>({...f,[k]:e.target.value}))}/></div>
-            ))}
-            <div><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>PINコード *<span style={{color:"#ef4444",marginLeft:2}}>(4桁以上)</span></label>
-              <input className="input" type="password" autoComplete="new-password" maxLength={8} value={form.pin||""} onChange={e=>setForm(f=>({...f,pin:e.target.value}))} placeholder="4〜8桁"/></div>
-          </div>
-          <div style={{marginBottom:10}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>保有資格（カンマ区切り）</label>
-            <input className="input" value={form.certifications||""} onChange={e=>setForm(f=>({...f,certifications:e.target.value}))} placeholder="例: 社会福祉士, 精神保健福祉士"/></div>
-          <div style={{marginBottom:12}}><label style={{fontSize:12,color:"#64748b",display:"block",marginBottom:3}}>備考</label>
-            <textarea className="input" rows={2} value={form.note||""} onChange={e=>setForm(f=>({...f,note:e.target.value}))}/></div>
-          <div style={{display:"flex",gap:8}}>
-            <button className="btn btn-primary" style={{flex:1,justifyContent:"center"}} onClick={submit}><Icon name="check" size={14}/>{editId?"更新":"登録"}</button>
-            <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={cancel}>キャンセル</button>
-          </div>
-        </div>
-      )}
-      {list.length===0&&!adding
-        ?<div className="card" style={{textAlign:"center",padding:"40px 20px",color:"#94a3b8"}}><div style={{fontSize:36,marginBottom:8}}>📝</div><div>サービス管理責任者が登録されていません</div></div>
-        :<div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:14,marginBottom:16}}>
-          {list.map((s)=>(
-            <div key={s.id} className="card">
-              <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}>
-                <div style={{width:40,height:40,borderRadius:10,background:"linear-gradient(135deg,#0369a1,#0284c7)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,color:"white",flexShrink:0,fontWeight:700}}>📋</div>
-                <div style={{flex:1}}><div style={{fontWeight:700,fontSize:14}}>{s.name}</div><div style={{fontSize:12,color:"#64748b"}}>{s.kana}</div></div>
-              </div>
-              <div style={{fontSize:12,color:"#64748b",lineHeight:2,marginBottom:8}}>
-                {s.tel&&<div>📞 {s.tel}</div>}
-                {s.email&&<div>✉️ {s.email}</div>}
-                {s.hire_date&&<div>📅 入職: {s.hire_date}</div>}
-                {s.certifications&&<div>🎓 {s.certifications}</div>}
-                {s.note&&<div style={{color:"#475569"}}>📝 {s.note}</div>}
-                <div>🔑 PIN: {s.pin?"設定済":"未設定"}</div>
-              </div>
-              <div style={{display:"flex",gap:8}}>
-                <button className="btn btn-secondary" style={{flex:1,justifyContent:"center"}} onClick={()=>startEdit(s)}><Icon name="edit" size={13}/>編集</button>
-                <button className="btn btn-red" style={{padding:"8px 12px"}} onClick={()=>del(s.id)}><Icon name="trash" size={13}/></button>
-              </div>
-            </div>
-          ))}
-        </div>
-      }
-    </div>
-  );
-}
-
 function SabikanPinResetForm() {
   const [newPin, setNewPin] = useState("");
   const [show, setShow] = useState(false);
@@ -5631,9 +5558,7 @@ export default function App() {
     if(!selSabikan.pin){setPinErr("PINが設定されていません。管理者へお問い合わせください");return;}
     if(String(selSabikan.pin)===String(sabikanPin)){
       setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");
-    } else {
-      setPinErr("PINコードが正しくありません");
-    }
+    } else { setPinErr("PINコードが正しくありません"); }
   };
   const logout = () => {setAuth("select");setIsAdmin(false);setIsSabikan(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");setSelSabikan(null);};
 
@@ -5827,7 +5752,6 @@ export default function App() {
     ]},
     {g:"スタッフ",items:[
       {id:"staff",label:"スタッフ管理",icon:"staff"},
-      {id:"sabikan_mgmt",label:"サービス管理責任者管理",icon:"staff"},
       {id:"att_admin",label:"勤怠管理",icon:"clock"},
       {id:"shift_mgmt",label:"シフト管理表",icon:"calendar"},
       {id:"salary",label:"給与計算・支払管理",icon:"wage"},
@@ -6743,9 +6667,6 @@ export default function App() {
               </MD>
             </div>
           )}
-
-          {/* ── サービス管理責任者管理 ── */}
-          {tab==="sabikan_mgmt"&&isAdmin&&<SabikanMgmtTab/>}
 
           {/* ── 勤怠管理（管理者） ── */}
           {tab==="att_admin"&&isAdmin&&<AttAdminTab attendance={attendance} today={today} loadAll={loadAll} csv={csv}/>}
