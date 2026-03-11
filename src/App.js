@@ -3430,85 +3430,140 @@ function SparkLine({data, color="#2563eb", height=40, width=120}) {
 // ═══════════════════════════════════════════════════════
 function MasterScreen({onBack}) {
   const [masterTab, setMasterTab] = useState("dashboard");
+  // 法人リスト（master_corporationsテーブル）
+  const [corps, setCorps] = useState([]);
+  // ホームリスト（master_homesテーブル）
   const [homes, setHomes] = useState([]);
-  const [allData, setAllData] = useState({});
+  // 選択中ホーム（データ閲覧タブ用）
+  const [selHomeId, setSelHomeId] = useState(null);
+  const [selHomeData, setSelHomeData] = useState(null);
+  const [selHomeLoading, setSelHomeLoading] = useState(false);
+  // 全ホームの集計データ
+  const [allStats, setAllStats] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selHome, setSelHome] = useState(null);
+  // 法人モーダル
+  const [corpModal, setCorpModal] = useState(null); // null|"add"|"edit"
+  const [corpForm, setCorpForm] = useState({name:"",representative:"",tel:"",address:"",note:""});
+  const [editCorpId, setEditCorpId] = useState(null);
+  // ホームモーダル
+  const [homeModal, setHomeModal] = useState(null);
+  const [homeForm, setHomeForm] = useState({name:"",corp_id:"",type:"グループホーム",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});
+  const [editHomeId, setEditHomeId] = useState(null);
+  // マスターPIN
   const [masterPinNew, setMasterPinNew] = useState("");
   const [pinMsg, setPinMsg] = useState("");
-  const [homeForm, setHomeForm] = useState({name:"",company:"",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});
-  const [homeModal, setHomeModal] = useState(null); // null | "add" | "edit"
-  const [editHomeId, setEditHomeId] = useState(null);
-  const [filterMonth, setFilterMonth] = useState(localDate().slice(0,7));
+  const [copiedId, setCopiedId] = useState(null);
 
-  const COLORS = ["#2563eb","#7c3aed","#059669","#d97706","#dc2626","#0891b2","#be185d","#65a30d","#9333ea","#ea580c"];
+  const COLORS = ["#3b82f6","#8b5cf6","#10b981","#f59e0b","#ef4444","#0891b2","#be185d","#65a30d","#9333ea","#ea580c"];
+  const HOME_TYPES = ["グループホーム","サテライト型住居","ショートステイ","日中活動支援"];
 
+  // ─── データロード ───────────────────────────────
   const loadMasterData = async() => {
     setLoading(true);
-    // ホーム一覧
-    const {data:hs} = await supabase.from("master_homes").select("*").order("id");
-    // "default"ホームが未登録なら自動登録
-    const defaults = (hs||[]).find(h=>h.home_id==="default");
-    if(!defaults){
-      await supabase.from("master_homes").insert({name:"グループホームつながり",company:"SOMME合同会社",home_id:"default",capacity:0});
-      const {data:hs2} = await supabase.from("master_homes").select("*").order("id");
+    // 法人
+    const {data:cs} = await supabase.from("master_corporations").select("*").order("id");
+    setCorps(cs||[]);
+    // ホーム
+    const {data:hs} = await supabase.from("master_homes").select("*").order("corp_id,id");
+    // defaultホームが未登録なら自動登録
+    if(!(hs||[]).find(h=>h.home_id==="default")){
+      await supabase.from("master_homes").insert({name:"グループホームつながり",type:"グループホーム",home_id:"default",capacity:0});
+      const {data:hs2} = await supabase.from("master_homes").select("*").order("corp_id,id");
       setHomes(hs2||[]);
-    } else {
-      setHomes(hs||[]);
-    }
-    // 全テーブルの件数サマリー
-    const [u,st,att,exp,sr,sal,tr,acc,cl,mo,pr,wr,sc,msg,pl,hlt] = await Promise.all([
-      supabase.from("users").select("id,status,unit,created_at"),
-      supabase.from("staff_members").select("id,role,full_time"),
-      supabase.from("attendance").select("id,date,staff_id,shift_type"),
-      supabase.from("expense_claims").select("id,date,amount,status,category"),
-      supabase.from("support_records").select("id,date,user_id"),
-      supabase.from("salary_records").select("id,year_month,staff_id,net_pay,gross_pay"),
-      supabase.from("transport_log").select("id,date"),
-      supabase.from("accounting_entries").select("id,date,category,amount"),
-      supabase.from("claim_data").select("id,year_month,amount,status"),
-      supabase.from("monitoring").select("id,date,user_id"),
-      supabase.from("performance_records").select("id,date,user_id,service_type"),
-      supabase.from("wage_records").select("id,year_month,amount,user_id"),
-      supabase.from("schedules").select("id,type,start_date"),
-      supabase.from("user_messages").select("id,created_at,is_read"),
-      supabase.from("support_plans").select("id,period_start,user_id,status"),
-      supabase.from("health_records").select("id,date,user_id"),
+    } else { setHomes(hs||[]); }
+
+    // 全ホームの集計（users・staff・attendance・expense件数）
+    const [u,st,att,exp,sr] = await Promise.all([
+      supabase.from("users").select("id,home_id,status"),
+      supabase.from("staff_members").select("id,home_id"),
+      supabase.from("attendance").select("id,home_id,date"),
+      supabase.from("expense_claims").select("id,home_id,amount,status"),
+      supabase.from("support_records").select("id,home_id,date"),
     ]);
-    setAllData({
-      users:u.data||[], staff:st.data||[], attendance:att.data||[],
-      expenses:exp.data||[], srecs:sr.data||[], salaries:sal.data||[],
-      transport:tr.data||[], accounting:acc.data||[], claims:cl.data||[],
-      monitoring:mo.data||[], perfs:pr.data||[], wages:wr.data||[],
-      schedules:sc.data||[], msgs:msg.data||[], plans:pl.data||[], health:hlt.data||[],
-    });
+    const thisMonth = localDate().slice(0,7);
+    const allHomeIds = [...new Set([...((hs)||[]).map(h=>h.home_id).filter(Boolean),"default"])];
+    const stats = allHomeIds.map(hid=>({
+      home_id: hid,
+      users: (u.data||[]).filter(x=>x.home_id===hid&&x.status!=="退居").length,
+      staff: (st.data||[]).filter(x=>x.home_id===hid).length,
+      att_month: (att.data||[]).filter(x=>x.home_id===hid&&x.date?.startsWith(thisMonth)).length,
+      exp_pending: (exp.data||[]).filter(x=>x.home_id===hid&&(x.status==="申請中"||x.status==="承認済")).length,
+      exp_amount: (exp.data||[]).filter(x=>x.home_id===hid).reduce((s,e)=>s+Number(e.amount||0),0),
+      srec_month: (sr.data||[]).filter(x=>x.home_id===hid&&x.date?.startsWith(thisMonth)).length,
+    }));
+    setAllStats(stats);
     setLoading(false);
   };
 
   useEffect(()=>{ loadMasterData(); },[]);
 
+  // ─── 選択ホームのデータ読み込み ─────────────────
+  const loadHomeData = async(home_id) => {
+    setSelHomeLoading(true);
+    const [u,st,att,exp,sr,sal] = await Promise.all([
+      supabase.from("users").select("*").eq("home_id",home_id).order("id"),
+      supabase.from("staff_members").select("*").eq("home_id",home_id).order("id"),
+      supabase.from("attendance").select("*").eq("home_id",home_id).order("date",{ascending:false}).limit(100),
+      supabase.from("expense_claims").select("*").eq("home_id",home_id).order("date",{ascending:false}).limit(100),
+      supabase.from("support_records").select("*").eq("home_id",home_id).order("date",{ascending:false}).limit(50),
+      supabase.from("salary_records").select("*").eq("home_id",home_id).order("year_month",{ascending:false}).limit(50),
+    ]);
+    setSelHomeData({users:u.data||[],staff:st.data||[],attendance:att.data||[],expenses:exp.data||[],srecs:sr.data||[],salaries:sal.data||[]});
+    setSelHomeLoading(false);
+  };
+
+  // ─── ID生成 ──────────────────────────────────────
   const genHomeId = () => {
     const chars="ABCDEFGHJKMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
     return Array.from({length:10},()=>chars[Math.floor(Math.random()*chars.length)]).join("");
   };
 
-  const saveHome = async() => {
-    if(!homeForm.name){return;}
-    if(homeModal==="add"){
-      const home_id = genHomeId();
-      await supabase.from("master_homes").insert({...homeForm, capacity:Number(homeForm.capacity)||0, home_id});
+  // ─── 法人CRUD ────────────────────────────────────
+  const saveCorp = async() => {
+    if(!corpForm.name){alert("法人名を入力してください");return;}
+    if(corpModal==="add"){
+      const {error}=await supabase.from("master_corporations").insert(corpForm);
+      if(error){alert("保存エラー: "+error.message);return;}
     } else {
-      await supabase.from("master_homes").update({...homeForm, capacity:Number(homeForm.capacity)||0}).eq("id",editHomeId);
+      const {error}=await supabase.from("master_corporations").update(corpForm).eq("id",editCorpId);
+      if(error){alert("更新エラー: "+error.message);return;}
     }
-    setHomeModal(null);
-    setHomeForm({name:"",company:"",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});
+    setCorpModal(null);
+    setCorpForm({name:"",representative:"",tel:"",address:"",note:""});
+    loadMasterData();
+  };
+  const deleteCorp = async(id) => {
+    if(!window.confirm("この法人を削除しますか？配下のホームも削除されます。"))return;
+    await supabase.from("master_homes").delete().eq("corp_id",id);
+    await supabase.from("master_corporations").delete().eq("id",id);
     loadMasterData();
   };
 
+  // ─── ホームCRUD ──────────────────────────────────
+  const saveHome = async() => {
+    if(!homeForm.name){alert("ホーム名を入力してください");return;}
+    if(homeModal==="add"){
+      const home_id=genHomeId();
+      const {error}=await supabase.from("master_homes").insert({...homeForm,capacity:Number(homeForm.capacity)||0,home_id});
+      if(error){alert("保存エラー: "+error.message);return;}
+    } else {
+      const {error}=await supabase.from("master_homes").update({...homeForm,capacity:Number(homeForm.capacity)||0}).eq("id",editHomeId);
+      if(error){alert("更新エラー: "+error.message);return;}
+    }
+    setHomeModal(null);
+    setHomeForm({name:"",corp_id:"",type:"グループホーム",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});
+    loadMasterData();
+  };
   const deleteHome = async(id) => {
-    if(!window.confirm("このホームを削除しますか？")) return;
+    if(!window.confirm("このホームを削除しますか？"))return;
     await supabase.from("master_homes").delete().eq("id",id);
     loadMasterData();
+  };
+
+  const copyUrl = (home_id) => {
+    navigator.clipboard.writeText(window.location.origin+"?home="+home_id);
+    setCopiedId(home_id);
+    setTimeout(()=>setCopiedId(null),2000);
   };
 
   const saveMasterPin = async() => {
@@ -3518,448 +3573,440 @@ function MasterScreen({onBack}) {
     setMasterPinNew("");
   };
 
-  // ── 集計データ計算 ──
-  const d = allData;
-  const activeUsers = (d.users||[]).filter(u=>u.status!=="退居");
-  const totalUsers = activeUsers.length;
-  const totalStaff = (d.staff||[]).length;
-  const fullTimeStaff = (d.staff||[]).filter(s=>s.full_time==="常勤").length;
-
-  // 今月の勤怠
-  const thisMonthAtt = (d.attendance||[]).filter(a=>a.date?.startsWith(filterMonth));
-  const thisMonthExp = (d.expenses||[]).filter(e=>e.date?.startsWith(filterMonth));
-  const thisMonthSal = (d.salaries||[]).filter(s=>s.year_month===filterMonth);
-  const thisMonthAcc = (d.accounting||[]).filter(a=>a.date?.startsWith(filterMonth));
-  const totalIncome = thisMonthAcc.filter(a=>a.category==="収入").reduce((s,a)=>s+Number(a.amount||0),0);
-  const totalExpenseAcc = thisMonthAcc.filter(a=>a.category==="支出").reduce((s,a)=>s+Number(a.amount||0),0);
-  const totalExpenseClaim = thisMonthExp.reduce((s,e)=>s+Number(e.amount||0),0);
-  const totalSalary = thisMonthSal.reduce((s,r)=>s+Number(r.net_pay||0),0);
-  const totalSrecs = (d.srecs||[]).filter(s=>s.date?.startsWith(filterMonth)).length;
-  const totalMessages = (d.msgs||[]).filter(m=>m.created_at?.startsWith(filterMonth)).length;
-  const unreadMessages = (d.msgs||[]).filter(m=>!m.is_read).length;
-
-  // 過去6ヶ月トレンド
-  const months6 = Array.from({length:6},(_,i)=>{
-    const d=new Date(); d.setMonth(d.getMonth()-5+i);
-    return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0");
-  });
-  const attTrend = months6.map(m=>({label:m.slice(5)+"月",value:(d.attendance||[]).filter(a=>a.date?.startsWith(m)).length}));
-  const srecTrend = months6.map(m=>({label:m.slice(5)+"月",value:(d.srecs||[]).filter(s=>s.date?.startsWith(m)).length}));
-  const expTrend = months6.map(m=>({label:m.slice(5)+"月",value:(d.expenses||[]).filter(e=>e.date?.startsWith(m)).reduce((s,e)=>s+Number(e.amount||0),0)}));
-
-  // 円グラフデータ
-  const userStatusPie = [
-    {label:"入居中",value:activeUsers.length,color:"#059669"},
-    {label:"外泊中",value:(d.users||[]).filter(u=>u.status==="外泊").length,color:"#d97706"},
-    {label:"退居",value:(d.users||[]).filter(u=>u.status==="退居").length,color:"#94a3b8"},
-  ].filter(x=>x.value>0);
-
-  const staffRolePie = [
-    {label:"世話人",value:(d.staff||[]).filter(s=>s.role==="世話人").length,color:"#2563eb"},
-    {label:"生活支援員",value:(d.staff||[]).filter(s=>s.role==="生活支援員").length,color:"#7c3aed"},
-    {label:"管理者",value:(d.staff||[]).filter(s=>s.role==="管理者"||s.role==="施設長").length,color:"#059669"},
-    {label:"その他",value:(d.staff||[]).filter(s=>!["世話人","生活支援員","管理者","施設長"].includes(s.role)).length,color:"#94a3b8"},
-  ].filter(x=>x.value>0);
-
-  const expenseCatPie = [
-    {label:"日用品",value:(d.expenses||[]).filter(e=>e.category?.includes("日用品")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#2563eb"},
-    {label:"交通費",value:(d.expenses||[]).filter(e=>e.category?.includes("交通")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#7c3aed"},
-    {label:"食材",value:(d.expenses||[]).filter(e=>e.category?.includes("食材")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#059669"},
-    {label:"医療",value:(d.expenses||[]).filter(e=>e.category?.includes("医療")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#ef4444"},
-    {label:"業務",value:(d.expenses||[]).filter(e=>e.category?.includes("業務")).reduce((s,e)=>s+Number(e.amount||0),0),color:"#d97706"},
-    {label:"その他",value:(d.expenses||[]).filter(e=>!["日用品","交通","食材","医療","業務"].some(k=>e.category?.includes(k))).reduce((s,e)=>s+Number(e.amount||0),0),color:"#94a3b8"},
-  ].filter(x=>x.value>0);
-
-  const expenseStatusPie = [
-    {label:"申請中",value:(d.expenses||[]).filter(e=>e.status==="申請中").length,color:"#d97706"},
-    {label:"承認済",value:(d.expenses||[]).filter(e=>e.status==="承認済").length,color:"#2563eb"},
-    {label:"精算済",value:(d.expenses||[]).filter(e=>e.status==="精算済").length,color:"#059669"},
-    {label:"却下",value:(d.expenses||[]).filter(e=>e.status==="却下").length,color:"#ef4444"},
-  ].filter(x=>x.value>0);
-
-  const shiftTypePie = [
-    {label:"日勤",value:thisMonthAtt.filter(a=>a.shift_type==="日勤"||!a.shift_type).length,color:"#2563eb"},
-    {label:"夜勤",value:thisMonthAtt.filter(a=>a.shift_type==="夜勤").length,color:"#7c3aed"},
-    {label:"早番",value:thisMonthAtt.filter(a=>a.shift_type==="早番").length,color:"#059669"},
-    {label:"遅番",value:thisMonthAtt.filter(a=>a.shift_type==="遅番").length,color:"#d97706"},
-  ].filter(x=>x.value>0);
-
-  const unitBar = [...new Set((d.users||[]).map(u=>u.unit).filter(Boolean))].map((unit,i)=>({
-    label:unit, value:(d.users||[]).filter(u=>u.unit===unit&&u.status!=="退居").length
-  }));
-
-  const CSS_MASTER = `
-    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;600;700;800&display=swap');
+  const CSS_M=`
+    @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Noto Sans JP',sans-serif;}
-    .m-card{background:white;border-radius:14px;padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid #f1f5f9;}
-    .m-tab{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;transition:all .15s;}
-    .m-tab-active{background:#0f172a;color:white;}
-    .m-tab-inactive{background:#f1f5f9;color:#475569;}
-    .m-kpi{background:white;border-radius:12px;padding:14px;box-shadow:0 1px 4px rgba(0,0,0,.08);border:1px solid #f1f5f9;}
-    .m-input{width:100%;padding:9px 12px;border:1.5px solid #e2e8f0;border-radius:8px;font-size:13px;outline:none;font-family:inherit;}
-    .m-input:focus{border-color:#0f172a;}
-    .m-btn{padding:8px 16px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:600;font-family:inherit;}
+    .mc{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:14px;}
+    .mc:hover{border-color:#475569;}
+    .mb{padding:7px 14px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:700;font-family:inherit;transition:opacity .15s;}
+    .mb:hover{opacity:.85;}
+    .mi{width:100%;padding:8px 11px;border:1.5px solid #334155;border-radius:8px;font-size:13px;background:#0f172a;color:#e2e8f0;outline:none;font-family:inherit;}
+    .mi:focus{border-color:#3b82f6;}
+    .mtab{padding:8px 14px;border-radius:8px;border:none;cursor:pointer;font-size:13px;font-weight:700;white-space:nowrap;font-family:inherit;}
   `;
 
-  const TABS = [
-    {id:"dashboard",label:"📊 ダッシュボード"},
-    {id:"homes",label:"🏠 ホーム管理"},
-    {id:"analytics",label:"📈 データ分析"},
+  const TABS=[
+    {id:"dashboard",label:"📊 比較ダッシュボード"},
+    {id:"corps",label:"🏢 法人・ホーム管理"},
+    {id:"viewer",label:"🔍 ホーム別データ閲覧"},
     {id:"settings",label:"⚙️ 設定"},
   ];
 
+  // ダッシュボード用：全ホームのKPI比較
+  const getHomeName = (hid) => homes.find(h=>h.home_id===hid)?.name || hid;
+
   if(loading) return(
-    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",color:"white",fontSize:14}}>
-      <style>{CSS_MASTER}</style>⏳ マスターデータ読み込み中...
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#0f172a",display:"flex",alignItems:"center",justifyContent:"center",color:"#94a3b8",fontSize:14}}>
+      <style>{CSS_M}</style>⏳ 読み込み中...
     </div>
   );
 
   return(
-    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#0f172a",color:"#f8fafc"}}>
-      <style>{CSS_MASTER}</style>
+    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"#0f172a",color:"#f1f5f9"}}>
+      <style>{CSS_M}</style>
 
       {/* ヘッダー */}
-      <div style={{background:"linear-gradient(135deg,#0f172a,#1e293b)",borderBottom:"1px solid #334155",padding:"12px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
+      <div style={{background:"#0f172a",borderBottom:"1px solid #1e293b",padding:"10px 16px",display:"flex",alignItems:"center",justifyContent:"space-between",position:"sticky",top:0,zIndex:50}}>
         <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <div style={{width:36,height:36,borderRadius:10,background:"linear-gradient(135deg,#334155,#475569)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>🛡️</div>
+          <div style={{width:34,height:34,borderRadius:9,background:"linear-gradient(135deg,#1e293b,#334155)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:16,border:"1px solid #334155"}}>🛡️</div>
           <div>
-            <div style={{fontWeight:800,fontSize:14,color:"white"}}>Master Console</div>
-            <div style={{fontSize:10,color:"#64748b"}}>グループホーム統合管理</div>
+            <div style={{fontWeight:800,fontSize:13,color:"white"}}>Master Console</div>
+            <div style={{fontSize:10,color:"#475569"}}>{homes.length}ホーム / {corps.length}法人</div>
           </div>
         </div>
-        <button onClick={onBack} style={{background:"#334155",color:"#94a3b8",border:"none",borderRadius:8,padding:"7px 14px",cursor:"pointer",fontSize:12,fontWeight:600}}>← 退出</button>
+        <button onClick={onBack} className="mb" style={{background:"#1e293b",color:"#64748b",fontSize:11}}>← 退出</button>
       </div>
 
       {/* タブ */}
-      <div style={{padding:"12px 20px",display:"flex",gap:8,overflowX:"auto",borderBottom:"1px solid #1e293b"}}>
+      <div style={{padding:"10px 16px",display:"flex",gap:6,overflowX:"auto",background:"#0f172a",borderBottom:"1px solid #1e293b"}}>
         {TABS.map(t=>(
-          <button key={t.id} className={"m-tab "+(masterTab===t.id?"m-tab-active":"m-tab-inactive")}
-            style={{whiteSpace:"nowrap",background:masterTab===t.id?"white":"#1e293b",color:masterTab===t.id?"#0f172a":"#94a3b8"}}
-            onClick={()=>setMasterTab(t.id)}>
-            {t.label}
-          </button>
+          <button key={t.id} className="mtab"
+            style={{background:masterTab===t.id?"white":"#1e293b",color:masterTab===t.id?"#0f172a":"#64748b"}}
+            onClick={()=>setMasterTab(t.id)}>{t.label}</button>
         ))}
       </div>
 
-      <div style={{padding:"16px 20px",maxWidth:1200,margin:"0 auto"}}>
+      <div style={{padding:"14px 16px",maxWidth:1100,margin:"0 auto"}}>
 
-        {/* ═══ ダッシュボード ═══ */}
+        {/* ══════════════════════════════════
+            📊 比較ダッシュボード
+        ══════════════════════════════════ */}
         {masterTab==="dashboard"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
-              <div style={{fontSize:16,fontWeight:800,color:"white"}}>概要ダッシュボード</div>
-              <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}
-                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#e2e8f0",padding:"6px 10px",fontSize:13}}/>
-            </div>
+            <div style={{fontSize:15,fontWeight:800,color:"white",marginBottom:14}}>📊 全ホーム比較ダッシュボード</div>
 
-            {/* KPIカード */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10,marginBottom:16}}>
-              {[
-                {l:"入居利用者",v:totalUsers+"名",sub:"アクティブ",c:"#3b82f6",icon:"👤"},
-                {l:"スタッフ数",v:totalStaff+"名",sub:`常勤${fullTimeStaff}名`,c:"#8b5cf6",icon:"👥"},
-                {l:"今月 支援記録",v:totalSrecs+"件",sub:filterMonth,c:"#10b981",icon:"📝"},
-                {l:"今月 勤怠打刻",v:thisMonthAtt.length+"件",sub:filterMonth,c:"#f59e0b",icon:"⏰"},
-                {l:"今月 立替総額",v:"¥"+totalExpenseClaim.toLocaleString(),sub:`${thisMonthExp.length}件`,c:"#ef4444",icon:"🧾"},
-                {l:"今月 収入",v:"¥"+(totalIncome/10000).toFixed(0)+"万",sub:"経理登録",c:"#059669",icon:"💰"},
-                {l:"今月 支出",v:"¥"+(totalExpenseAcc/10000).toFixed(0)+"万",sub:"経理登録",c:"#dc2626",icon:"💸"},
-                {l:"未読メッセージ",v:unreadMessages+"件",sub:`今月${totalMessages}件`,c:"#0891b2",icon:"💬"},
-              ].map((k,i)=>(
-                <div key={i} className="m-kpi" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                  <div style={{fontSize:18,marginBottom:4}}>{k.icon}</div>
-                  <div style={{fontSize:11,color:"#64748b",marginBottom:2}}>{k.l}</div>
-                  <div style={{fontSize:20,fontWeight:800,color:k.c}}>{k.v}</div>
-                  <div style={{fontSize:10,color:"#475569"}}>{k.sub}</div>
-                </div>
-              ))}
-            </div>
-
-            {/* グラフ行1 */}
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(260px,1fr))",gap:12,marginBottom:12}}>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>👤 利用者ステータス</div>
-                <PieChart data={userStatusPie} size={150} />
-              </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>👥 スタッフ役職別</div>
-                <PieChart data={staffRolePie} size={150} />
-              </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>🧾 立替ステータス</div>
-                <PieChart data={expenseStatusPie} size={150} />
-              </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:12}}>⏰ 今月シフト種別</div>
-                <PieChart data={shiftTypePie} size={150} />
-              </div>
-            </div>
-
-            {/* グラフ行2：トレンド */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:12}}>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📅 月別 勤怠打刻数（6ヶ月）</div>
-                <BarChart data={attTrend} height={110} color="#3b82f6"/>
-              </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📝 月別 支援記録数（6ヶ月）</div>
-                <BarChart data={srecTrend} height={110} color="#10b981"/>
-              </div>
-            </div>
-
-            {/* 棟別利用者 + 立替カテゴリ */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🏠 棟別 入居者数</div>
-                {unitBar.length>0?<BarChart data={unitBar} height={110} color={COLORS}/>:<div style={{color:"#64748b",fontSize:12,padding:"20px",textAlign:"center"}}>データなし</div>}
-              </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🧾 立替カテゴリ別金額（全期間）</div>
-                <PieChart data={expenseCatPie} size={140}/>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ═══ ホーム管理 ═══ */}
-        {masterTab==="homes"&&(
-          <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div style={{fontSize:16,fontWeight:800,color:"white"}}>🏠 ホーム・ユニット管理</div>
-              <button className="m-btn" style={{background:"#3b82f6",color:"white"}} onClick={()=>{setHomeForm({name:"",company:"",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});setHomeModal("add");}}>＋ ホーム追加</button>
-            </div>
-
-            {homes.length===0&&<div className="m-card" style={{background:"#1e293b",border:"1px solid #334155",textAlign:"center",padding:40,color:"#64748b"}}>登録されているホームがありません<br/><span style={{fontSize:12}}>「ホーム追加」から登録してください</span></div>}
-
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:12}}>
-              {homes.map((h,i)=>{
-                const hUsers = (d.users||[]).filter(u=>u.unit===h.unit&&u.status!=="退居");
-                const hStaff = (d.staff||[]).filter(s=>s.unit===h.unit||true); // unit未紐付けのため全員
-                const fillRate = h.capacity>0?Math.round(hUsers.length/h.capacity*100):null;
+            {/* ホーム別KPIカード */}
+            {allStats.length===0&&<div style={{color:"#64748b",textAlign:"center",padding:40}}>ホームデータがありません</div>}
+            <div style={{display:"grid",gap:10,marginBottom:16}}>
+              {allStats.map((s,i)=>{
+                const home = homes.find(h=>h.home_id===s.home_id);
+                if(!home) return null;
+                const corp = corps.find(c=>c.id===home.corp_id);
+                const fillRate = home.capacity>0?Math.round(s.users/home.capacity*100):null;
+                const color = COLORS[i%COLORS.length];
                 return(
-                  <div key={h.id} className="m-card" style={{background:"#1e293b",border:"1px solid #334155",cursor:"pointer",transition:"border-color .15s"}}
-                    onMouseEnter={e=>e.currentTarget.style.borderColor="#3b82f6"}
-                    onMouseLeave={e=>e.currentTarget.style.borderColor="#334155"}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                  <div key={s.home_id} className="mc" style={{borderLeft:`3px solid ${color}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:6}}>
                       <div>
-                        <div style={{fontWeight:800,fontSize:15,color:"white",marginBottom:2}}>{h.name}</div>
-                        <div style={{fontSize:11,color:"#64748b"}}>{h.company} {h.unit&&<span>/ {h.unit}棟</span>}</div>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                          <span style={{fontWeight:800,fontSize:14,color:"white"}}>{home.name}</span>
+                          <span style={{fontSize:10,padding:"2px 6px",borderRadius:5,background:color+"20",color,border:`1px solid ${color}40`}}>{home.type||"GH"}</span>
+                          {corp&&<span style={{fontSize:10,color:"#64748b"}}>🏢 {corp.name}</span>}
+                        </div>
+                        {home.unit&&<div style={{fontSize:11,color:"#64748b"}}>{home.unit}</div>}
                       </div>
-                      <div style={{width:10,height:10,borderRadius:"50%",background:COLORS[i%COLORS.length],marginTop:4}}/>
+                      {fillRate!=null&&(
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:10,color:"#64748b"}}>充填率</div>
+                          <div style={{fontSize:18,fontWeight:800,color:fillRate>=90?"#ef4444":fillRate>=70?"#f59e0b":"#10b981"}}>{fillRate}%</div>
+                        </div>
+                      )}
                     </div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
+                    {/* 充填率バー */}
+                    {fillRate!=null&&(
+                      <div style={{height:5,background:"#334155",borderRadius:3,marginBottom:10}}>
+                        <div style={{height:"100%",width:Math.min(fillRate,100)+"%",background:fillRate>=90?"#ef4444":fillRate>=70?"#f59e0b":"#10b981",borderRadius:3,transition:"width .4s"}}/>
+                      </div>
+                    )}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(100px,1fr))",gap:6}}>
                       {[
-                        {l:"定員",v:h.capacity||"-"},
-                        {l:"入居者",v:hUsers.length+"名"},
-                        {l:"充填率",v:fillRate!=null?fillRate+"%":"-"},
+                        {l:"入居者",v:s.users+"名",c:"#3b82f6"},
+                        {l:"スタッフ",v:s.staff+"名",c:"#8b5cf6"},
+                        {l:"今月打刻",v:s.att_month+"件",c:"#10b981"},
+                        {l:"支援記録",v:s.srec_month+"件",c:"#f59e0b"},
+                        {l:"立替未精算",v:s.exp_pending+"件",c:s.exp_pending>0?"#ef4444":"#64748b"},
                       ].map((k,j)=>(
                         <div key={j} style={{textAlign:"center",padding:"8px 4px",background:"#0f172a",borderRadius:8}}>
-                          <div style={{fontSize:10,color:"#64748b"}}>{k.l}</div>
-                          <div style={{fontSize:16,fontWeight:800,color:"white"}}>{k.v}</div>
+                          <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>{k.l}</div>
+                          <div style={{fontSize:15,fontWeight:800,color:k.c}}>{k.v}</div>
                         </div>
                       ))}
-                    </div>
-                    {fillRate!=null&&(
-                      <div style={{height:6,background:"#334155",borderRadius:3,marginBottom:10}}>
-                        <div style={{height:"100%",width:Math.min(fillRate,100)+"%",background:fillRate>=90?"#ef4444":fillRate>=70?"#d97706":"#3b82f6",borderRadius:3,transition:"width .3s"}}/>
-                      </div>
-                    )}
-                    <div style={{fontSize:11,color:"#64748b",marginBottom:10}}>
-                      {h.address&&<div>📍 {h.address}</div>}
-                      {h.tel&&<div>📞 {h.tel}</div>}
-                      {h.open_date&&<div>📅 開設: {h.open_date}</div>}
-                      {h.note&&<div>📝 {h.note}</div>}
-                    </div>
-                    {/* URL発行エリア */}
-                    {h.home_id ? (
-                      <div style={{marginBottom:8}}>
-                        <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>🔗 管理画面URL</div>
-                        <div style={{display:"flex",gap:4,alignItems:"center"}}>
-                          <div style={{flex:1,fontSize:10,padding:"5px 8px",background:"#0f172a",borderRadius:6,color:"#94a3b8",wordBreak:"break-all",fontFamily:"monospace",border:"1px solid #334155"}}>
-                            {window.location.origin}?home={h.home_id}
-                          </div>
-                          <button className="m-btn" style={{background:"#1d4ed8",color:"white",fontSize:10,padding:"5px 8px",flexShrink:0}} onClick={()=>{navigator.clipboard.writeText(window.location.origin+"?home="+h.home_id);alert("URLをコピーしました！");}}>📋</button>
-                          <a href={window.location.origin+"?home="+h.home_id} target="_blank" rel="noreferrer"><button className="m-btn" style={{background:"#064e3b",color:"#6ee7b7",fontSize:10,padding:"5px 8px"}}>↗️</button></a>
-                        </div>
-                      </div>
-                    ) : (
-                      <div style={{fontSize:10,color:"#ef4444",marginBottom:8}}>⚠️ URLが未発行です（再保存で発行）</div>
-                    )}
-                    <div style={{display:"flex",gap:6}}>
-                      <button className="m-btn" style={{background:"#334155",color:"#94a3b8",fontSize:11,padding:"5px 10px",flex:1}} onClick={()=>{setHomeForm({name:h.name,company:h.company||"",unit:h.unit||"",address:h.address||"",capacity:String(h.capacity||""),tel:h.tel||"",open_date:h.open_date||"",note:h.note||""});setEditHomeId(h.id);setHomeModal("edit");}}>✏️ 編集</button>
-                      <button className="m-btn" style={{background:"#450a0a",color:"#fca5a5",fontSize:11,padding:"5px 10px"}} onClick={()=>deleteHome(h.id)}>🗑</button>
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {/* ホーム追加・編集モーダル */}
-            {homeModal&&(
-              <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setHomeModal(null)}>
-                <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:24,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
-                  <div style={{fontWeight:800,fontSize:15,color:"white",marginBottom:16}}>{homeModal==="add"?"🏠 ホーム追加":"🏠 ホーム編集"}</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-                    {[
-                      {l:"ホーム名 *",k:"name",type:"text",span:2},
-                      {l:"運営会社",k:"company",type:"text"},
-                      {l:"棟・ユニット名",k:"unit",type:"text"},
-                      {l:"定員",k:"capacity",type:"number"},
-                      {l:"電話番号",k:"tel",type:"tel"},
-                      {l:"開設日",k:"open_date",type:"date"},
-                      {l:"住所",k:"address",type:"text",span:2},
-                      {l:"備考",k:"note",type:"text",span:2},
-                    ].map(f=>(
-                      <div key={f.k} style={{gridColumn:f.span?"span 2":"span 1"}}>
-                        <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>{f.l}</label>
-                        <input className="m-input" type={f.type||"text"} value={homeForm[f.k]} onChange={e=>setHomeForm(fm=>({...fm,[f.k]:e.target.value}))}
-                          style={{background:"#0f172a",borderColor:"#334155",color:"white"}}/>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{display:"flex",gap:8}}>
-                    <button className="m-btn" style={{background:"#3b82f6",color:"white",flex:1}} onClick={saveHome}>保存</button>
-                    <button className="m-btn" style={{background:"#334155",color:"#94a3b8"}} onClick={()=>setHomeModal(null)}>キャンセル</button>
-                  </div>
-                </div>
+            {/* 比較グラフ（入居者数・スタッフ数） */}
+            {allStats.length>1&&(
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {[
+                  {title:"👤 入居者数比較",key:"users",color:"#3b82f6"},
+                  {title:"👥 スタッフ数比較",key:"staff",color:"#8b5cf6"},
+                  {title:"📝 今月支援記録",key:"srec_month",color:"#10b981"},
+                  {title:"⏰ 今月打刻数",key:"att_month",color:"#f59e0b"},
+                ].map(({title,key,color})=>{
+                  const data = allStats.map(s=>({
+                    label: homes.find(h=>h.home_id===s.home_id)?.name?.slice(0,6)||s.home_id,
+                    value: s[key]
+                  }));
+                  return(
+                    <div key={key} className="mc">
+                      <div style={{fontSize:11,fontWeight:700,color:"#94a3b8",marginBottom:8}}>{title}</div>
+                      <BarChart data={data} height={100} color={color}/>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
         )}
 
-        {/* ═══ データ分析 ═══ */}
-        {masterTab==="analytics"&&(
+        {/* ══════════════════════════════════
+            🏢 法人・ホーム管理
+        ══════════════════════════════════ */}
+        {masterTab==="corps"&&(
           <div>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
-              <div style={{fontSize:16,fontWeight:800,color:"white"}}>📈 詳細データ分析</div>
-              <input type="month" value={filterMonth} onChange={e=>setFilterMonth(e.target.value)}
-                style={{background:"#1e293b",border:"1px solid #334155",borderRadius:8,color:"#e2e8f0",padding:"6px 10px",fontSize:13}}/>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+              <div style={{fontSize:15,fontWeight:800,color:"white"}}>🏢 法人・ホーム管理</div>
+              <button className="mb" style={{background:"#3b82f6",color:"white"}} onClick={()=>{setCorpForm({name:"",representative:"",tel:"",address:"",note:""});setCorpModal("add");}}>＋ 法人追加</button>
             </div>
 
-            {/* 財務分析 */}
-            <div style={{fontSize:13,fontWeight:700,color:"#64748b",marginBottom:8,marginTop:4}}>💰 財務・経費分析</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,marginBottom:12}}>
-              {[
-                {l:"今月 収入合計",v:"¥"+totalIncome.toLocaleString(),c:"#10b981"},
-                {l:"今月 支出合計",v:"¥"+totalExpenseAcc.toLocaleString(),c:"#ef4444"},
-                {l:"収支差額",v:(totalIncome-totalExpenseAcc>=0?"+":"")+"¥"+(totalIncome-totalExpenseAcc).toLocaleString(),c:totalIncome-totalExpenseAcc>=0?"#10b981":"#ef4444"},
-                {l:"今月 立替払い",v:"¥"+totalExpenseClaim.toLocaleString(),c:"#f59e0b"},
-                {l:"今月 給与合計",v:"¥"+totalSalary.toLocaleString(),c:"#8b5cf6"},
-                {l:"立替 未精算件数",v:(d.expenses||[]).filter(e=>e.status==="申請中"||e.status==="承認済").length+"件",c:"#dc2626"},
-              ].map((k,i)=>(
-                <div key={i} className="m-kpi" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                  <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div>
+            {/* 法人なし：ホームを直接登録 */}
+            <div className="mc" style={{marginBottom:14}}>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                <div>
+                  <div style={{fontWeight:700,fontSize:13,color:"white"}}>🏠 法人未所属のホーム</div>
+                  <div style={{fontSize:11,color:"#64748b",marginTop:2}}>法人に所属しないホーム・直接管理するホーム</div>
                 </div>
-              ))}
-            </div>
-
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📊 月別立替金額推移（6ヶ月）</div>
-                <BarChart data={expTrend} height={120} color="#f59e0b"/>
+                <button className="mb" style={{background:"#10b981",color:"white",fontSize:11}} onClick={()=>{setHomeForm({name:"",corp_id:"",type:"グループホーム",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});setHomeModal("add");}}>＋ ホーム追加</button>
               </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🧾 立替カテゴリ別（全期間累計）</div>
-                <PieChart data={expenseCatPie} size={150}/>
+              <div style={{display:"grid",gap:8}}>
+                {homes.filter(h=>!h.corp_id).map(h=><HomeCard key={h.id} h={h} onEdit={()=>{setHomeForm({name:h.name,corp_id:"",type:h.type||"グループホーム",unit:h.unit||"",address:h.address||"",capacity:String(h.capacity||""),tel:h.tel||"",open_date:h.open_date||"",note:h.note||""});setEditHomeId(h.id);setHomeModal("edit");}} onDelete={()=>deleteHome(h.id)} onCopy={()=>copyUrl(h.home_id)} copied={copiedId===h.home_id} stats={allStats.find(s=>s.home_id===h.home_id)} onView={()=>{setSelHomeId(h.home_id);loadHomeData(h.home_id);setMasterTab("viewer");}}/>)}
+                {homes.filter(h=>!h.corp_id).length===0&&<div style={{fontSize:12,color:"#475569",padding:"12px",textAlign:"center"}}>未所属のホームはありません</div>}
               </div>
             </div>
 
-            {/* 支援・ケア分析 */}
-            <div style={{fontSize:13,fontWeight:700,color:"#64748b",marginBottom:8}}>📝 支援・ケア分析</div>
-            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10,marginBottom:12}}>
-              {[
-                {l:"今月 支援記録",v:totalSrecs+"件",c:"#10b981"},
-                {l:"今月 モニタリング",v:(d.monitoring||[]).filter(m=>m.date?.startsWith(filterMonth)).length+"件",c:"#3b82f6"},
-                {l:"今月 健康記録",v:(d.health||[]).filter(h=>h.date?.startsWith(filterMonth)).length+"件",c:"#8b5cf6"},
-                {l:"今月 外泊予定",v:(d.schedules||[]).filter(s=>s.type==="外泊"&&s.start_date?.startsWith(filterMonth)).length+"件",c:"#d97706"},
-                {l:"活動中 支援計画",v:(d.plans||[]).filter(p=>p.status==="進行中"||!p.status).length+"件",c:"#059669"},
-                {l:"利用者 メッセージ",v:totalMessages+"件",c:"#0891b2"},
-              ].map((k,i)=>(
-                <div key={i} className="m-kpi" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                  <div style={{fontSize:11,color:"#64748b",marginBottom:4}}>{k.l}</div>
-                  <div style={{fontSize:18,fontWeight:800,color:k.c}}>{k.v}</div>
+            {/* 法人ごとの表示 */}
+            {corps.map((corp,ci)=>(
+              <div key={corp.id} className="mc" style={{marginBottom:12,borderLeft:`3px solid ${COLORS[ci%COLORS.length]}`}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                  <div>
+                    <div style={{fontWeight:800,fontSize:14,color:"white",marginBottom:2}}>🏢 {corp.name}</div>
+                    <div style={{fontSize:11,color:"#64748b",display:"flex",gap:10,flexWrap:"wrap"}}>
+                      {corp.representative&&<span>代表: {corp.representative}</span>}
+                      {corp.tel&&<span>📞 {corp.tel}</span>}
+                      {corp.address&&<span>📍 {corp.address}</span>}
+                    </div>
+                  </div>
+                  <div style={{display:"flex",gap:4,flexShrink:0}}>
+                    <button className="mb" style={{background:"#10b981",color:"white",fontSize:11}} onClick={()=>{setHomeForm({name:"",corp_id:corp.id,type:"グループホーム",unit:"",address:"",capacity:"",tel:"",open_date:"",note:""});setHomeModal("add");}}>＋ ホーム</button>
+                    <button className="mb" style={{background:"#334155",color:"#94a3b8",fontSize:11}} onClick={()=>{setCorpForm({name:corp.name,representative:corp.representative||"",tel:corp.tel||"",address:corp.address||"",note:corp.note||""});setEditCorpId(corp.id);setCorpModal("edit");}}>✏️</button>
+                    <button className="mb" style={{background:"#450a0a",color:"#fca5a5",fontSize:11}} onClick={()=>deleteCorp(corp.id)}>🗑</button>
+                  </div>
                 </div>
-              ))}
-            </div>
-
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>📅 月別 支援記録数（6ヶ月）</div>
-                <BarChart data={srecTrend} height={110} color="#10b981"/>
+                {/* 配下のホーム */}
+                <div style={{display:"grid",gap:8}}>
+                  {homes.filter(h=>h.corp_id===corp.id).map(h=>(
+                    <HomeCard key={h.id} h={h} onEdit={()=>{setHomeForm({name:h.name,corp_id:corp.id,type:h.type||"グループホーム",unit:h.unit||"",address:h.address||"",capacity:String(h.capacity||""),tel:h.tel||"",open_date:h.open_date||"",note:h.note||""});setEditHomeId(h.id);setHomeModal("edit");}} onDelete={()=>deleteHome(h.id)} onCopy={()=>copyUrl(h.home_id)} copied={copiedId===h.home_id} stats={allStats.find(s=>s.home_id===h.home_id)} onView={()=>{setSelHomeId(h.home_id);loadHomeData(h.home_id);setMasterTab("viewer");}}/>
+                  ))}
+                  {homes.filter(h=>h.corp_id===corp.id).length===0&&<div style={{fontSize:12,color:"#475569",padding:"10px",textAlign:"center"}}>まだホームが登録されていません</div>}
+                </div>
               </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>🏠 棟別 入居者分布</div>
-                {unitBar.length>0?<BarChart data={unitBar} height={110} color={COLORS}/>:<div style={{color:"#64748b",fontSize:12,padding:"20px",textAlign:"center"}}>棟データなし</div>}
-              </div>
-            </div>
-
-            {/* スタッフ分析 */}
-            <div style={{fontSize:13,fontWeight:700,color:"#64748b",marginBottom:8}}>👥 スタッフ分析</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>👥 役職構成</div>
-                <PieChart data={staffRolePie} size={150}/>
-              </div>
-              <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-                <div style={{fontSize:12,fontWeight:700,color:"#94a3b8",marginBottom:8}}>⏰ 今月シフト種別</div>
-                <PieChart data={shiftTypePie} size={150}/>
-              </div>
-            </div>
+            ))}
           </div>
         )}
 
-        {/* ═══ 設定 ═══ */}
-        {masterTab==="settings"&&(
+        {/* ══════════════════════════════════
+            🔍 ホーム別データ閲覧
+        ══════════════════════════════════ */}
+        {masterTab==="viewer"&&(
           <div>
-            <div style={{fontSize:16,fontWeight:800,color:"white",marginBottom:16}}>⚙️ マスター設定</div>
+            <div style={{fontSize:15,fontWeight:800,color:"white",marginBottom:12}}>🔍 ホーム別データ閲覧</div>
 
-            <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155",marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:14,color:"white",marginBottom:12}}>🔑 マスターPIN変更</div>
-              <div style={{fontSize:12,color:"#64748b",marginBottom:10}}>現在のマスターPINを変更します（初期値: 999999）</div>
-              <input className="m-input" type="password" maxLength={8} placeholder="新しいマスターPIN（4〜8桁）"
-                value={masterPinNew} onChange={e=>setMasterPinNew(e.target.value)}
-                style={{background:"#0f172a",borderColor:"#334155",color:"white",marginBottom:8}}/>
-              {pinMsg&&<div style={{fontSize:12,color:pinMsg.startsWith("✅")?"#10b981":"#ef4444",marginBottom:8}}>{pinMsg}</div>}
-              <button className="m-btn" style={{background:"#3b82f6",color:"white"}} onClick={saveMasterPin}>更新</button>
-            </div>
-
-            <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155",marginBottom:12}}>
-              <div style={{fontWeight:700,fontSize:14,color:"white",marginBottom:8}}>📊 データ概要</div>
-              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(160px,1fr))",gap:8}}>
-                {[
-                  ["利用者総数",(d.users||[]).length+"名"],
-                  ["スタッフ総数",(d.staff||[]).length+"名"],
-                  ["支援記録総数",(d.srecs||[]).length+"件"],
-                  ["勤怠記録総数",(d.attendance||[]).length+"件"],
-                  ["立替総件数",(d.expenses||[]).length+"件"],
-                  ["立替総額","¥"+(d.expenses||[]).reduce((s,e)=>s+Number(e.amount||0),0).toLocaleString()],
-                  ["メッセージ総数",(d.msgs||[]).length+"件"],
-                  ["ホーム登録数",homes.length+"件"],
-                ].map(([l,v],i)=>(
-                  <div key={i} style={{padding:"10px",background:"#0f172a",borderRadius:8}}>
-                    <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>{l}</div>
-                    <div style={{fontSize:15,fontWeight:800,color:"#e2e8f0"}}>{v}</div>
-                  </div>
+            {/* ホーム選択 */}
+            <div className="mc" style={{marginBottom:14}}>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:8}}>閲覧するホームを選択してください</div>
+              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                {homes.map((h,i)=>(
+                  <button key={h.id} className="mb"
+                    style={{background:selHomeId===h.home_id?COLORS[i%COLORS.length]:"#1e293b",color:selHomeId===h.home_id?"white":"#94a3b8",border:`1px solid ${selHomeId===h.home_id?COLORS[i%COLORS.length]:"#334155"}`}}
+                    onClick={()=>{setSelHomeId(h.home_id);loadHomeData(h.home_id);}}>
+                    {h.name}
+                    {h.type&&h.type!=="グループホーム"&&<span style={{fontSize:10,marginLeft:4,opacity:.7}}>({h.type.slice(0,3)})</span>}
+                  </button>
                 ))}
               </div>
             </div>
 
-            <div className="m-card" style={{background:"#1e293b",border:"1px solid #334155"}}>
-              <div style={{fontWeight:700,fontSize:14,color:"white",marginBottom:8}}>🛡️ アクセス方法</div>
-              <div style={{fontSize:12,color:"#64748b",lineHeight:1.8}}>
-                <div>• ログイン画面のロゴアイコンを <b style={{color:"#e2e8f0"}}>5回連続タップ</b> でマスターPIN入力画面へ</div>
+            {!selHomeId&&<div style={{color:"#475569",textAlign:"center",padding:40,fontSize:13}}>↑ ホームを選択するとデータが表示されます</div>}
+            {selHomeId&&selHomeLoading&&<div style={{color:"#64748b",textAlign:"center",padding:40}}>⏳ 読み込み中...</div>}
+
+            {selHomeId&&!selHomeLoading&&selHomeData&&(()=>{
+              const hd = selHomeData;
+              const home = homes.find(h=>h.home_id===selHomeId);
+              const thisMonth = localDate().slice(0,7);
+              const activeUsers = hd.users.filter(u=>u.status!=="退居");
+              const thisMonthAtt = hd.attendance.filter(a=>a.date?.startsWith(thisMonth));
+              const pendingExp = hd.expenses.filter(e=>e.status==="申請中"||e.status==="承認済");
+              return(
+                <div>
+                  <div style={{fontWeight:800,fontSize:14,color:"white",marginBottom:12}}>
+                    🏠 {home?.name}
+                    {home?.type&&<span style={{fontSize:11,color:"#64748b",marginLeft:8}}>{home.type}</span>}
+                  </div>
+                  {/* KPI */}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(120px,1fr))",gap:8,marginBottom:14}}>
+                    {[
+                      {l:"入居者",v:activeUsers.length+"名",c:"#3b82f6"},
+                      {l:"スタッフ",v:hd.staff.length+"名",c:"#8b5cf6"},
+                      {l:"今月打刻",v:thisMonthAtt.length+"件",c:"#10b981"},
+                      {l:"今月支援記録",v:hd.srecs.filter(s=>s.date?.startsWith(thisMonth)).length+"件",c:"#f59e0b"},
+                      {l:"立替未精算",v:pendingExp.length+"件",c:pendingExp.length>0?"#ef4444":"#64748b"},
+                      {l:"立替総額",v:"¥"+(hd.expenses.reduce((s,e)=>s+Number(e.amount||0),0)).toLocaleString(),c:"#94a3b8"},
+                    ].map((k,i)=>(
+                      <div key={i} style={{background:"#0f172a",borderRadius:10,padding:"10px",textAlign:"center",border:"1px solid #1e293b"}}>
+                        <div style={{fontSize:10,color:"#64748b",marginBottom:2}}>{k.l}</div>
+                        <div style={{fontSize:16,fontWeight:800,color:k.c}}>{k.v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* 利用者一覧 */}
+                  <div className="mc" style={{marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:12,color:"#94a3b8",marginBottom:8}}>👤 利用者（{activeUsers.length}名）</div>
+                    {activeUsers.length===0?<div style={{fontSize:12,color:"#475569",padding:"10px",textAlign:"center"}}>利用者データなし</div>:(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {activeUsers.map(u=>(
+                          <div key={u.id} style={{fontSize:12,padding:"4px 10px",background:"#0f172a",borderRadius:8,color:"#e2e8f0",border:"1px solid #334155"}}>
+                            {u.name} <span style={{fontSize:10,color:"#64748b"}}>{u.unit||""}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* スタッフ一覧 */}
+                  <div className="mc" style={{marginBottom:10}}>
+                    <div style={{fontWeight:700,fontSize:12,color:"#94a3b8",marginBottom:8}}>👥 スタッフ（{hd.staff.length}名）</div>
+                    {hd.staff.length===0?<div style={{fontSize:12,color:"#475569",padding:"10px",textAlign:"center"}}>スタッフデータなし</div>:(
+                      <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+                        {hd.staff.map(s=>(
+                          <div key={s.id} style={{fontSize:12,padding:"4px 10px",background:"#0f172a",borderRadius:8,color:"#e2e8f0",border:"1px solid #334155"}}>
+                            {s.name} <span style={{fontSize:10,color:"#64748b"}}>{s.role||""}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  {/* 立替未精算 */}
+                  {pendingExp.length>0&&(
+                    <div className="mc" style={{marginBottom:10,borderLeft:"3px solid #ef4444"}}>
+                      <div style={{fontWeight:700,fontSize:12,color:"#ef4444",marginBottom:8}}>🧾 立替未精算（{pendingExp.length}件）</div>
+                      <div style={{display:"grid",gap:6}}>
+                        {pendingExp.slice(0,5).map(e=>(
+                          <div key={e.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,padding:"6px 10px",background:"#0f172a",borderRadius:8,color:"#e2e8f0"}}>
+                            <span>{e.date} {e.staff_name} - {e.description}</span>
+                            <span style={{color:"#f59e0b",fontWeight:700}}>¥{Number(e.amount||0).toLocaleString()}</span>
+                          </div>
+                        ))}
+                        {pendingExp.length>5&&<div style={{fontSize:11,color:"#64748b",textAlign:"center"}}>他{pendingExp.length-5}件...</div>}
+                      </div>
+                    </div>
+                  )}
+                  {/* 管理画面リンク */}
+                  <div className="mc">
+                    <div style={{fontWeight:700,fontSize:12,color:"#94a3b8",marginBottom:8}}>🔗 管理画面URL</div>
+                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                      <div style={{flex:1,fontSize:11,padding:"7px 10px",background:"#0f172a",borderRadius:8,color:"#64748b",wordBreak:"break-all",fontFamily:"monospace",border:"1px solid #1e293b"}}>
+                        {window.location.origin}?home={selHomeId}
+                      </div>
+                      <button className="mb" style={{background:copiedId===selHomeId?"#059669":"#1d4ed8",color:"white",padding:"7px 10px",flexShrink:0}} onClick={()=>copyUrl(selHomeId)}>
+                        {copiedId===selHomeId?"✅ コピー済":"📋 コピー"}
+                      </button>
+                      <a href={window.location.origin+"?home="+selHomeId} target="_blank" rel="noreferrer">
+                        <button className="mb" style={{background:"#064e3b",color:"#6ee7b7",padding:"7px 10px"}}>↗️ 開く</button>
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {/* ══════════════════════════════════
+            ⚙️ 設定
+        ══════════════════════════════════ */}
+        {masterTab==="settings"&&(
+          <div>
+            <div style={{fontSize:15,fontWeight:800,color:"white",marginBottom:14}}>⚙️ マスター設定</div>
+            <div className="mc" style={{marginBottom:12}}>
+              <div style={{fontWeight:700,fontSize:13,color:"white",marginBottom:8}}>🔑 マスターPIN変更</div>
+              <div style={{fontSize:12,color:"#64748b",marginBottom:8}}>初期値: 999999</div>
+              <input className="mi" type="password" maxLength={8} placeholder="新しいPIN（4〜8桁）" value={masterPinNew} onChange={e=>setMasterPinNew(e.target.value)} style={{marginBottom:8}}/>
+              {pinMsg&&<div style={{fontSize:12,color:pinMsg.startsWith("✅")?"#10b981":"#ef4444",marginBottom:8}}>{pinMsg}</div>}
+              <button className="mb" style={{background:"#3b82f6",color:"white"}} onClick={saveMasterPin}>更新</button>
+            </div>
+            <div className="mc">
+              <div style={{fontWeight:700,fontSize:13,color:"white",marginBottom:8}}>🛡️ アクセス方法</div>
+              <div style={{fontSize:12,color:"#64748b",lineHeight:1.9}}>
+                <div>• ログイン画面の🏠ロゴを <b style={{color:"#e2e8f0"}}>5回連続タップ</b> → マスターPIN入力</div>
                 <div>• 通常の管理者・スタッフ画面からは一切アクセス不可</div>
-                <div>• マスターPINは管理者PINとは別に管理してください</div>
-                <div>• ナビゲーションにも表示されません</div>
+                <div>• 各ホームURL: <span style={{color:"#94a3b8",fontFamily:"monospace"}}>{window.location.origin}?home=【ホームID】</span></div>
               </div>
             </div>
           </div>
         )}
 
       </div>
+
+      {/* ─── 法人モーダル ─── */}
+      {corpModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setCorpModal(null)}>
+          <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:22,width:"100%",maxWidth:460}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontWeight:800,fontSize:14,color:"white",marginBottom:14}}>{corpModal==="add"?"🏢 法人追加":"🏢 法人編集"}</div>
+            <div style={{display:"grid",gap:8,marginBottom:12}}>
+              {[{l:"法人名 *",k:"name",span:2},{l:"代表者名",k:"representative"},{l:"電話番号",k:"tel"},{l:"住所",k:"address",span:2},{l:"備考",k:"note",span:2}].map(f=>(
+                <div key={f.k} style={{gridColumn:f.span?"span 2":"span 1"}}>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>{f.l}</label>
+                  <input className="mi" type="text" value={corpForm[f.k]} onChange={e=>setCorpForm(fm=>({...fm,[f.k]:e.target.value}))}/>
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="mb" style={{background:"#3b82f6",color:"white",flex:1,padding:"9px"}} onClick={saveCorp}>保存</button>
+              <button className="mb" style={{background:"#334155",color:"#94a3b8",padding:"9px 16px"}} onClick={()=>setCorpModal(null)}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── ホームモーダル ─── */}
+      {homeModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setHomeModal(null)}>
+          <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:22,width:"100%",maxWidth:480}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontWeight:800,fontSize:14,color:"white",marginBottom:14}}>{homeModal==="add"?"🏠 ホーム追加":"🏠 ホーム編集"}</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:12}}>
+              {[
+                {l:"ホーム名 *",k:"name",span:2},
+                {l:"種別",k:"type",type:"select",opts:HOME_TYPES},
+                {l:"棟・ユニット名",k:"unit"},
+                {l:"定員",k:"capacity",type:"number"},
+                {l:"電話番号",k:"tel"},
+                {l:"開設日",k:"open_date",type:"date"},
+                {l:"住所",k:"address",span:2},
+                {l:"備考",k:"note",span:2},
+              ].map(f=>(
+                <div key={f.k} style={{gridColumn:f.span?"span 2":"span 1"}}>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>{f.l}</label>
+                  {f.type==="select"
+                    ?<select className="mi" value={homeForm[f.k]} onChange={e=>setHomeForm(fm=>({...fm,[f.k]:e.target.value}))}>
+                        {f.opts.map(o=><option key={o}>{o}</option>)}
+                      </select>
+                    :<input className="mi" type={f.type||"text"} value={homeForm[f.k]} onChange={e=>setHomeForm(fm=>({...fm,[f.k]:e.target.value}))}/>
+                  }
+                </div>
+              ))}
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="mb" style={{background:"#3b82f6",color:"white",flex:1,padding:"9px"}} onClick={saveHome}>保存</button>
+              <button className="mb" style={{background:"#334155",color:"#94a3b8",padding:"9px 16px"}} onClick={()=>setHomeModal(null)}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
+// ホームカード（法人管理タブ内で使い回す）
+function HomeCard({h, onEdit, onDelete, onCopy, copied, stats, onView}) {
+  const fillRate = h.capacity>0&&stats?Math.round(stats.users/h.capacity*100):null;
+  const typeColor = h.type==="サテライト型住居"?"#f59e0b":h.type==="ショートステイ"?"#10b981":"#3b82f6";
+  return(
+    <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:10,padding:"10px 12px"}}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+            <span style={{fontWeight:700,fontSize:13,color:"white"}}>{h.name}</span>
+            <span style={{fontSize:10,padding:"1px 6px",borderRadius:5,background:typeColor+"20",color:typeColor,border:`1px solid ${typeColor}40`}}>{h.type||"GH"}</span>
+            {h.unit&&<span style={{fontSize:10,color:"#64748b"}}>{h.unit}</span>}
+            {h.home_id==="default"&&<span style={{fontSize:10,padding:"1px 6px",borderRadius:5,background:"#7c3aed20",color:"#a78bfa",border:"1px solid #7c3aed40"}}>既存データ</span>}
+          </div>
+          {stats&&(
+            <div style={{display:"flex",gap:8,fontSize:11,color:"#64748b",marginTop:3,flexWrap:"wrap"}}>
+              <span>入居 {stats.users}名</span>
+              <span>スタッフ {stats.staff}名</span>
+              {fillRate!=null&&<span style={{color:fillRate>=90?"#ef4444":fillRate>=70?"#f59e0b":"#10b981"}}>充填率 {fillRate}%</span>}
+            </div>
+          )}
+        </div>
+        <div style={{display:"flex",gap:4,flexShrink:0,marginLeft:8}}>
+          <button style={{fontSize:11,padding:"4px 8px",background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,cursor:"pointer",fontWeight:600}} onClick={onView}>🔍</button>
+          <button style={{fontSize:11,padding:"4px 8px",background:copied?"#065f46":"#1d4ed8",color:copied?"#6ee7b7":"white",border:"none",borderRadius:6,cursor:"pointer",fontWeight:600}} onClick={onCopy}>{copied?"✅":"📋"}</button>
+          <button style={{fontSize:11,padding:"4px 8px",background:"#1e293b",color:"#94a3b8",border:"1px solid #334155",borderRadius:6,cursor:"pointer"}} onClick={onEdit}>✏️</button>
+          {h.home_id!=="default"&&<button style={{fontSize:11,padding:"4px 8px",background:"#450a0a",color:"#fca5a5",border:"none",borderRadius:6,cursor:"pointer"}} onClick={onDelete}>🗑</button>}
+        </div>
+      </div>
+      {h.home_id&&h.home_id!=="default"&&(
+        <div style={{fontSize:10,color:"#334155",fontFamily:"monospace",marginTop:4,padding:"3px 6px",background:"#0f172a",borderRadius:4,border:"1px solid #1e293b",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {window.location.origin}?home={h.home_id}
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function ExportAllTab({users,staffList,attendance,transport,entries,claims,srecs,plans,monitors,perfs,wages,files,scheds,msgs,salaries,shifts,health,expenses}) {
   const [exporting, setExporting] = useState(false);
