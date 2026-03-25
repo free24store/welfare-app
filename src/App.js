@@ -32,6 +32,7 @@ const Icon = ({ name, size = 18 }) => {
     clock: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
     book: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>,
     news: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 22h16a2 2 0 0 0 2-2V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v16a2 2 0 0 0-2 2zm0 0a2 2 0 0 1-2-2v-9c0-1.1.9-2 2-2h2"/><path d="M18 14h-8"/><path d="M15 18h-5"/><path d="M10 6h8v4h-8V6z"/></svg>,
+    lock: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>,
     shield: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>,
     hint: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>,
     download: <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
@@ -5497,6 +5498,10 @@ export default function App() {
   const [loginPassword, setLoginPassword] = useState("");
   const [loginError, setLoginError] = useState("");
   const [authUser, setAuthUser] = useState(null);
+  const [showPwChange, setShowPwChange] = useState(false);
+  const [newPw, setNewPw] = useState("");
+  const [newPwConfirm, setNewPwConfirm] = useState("");
+  const [pwChangeMsg, setPwChangeMsg] = useState("");
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
 
@@ -5674,6 +5679,17 @@ export default function App() {
   };
 
   const logout = async () => {await supabase.auth.signOut();setAuth("select");setIsAdmin(false);setIsSabikan(false);setIsMaster(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");setSelSabikan(null);setLoginEmail("");setLoginPassword("");setLoginError("");setAuthUser(null);};
+  const handlePasswordChange = async () => {
+    setPwChangeMsg("");
+    if(!newPw||!newPwConfirm){setPwChangeMsg("新しいパスワードを入力してください");return;}
+    if(newPw!==newPwConfirm){setPwChangeMsg("パスワードが一致しません");return;}
+    if(newPw.length<6){setPwChangeMsg("パスワードは6文字以上で入力してください");return;}
+    const{error}=await supabase.auth.updateUser({password:newPw});
+    if(error){setPwChangeMsg("エラー: "+error.message);return;}
+    setPwChangeMsg("パスワードを変更しました");
+    setNewPw("");setNewPwConfirm("");
+    setTimeout(()=>{setShowPwChange(false);setPwChangeMsg("");},2000);
+  };
 
   const openModal = (name,init={}) => {setForm(init);setModal(name);setEditId(null);};
   const openEdit = (name,row) => {setForm({...row});setModal(name);setEditId(row.id);};
@@ -5920,9 +5936,25 @@ export default function App() {
               ))}
             </div>
           ))}
-        </aside>
+                      <div style={{marginTop:"auto",padding:"8px 6px",borderTop:"1px solid #e2e8f0"}}>
+                <button className="nav-item" onClick={()=>{setShowPwChange(true);setPwChangeMsg("");setNewPw("");setNewPwConfirm("");}} style={{width:"100%",color:"#64748b",fontSize:12}}>
+                  <Icon name="lock" size={14}/>パスワード変更
+                </button>
+              </div>
+</aside>
 
-        <main ref={mainRef} style={{flex:1,padding:isMobile?"16px 12px 60px":"18px 18px 60px",overflowY:"auto",overflowX:"hidden",minWidth:0,minHeight:0}}>
+        {showPwChange && (
+<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:1000,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setShowPwChange(false)}>
+<div style={{background:"white",borderRadius:12,padding:24,width:340,maxWidth:"90%"}} onClick={e=>e.stopPropagation()}>
+<h3 style={{margin:"0 0 16px",fontSize:16}}>パスワード変更</h3>
+<input type="password" placeholder="新しいパスワード" value={newPw} onChange={e=>setNewPw(e.target.value)} style={{width:"100%",padding:"8px 12px",border:"1px solid #cbd5e1",borderRadius:6,marginBottom:8,boxSizing:"border-box"}}/>
+<input type="password" placeholder="新しいパスワード（確認）" value={newPwConfirm} onChange={e=>setNewPwConfirm(e.target.value)} style={{width:"100%",padding:"8px 12px",border:"1px solid #cbd5e1",borderRadius:6,marginBottom:12,boxSizing:"border-box"}}/>
+{pwChangeMsg&&<div style={{padding:"6px 0",fontSize:13,color:pwChangeMsg.includes("変更しました")?"#16a34a":"#dc2626"}}>{pwChangeMsg}</div>}
+<div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+<button onClick={()=>setShowPwChange(false)} style={{padding:"6px 16px",border:"1px solid #cbd5e1",borderRadius:6,background:"white",cursor:"pointer"}}>キャンセル</button>
+<button onClick={handlePasswordChange} style={{padding:"6px 16px",border:"none",borderRadius:6,background:"#2563eb",color:"white",cursor:"pointer"}}>変更する</button>
+</div></div></div>)}
+<main ref={mainRef} style={{flex:1,padding:isMobile?"16px 12px 60px":"18px 18px 60px",overflowY:"auto",overflowX:"hidden",minWidth:0,minHeight:0}}>
 
           {/* ── DASHBOARD ── */}
           {tab==="dashboard"&&isAdmin&&(
