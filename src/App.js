@@ -3487,6 +3487,14 @@ function MasterScreen({onBack}) {
   const [noteFilter, setNoteFilter] = useState("all");
   const [alerts, setAlerts] = useState([]);
   const [monthlyTrend, setMonthlyTrend] = useState([]);
+  const [research, setResearch] = useState([]);
+  const [checklist, setChecklist] = useState([]);
+  const [researchFilter, setResearchFilter] = useState("all");
+  const [checklistFilter, setChecklistFilter] = useState("all");
+  const [researchModal, setResearchModal] = useState(null);
+  const [researchForm, setResearchForm] = useState({category:"行政情報",title:"",content:"",source:"",source_url:"",importance:"中"});
+  const [editResearchId, setEditResearchId] = useState(null);
+  const [advisorTab, setAdvisorTab] = useState("research");
 
   const COLORS = ["#3b82f6","#8b5cf6","#10b981","#f59e0b","#ef4444","#0891b2","#be185d","#65a30d","#9333ea","#ea580c"];
   const HOME_TYPES = ["グループホーム","サテライト型住居","ショートステイ","日中活動支援"];
@@ -3529,6 +3537,8 @@ function MasterScreen({onBack}) {
     generateAlerts(stats, hs||[]);
     generateMonthlyTrend(att.data, sr.data);
     loadNotes();
+    loadResearch();
+    loadChecklist();
     setLoading(false);
   };
 
@@ -3654,7 +3664,39 @@ useEffect(()=>{ loadMasterData(); },[]);
     setMasterPinNew("");
   };
 
-    const NOTE_CATEGORIES = ["\u30E1\u30E2","\u6539\u5584\u63D0\u6848","\u30EA\u30B9\u30AF","\u30D5\u30A9\u30ED\u30FC\u30A2\u30C3\u30D7","\u76E3\u67FB\u6307\u6458","\u7814\u4FEE"];
+      const loadResearch = async() => {
+    const {data} = await supabase.from("master_research").select("*").order("created_at",{ascending:false});
+    setResearch(data||[]);
+  };
+  const loadChecklist = async() => {
+    const {data} = await supabase.from("master_checklist").select("*").order("category,id");
+    setChecklist(data||[]);
+  };
+  const RESEARCH_CATEGORIES = ["行政情報","報酬改定","市場動向","補助金","地域情報","研修・セミナー"];
+  const saveResearch = async() => {
+    if(!researchForm.title){alert("\u30BF\u30A4\u30C8\u30EB\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");return;}
+    if(researchModal==="add"){
+      const {error}=await supabase.from("master_research").insert(researchForm);
+      if(error){alert("\u4FDD\u5B58\u30A8\u30E9\u30FC: "+error.message);return;}
+    } else {
+      const {error}=await supabase.from("master_research").update({...researchForm,updated_at:new Date().toISOString()}).eq("id",editResearchId);
+      if(error){alert("\u66F4\u65B0\u30A8\u30E9\u30FC: "+error.message);return;}
+    }
+    setResearchModal(null);
+    setResearchForm({category:"\u884C\u653F\u60C5\u5831",title:"",content:"",source:"",source_url:"",importance:"\u4E2D"});
+    loadResearch();
+  };
+  const deleteResearch = async(id) => {
+    if(!window.confirm("\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F"))return;
+    await supabase.from("master_research").delete().eq("id",id);
+    loadResearch();
+  };
+  const toggleCheck = async(item) => {
+    const newChecked = !item.checked;
+    await supabase.from("master_checklist").update({checked:newChecked,checked_date:newChecked?localDate():null}).eq("id",item.id);
+    loadChecklist();
+  };
+const NOTE_CATEGORIES = ["\u30E1\u30E2","\u6539\u5584\u63D0\u6848","\u30EA\u30B9\u30AF","\u30D5\u30A9\u30ED\u30FC\u30A2\u30C3\u30D7","\u76E3\u67FB\u6307\u6458","\u7814\u4FEE"];
   const NOTE_PRIORITIES = ["\u9AD8","\u4E2D","\u4F4E"];
   const NOTE_STATUSES = ["\u672A\u5BFE\u5FDC","\u5BFE\u5FDC\u4E2D","\u5B8C\u4E86","\u4FDD\u7559"];
   const saveNote = async() => {
@@ -3696,6 +3738,7 @@ const CSS_M=`
   const TABS=[
     {id:"dashboard",label:"📊 ダッシュボード"},
     {id:"notes",label:"📋 ノート"},
+    {id:"advisor",label:"📚 アドバイザリー"},
     {id:"corps",label:"🏢 法人・ホーム"},
     {id:"viewer",label:"🔍 データ閲覧"},
     {id:"settings",label:"⚙️ 設定"},
@@ -3860,7 +3903,153 @@ const CSS_M=`
           </div>
         )}
 
-        {/* コンサルノート */}
+        {/* アドバイザリー */}
+          {masterTab==="advisor"&&(
+            <div>
+              <div style={{fontSize:15,fontWeight:800,color:"white",marginBottom:14}}>📚 アドバイザリー</div>
+              {/* サブタブ */}
+              <div style={{display:"flex",gap:6,marginBottom:14}}>
+                {[{id:"research",label:"📄 行政・市場情報"},{id:"checklist",label:"✅ 運営チェックリスト"},{id:"benchmark",label:"📊 KPIベンチマーク"}].map(t=>(
+                  <button key={t.id} className="mb" style={{background:advisorTab===t.id?"#3b82f6":"#1e293b",color:advisorTab===t.id?"white":"#94a3b8",border:"1px solid "+(advisorTab===t.id?"#3b82f6":"#334155")}} onClick={()=>setAdvisorTab(t.id)}>{t.label}</button>
+                ))}
+              </div>
+
+              {/* 行政・市場情報 */}
+              {advisorTab==="research"&&(
+                <div>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                      {["all",...RESEARCH_CATEGORIES].map(f=>(
+                        <button key={f} className="mb" style={{background:researchFilter===f?"#8b5cf6":"#1e293b",color:researchFilter===f?"white":"#94a3b8",fontSize:11,border:"1px solid "+(researchFilter===f?"#8b5cf6":"#334155")}} onClick={()=>setResearchFilter(f)}>{f==="all"?"すべて":f}</button>
+                      ))}
+                    </div>
+                    <button className="mb" style={{background:"#3b82f6",color:"white"}} onClick={()=>{setResearchForm({category:"行政情報",title:"",content:"",source:"",source_url:"",importance:"中"});setResearchModal("add");}}>＋ 情報追加</button>
+                  </div>
+                  <div style={{display:"grid",gap:8}}>
+                    {research.filter(r=>researchFilter==="all"||r.category===researchFilter).map(r=>{
+                      const impColor=r.importance==="高"?"#ef4444":r.importance==="中"?"#f59e0b":"#64748b";
+                      const catColor=r.category==="報酬改定"?"#ef4444":r.category==="行政情報"?"#3b82f6":r.category==="市場動向"?"#10b981":r.category==="補助金"?"#f59e0b":"#8b5cf6";
+                      return(
+                        <div key={r.id} className="mc" style={{borderLeft:"3px solid "+catColor}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                            <div style={{flex:1}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
+                                <span style={{fontSize:10,padding:"2px 6px",borderRadius:5,background:catColor+"20",color:catColor,border:"1px solid "+catColor+"40"}}>{r.category}</span>
+                                <span style={{fontSize:10,padding:"2px 6px",borderRadius:5,background:impColor+"20",color:impColor}}>重要度:{r.importance}</span>
+                                {r.source&&<span style={{fontSize:10,color:"#64748b"}}>📁 {r.source}</span>}
+                              </div>
+                              <div style={{fontWeight:700,fontSize:13,color:"white",marginBottom:4}}>{r.title}</div>
+                              {r.content&&<div style={{fontSize:12,color:"#94a3b8",lineHeight:1.7,whiteSpace:"pre-wrap"}}>{r.content}</div>}
+                            </div>
+                            <div style={{display:"flex",gap:4,flexShrink:0}}>
+                              <button className="mb" style={{background:"#334155",color:"#94a3b8",fontSize:11}} onClick={()=>{setResearchForm({category:r.category,title:r.title,content:r.content||"",source:r.source||"",source_url:r.source_url||"",importance:r.importance||"中"});setEditResearchId(r.id);setResearchModal("edit");}}>✏️</button>
+                              <button className="mb" style={{background:"#450a0a",color:"#fca5a5",fontSize:11}} onClick={()=>deleteResearch(r.id)}>🗑</button>
+                            </div>
+                          </div>
+                          <div style={{fontSize:10,color:"#475569",marginTop:4}}>{r.updated_at?.slice(0,10)}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* 運営チェックリスト */}
+              {advisorTab==="checklist"&&(
+                <div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                    {["all","人員配置","記録・書類","運営基準","届出・報告"].map(f=>(
+                      <button key={f} className="mb" style={{background:checklistFilter===f?"#10b981":"#1e293b",color:checklistFilter===f?"white":"#94a3b8",fontSize:11,border:"1px solid "+(checklistFilter===f?"#10b981":"#334155")}} onClick={()=>setChecklistFilter(f)}>{f==="all"?"すべて":f}</button>
+                    ))}
+                  </div>
+                  {(()=>{
+                    const filtered=checklist.filter(cl=>checklistFilter==="all"||cl.category===checklistFilter);
+                    const total=filtered.length;
+                    const done=filtered.filter(cl=>cl.checked).length;
+                    const pct=total>0?Math.round(done/total*100):0;
+                    return(
+                      <div>
+                        <div className="mc" style={{marginBottom:12,borderLeft:"3px solid "+(pct===100?"#10b981":pct>=50?"#f59e0b":"#ef4444")}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                            <span style={{fontWeight:700,fontSize:13,color:"white"}}>達成率</span>
+                            <span style={{fontSize:20,fontWeight:800,color:pct===100?"#10b981":pct>=50?"#f59e0b":"#ef4444"}}>{pct}%</span>
+                          </div>
+                          <div style={{height:8,background:"#334155",borderRadius:4}}>
+                            <div style={{height:"100%",width:pct+"%",background:pct===100?"#10b981":pct>=50?"#f59e0b":"#ef4444",borderRadius:4,transition:"width .4s"}}/>
+                          </div>
+                          <div style={{fontSize:11,color:"#64748b",marginTop:4}}>{done}/{total}項目完了</div>
+                        </div>
+                        <div style={{display:"grid",gap:6}}>
+                          {filtered.map(cl=>(
+                            <div key={cl.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"10px 12px",background:cl.checked?"#0f172a80":"#0f172a",borderRadius:10,border:"1px solid "+(cl.checked?"#1e293b":"#334155"),opacity:cl.checked?.6:1,cursor:"pointer"}} onClick={()=>toggleCheck(cl)}>
+                              <div style={{width:22,height:22,borderRadius:6,border:"2px solid "+(cl.checked?"#10b981":"#475569"),background:cl.checked?"#10b981":"transparent",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1}}>
+                                {cl.checked&&<span style={{color:"white",fontSize:14,fontWeight:700}}>✓</span>}
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:2}}>
+                                  <span style={{fontSize:10,padding:"1px 5px",borderRadius:4,background:"#1e293b",color:"#94a3b8"}}>{cl.category}</span>
+                                  <span style={{fontWeight:700,fontSize:12,color:cl.checked?"#64748b":"white",textDecoration:cl.checked?"line-through":"none"}}>{cl.item}</span>
+                                </div>
+                                {cl.description&&<div style={{fontSize:11,color:"#64748b"}}>{cl.description}</div>}
+                                {cl.checked_date&&<div style={{fontSize:10,color:"#10b981",marginTop:2}}>✅ {cl.checked_date}に確認済</div>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* KPIベンチマーク */}
+              {advisorTab==="benchmark"&&(
+                <div>
+                  <div style={{fontSize:13,fontWeight:700,color:"#94a3b8",marginBottom:12}}>🎯 業界標準KPIとの比較</div>
+                  {allStats.map((s,i)=>{
+                    const home=homes.find(h=>h.home_id===s.home_id);
+                    if(!home) return null;
+                    const fillRate=home.capacity>0?Math.round(s.users/home.capacity*100):null;
+                    const staffRatio=s.staff>0?(s.users/s.staff).toFixed(1):"N/A";
+                    const srecRate=s.users>0?Math.round(s.srec_month/s.users*100):0;
+                    const benchmarks=[
+                      {label:"充填率",value:fillRate!=null?fillRate+"%":"N/A",target:"85%以上",ok:fillRate!=null&&fillRate>=85,warn:fillRate!=null&&fillRate>=70&&fillRate<85,color:fillRate!=null&&fillRate>=85?"#10b981":fillRate!=null&&fillRate>=70?"#f59e0b":"#ef4444"},
+                      {label:"人員配置比",value:staffRatio,target:"6:1以下",ok:s.staff>0&&s.users/s.staff<=6,warn:s.staff>0&&s.users/s.staff<=8,color:s.staff>0&&s.users/s.staff<=6?"#10b981":s.staff>0&&s.users/s.staff<=8?"#f59e0b":"#ef4444"},
+                      {label:"支援記録率",value:srecRate+"%",target:"100%",ok:srecRate>=100,warn:srecRate>=50,color:srecRate>=100?"#10b981":srecRate>=50?"#f59e0b":"#ef4444"},
+                      {label:"立替未精算",value:s.exp_pending+"件",target:"0件",ok:s.exp_pending===0,warn:s.exp_pending<=3,color:s.exp_pending===0?"#10b981":s.exp_pending<=3?"#f59e0b":"#ef4444"},
+                    ];
+                    return(
+                      <div key={s.home_id} className="mc" style={{marginBottom:10,borderLeft:"3px solid "+COLORS[i%COLORS.length]}}>
+                        <div style={{fontWeight:800,fontSize:13,color:"white",marginBottom:10}}>{home.name}</div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:8}}>
+                          {benchmarks.map((b,j)=>(
+                            <div key={j} style={{background:"#0f172a",borderRadius:10,padding:"10px 12px",border:"1px solid "+b.color+"30"}}>
+                              <div style={{fontSize:10,color:"#64748b",marginBottom:4}}>{b.label}</div>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"baseline"}}>
+                                <span style={{fontSize:18,fontWeight:800,color:b.color}}>{b.value}</span>
+                                <span style={{fontSize:9,color:"#475569"}}>目標:{b.target}</span>
+                              </div>
+                              <div style={{fontSize:10,marginTop:4,color:b.ok?"#10b981":b.warn?"#f59e0b":"#ef4444"}}>{b.ok?"✅ 達成":b.warn?"⚠️ 要改善":"❌ 未達成"}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div className="mc" style={{marginTop:12,borderLeft:"3px solid #8b5cf6"}}>
+                    <div style={{fontWeight:700,fontSize:13,color:"#8b5cf6",marginBottom:8}}>💡 コンサルティングアドバイス</div>
+                    <div style={{fontSize:12,color:"#94a3b8",lineHeight:1.8}}>
+                      {alerts.filter(a=>a.type==="danger").length>0&&<div>⚠️ <b style={{color:"#fca5a5"}}>緊急対応:</b> {alerts.filter(a=>a.type==="danger").map(a=>a.msg).join("、")}</div>}
+                      {allStats.some(s=>s.srec_month===0&&s.users>0)&&<div>📝 <b style={{color:"#fcd34d"}}>推奨:</b> 支援記録が未作成のホームがあります。記録作成ルールの研修を検討してください。</div>}
+                      {allStats.some(s=>homes.find(h=>h.home_id===s.home_id&&h.capacity>0)&&s.users/homes.find(h=>h.home_id===s.home_id).capacity<0.7)&&<div>📈 <b style={{color:"#93c5fd"}}>営業提案:</b> 充填率が70%未満のホームがあります。相談支援事業所への営業強化を提案します。</div>}
+                      <div>📅 <b style={{color:"#a5b4fc"}}>次回確認:</b> 実地指導対策として運営チェックリストの完了率100%を目指してください。</div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+          {/* コンサルノート */}
           {masterTab==="notes"&&(
             <div>
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -4165,7 +4354,47 @@ const CSS_M=`
           </div>
         </div>
       )}
-      {/* ノートモーダル */}
+            {/* 情報モーダル */}
+      {researchModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setResearchModal(null)}>
+          <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:22,width:"100%",maxWidth:500,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontWeight:800,fontSize:14,color:"white",marginBottom:14}}>{researchModal==="add"?"📚 情報追加":"📚 情報編集"}</div>
+            <div style={{display:"grid",gap:10,marginBottom:14}}>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>タイトル *</label>
+                <input className="mi" value={researchForm.title} onChange={e=>setResearchForm(f=>({...f,title:e.target.value}))}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>カテゴリ</label>
+                  <select className="mi" value={researchForm.category} onChange={e=>setResearchForm(f=>({...f,category:e.target.value}))}>
+                    {RESEARCH_CATEGORIES.map(ct=><option key={ct}>{ct}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>重要度</label>
+                  <select className="mi" value={researchForm.importance} onChange={e=>setResearchForm(f=>({...f,importance:e.target.value}))}>
+                    {["高","中","低"].map(p=><option key={p}>{p}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>情報ソース</label>
+                <input className="mi" value={researchForm.source} onChange={e=>setResearchForm(f=>({...f,source:e.target.value}))} placeholder="例: 厚生労働省"/>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>内容</label>
+                <textarea className="mi" rows={5} value={researchForm.content} onChange={e=>setResearchForm(f=>({...f,content:e.target.value}))} style={{resize:"vertical"}}/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="mb" style={{background:"#3b82f6",color:"white",flex:1,padding:"9px"}} onClick={saveResearch}>保存</button>
+              <button className="mb" style={{background:"#334155",color:"#94a3b8",padding:"9px 16px"}} onClick={()=>setResearchModal(null)}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+{/* ノートモーダル */}
       {noteModal&&(
         <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setNoteModal(null)}>
           <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:22,width:"100%",maxWidth:500,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
