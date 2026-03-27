@@ -3480,6 +3480,22 @@ function MasterScreen({onBack}) {
   const [masterPinNew, setMasterPinNew] = useState("");
   const [pinMsg, setPinMsg] = useState("");
   const [copiedId, setCopiedId] = useState(null);
+  const [incidents, setIncidents] = useState([]);
+  const [incidentModal, setIncidentModal] = useState(false);
+  const [incidentForm, setIncidentForm] = useState({report_date:localDate(),report_time:"",reporter_name:"",incident_type:"ヒヤリハット",severity:"軽微",location:"",resident_name:"",description:"",cause:"",action_taken:"",prevention:"",status:"未対応"});
+  const [editIncidentId, setEditIncidentId] = useState(null);
+  const [incidentFilter, setIncidentFilter] = useState("all");
+  const [handovers, setHandovers] = useState([]);
+  const [handoverModal, setHandoverModal] = useState(false);
+  const [handoverForm, setHandoverForm] = useState({note_date:localDate(),shift_type:"日勤",author_name:"",category:"一般",priority:"通常",content:"",target_staff:""});
+  const [editHandoverId, setEditHandoverId] = useState(null);
+  const [handoverFilter, setHandoverFilter] = useState("all");
+  const [visits, setVisits] = useState([]);
+  const [visitModal, setVisitModal] = useState(false);
+  const [visitForm, setVisitForm] = useState({visit_date:localDate(),visit_time:"",resident_name:"",visitor_name:"",visitor_relation:"",purpose:"",duration_minutes:"",notes:"",staff_name:""});
+  const [editVisitId, setEditVisitId] = useState(null);
+  const [visitFilter, setVisitFilter] = useState("all");
+
   const [notes, setNotes] = useState([]);
   const [noteModal, setNoteModal] = useState(null);
   const [noteForm, setNoteForm] = useState({home_id:"",category:"メモ",title:"",content:"",priority:"中",status:"未対応",due_date:""});
@@ -6108,7 +6124,8 @@ export default function App() {
     setSalaries(sal.data||[]); setShifts(shf.data||[]); setHealth(hl.data||[]);
     setExpenses(ex.data||[]);
     setLoading(false);
-  };
+  
+    loadIncidents(); loadHandovers(); loadVisits();};
 
   const handleEmailLogin = async () => {
     setLoginError("");
@@ -6181,6 +6198,64 @@ export default function App() {
     setCustomTemplates(newT);
     await supabase.from("app_settings").upsert({key:"custom_templates",value:JSON.stringify(newT)},{onConflict:"key"});
   };
+
+  // === ヒヤリハット・事故報告 CRUD ===
+  const loadIncidents = async () => {
+    const {data} = await supabase.from("incident_reports").select("*").eq("home_id", HOME_ID).order("report_date",{ascending:false});
+    if(data) setIncidents(data);
+  };
+  const saveIncident = async () => {
+    if(!incidentForm.reporter_name||!incidentForm.description) return alert("報告者名と内容は必須です");
+    const payload = {...incidentForm, home_id: HOME_ID, updated_at: new Date().toISOString()};
+    if(editIncidentId){
+      await supabase.from("incident_reports").update(payload).eq("id",editIncidentId);
+    } else {
+      await supabase.from("incident_reports").insert(payload);
+    }
+    setIncidentModal(false); setEditIncidentId(null);
+    setIncidentForm({report_date:localDate(),report_time:"",reporter_name:"",incident_type:"ヒヤリハット",severity:"軽微",location:"",resident_name:"",description:"",cause:"",action_taken:"",prevention:"",status:"未対応"});
+    loadIncidents();
+  };
+  const deleteIncident = async (id) => { if(!window.confirm("削除しますか？")){return;} await supabase.from("incident_reports").delete().eq("id",id); loadIncidents(); };
+
+  // === 申し送りノート CRUD ===
+  const loadHandovers = async () => {
+    const {data} = await supabase.from("handover_notes").select("*").eq("home_id", HOME_ID).order("note_date",{ascending:false}).order("created_at",{ascending:false});
+    if(data) setHandovers(data);
+  };
+  const saveHandover = async () => {
+    if(!handoverForm.author_name||!handoverForm.content) return alert("記入者と内容は必須です");
+    const payload = {...handoverForm, home_id: HOME_ID};
+    if(editHandoverId){
+      await supabase.from("handover_notes").update(payload).eq("id",editHandoverId);
+    } else {
+      await supabase.from("handover_notes").insert(payload);
+    }
+    setHandoverModal(false); setEditHandoverId(null);
+    setHandoverForm({note_date:localDate(),shift_type:"日勤",author_name:"",category:"一般",priority:"通常",content:"",target_staff:""});
+    loadHandovers();
+  };
+  const deleteHandover = async (id) => { if(!window.confirm("削除しますか？")){return;} await supabase.from("handover_notes").delete().eq("id",id); loadHandovers(); };
+
+  // === 面会記録 CRUD ===
+  const loadVisits = async () => {
+    const {data} = await supabase.from("visit_records").select("*").eq("home_id", HOME_ID).order("visit_date",{ascending:false});
+    if(data) setVisits(data);
+  };
+  const saveVisit = async () => {
+    if(!visitForm.resident_name||!visitForm.visitor_name) return alert("利用者名と来訪者名は必須です");
+    const payload = {...visitForm, home_id: HOME_ID, duration_minutes: visitForm.duration_minutes ? Number(visitForm.duration_minutes) : null};
+    if(editVisitId){
+      await supabase.from("visit_records").update(payload).eq("id",editVisitId);
+    } else {
+      await supabase.from("visit_records").insert(payload);
+    }
+    setVisitModal(false); setEditVisitId(null);
+    setVisitForm({visit_date:localDate(),visit_time:"",resident_name:"",visitor_name:"",visitor_relation:"",purpose:"",duration_minutes:"",notes:"",staff_name:""});
+    loadVisits();
+  };
+  const deleteVisit = async (id) => { if(!window.confirm("削除しますか？")){return;} await supabase.from("visit_records").delete().eq("id",id); loadVisits(); };
+
 
   const clockIn = async () => {
     // 当日 or 前日夜勤で未退勤があれば重複防止
@@ -6280,7 +6355,7 @@ export default function App() {
       {id:"docs",label:"必須保存書類管理",icon:"file"},
       {id:"files",label:"ファイル・会議報告書",icon:"file"},
       {id:"cleaning",label:"掃除当番表",icon:"check"},
-      {id:"supplies",label:"備品管理表",icon:"list"},
+      {id:"supplies",label:"備品管理表",icon:"list"},{id:"incidents",label:"ヒヤリハット・事故報告",icon:"warning"},{id:"handovers",label:"申し送りノート",icon:"note"},{id:"visits",label:"面会記録",icon:"people"},
       {id:"hints",label:"加算ヒント",icon:"hint"},
       {id:"news",label:"最新ニュース",icon:"news"},
     ]},
@@ -7745,7 +7820,152 @@ export default function App() {
           {tab==="hints"&&(isAdmin||isSabikan)&&<HintsTab/>}
 
           {/* ── ニュース ── */}
-          {tab==="news"&&(isAdmin||isSabikan)&&(
+          {tab==="news"&&(isAdmin||isSabikan)
+
+{tab==="incidents"&&(<div>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+<h2 style={{margin:0}}>ヒヤリハット・事故報告</h2>
+<button onClick={()=>{setEditIncidentId(null);setIncidentForm({report_date:localDate(),report_time:"",reporter_name:"",incident_type:"ヒヤリハット",severity:"軽微",location:"",resident_name:"",description:"",cause:"",action_taken:"",prevention:"",status:"未対応"});setIncidentModal(true);}} style={{padding:"8px 16px",background:"#ef4444",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:"bold"}}>+ 新規報告</button>
+</div>
+<div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+{["all","ヒヤリハット","事故","苦情"].map(f=><button key={f} onClick={()=>setIncidentFilter(f)} style={{padding:"6px 14px",borderRadius:20,border:"none",cursor:"pointer",background:incidentFilter===f?"#ef4444":"#333",color:"#fff",fontSize:13}}>{f==="all"?"すべて":f}</button>)}
+</div>
+{incidents.filter(r=>incidentFilter==="all"||r.incident_type===incidentFilter).length===0?<p style={{color:"#888",textAlign:"center",padding:40}}>報告はありません</p>:
+incidents.filter(r=>incidentFilter==="all"||r.incident_type===incidentFilter).map(r=><div key={r.id} style={{background:"#1a1a2e",borderRadius:12,padding:16,marginBottom:12,borderLeft:r.severity==="重大"?"4px solid #ef4444":r.severity==="中程度"?"4px solid #f59e0b":"4px solid #6b7280"}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+<div style={{display:"flex",gap:8,alignItems:"center"}}>
+<span style={{background:r.incident_type==="事故"?"#ef4444":"#f59e0b",color:"#fff",padding:"2px 10px",borderRadius:12,fontSize:12}}>{r.incident_type}</span>
+<span style={{background:r.severity==="重大"?"#ef4444":r.severity==="中程度"?"#f59e0b":"#6b7280",color:"#fff",padding:"2px 10px",borderRadius:12,fontSize:12}}>{r.severity}</span>
+<span style={{color:"#aaa",fontSize:13}}>{r.report_date}{r.report_time?" "+r.report_time:""}</span>
+</div>
+<div style={{display:"flex",gap:4}}>
+<button onClick={()=>{setEditIncidentId(r.id);setIncidentForm({report_date:r.report_date||"",report_time:r.report_time||"",reporter_name:r.reporter_name||"",incident_type:r.incident_type||"ヒヤリハット",severity:r.severity||"軽微",location:r.location||"",resident_name:r.resident_name||"",description:r.description||"",cause:r.cause||"",action_taken:r.action_taken||"",prevention:r.prevention||"",status:r.status||"未対応"});setIncidentModal(true);}} style={{background:"#f59e0b",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>編集</button>
+<button onClick={()=>deleteIncident(r.id)} style={{background:"#ef4444",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>削除</button>
+</div>
+</div>
+<div style={{fontWeight:"bold",marginBottom:4}}>{r.resident_name&&<span style={{color:"#60a5fa"}}>[{r.resident_name}] </span>}{r.description}</div>
+{r.location&&<div style={{color:"#aaa",fontSize:13}}>場所: {r.location}</div>}
+{r.cause&&<div style={{color:"#aaa",fontSize:13}}>原因: {r.cause}</div>}
+{r.action_taken&&<div style={{color:"#34d399",fontSize:13}}>対応: {r.action_taken}</div>}
+{r.prevention&&<div style={{color:"#60a5fa",fontSize:13}}>再発防止: {r.prevention}</div>}
+<div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:12,color:"#888"}}>
+<span>報告者: {r.reporter_name}</span>
+<span style={{background:r.status==="対応済"?"#059669":r.status==="対応中"?"#f59e0b":"#ef4444",color:"#fff",padding:"2px 8px",borderRadius:8}}>{r.status}</span>
+</div>
+</div>)}
+</div>)}
+{tab==="handovers"&&(<div>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+<h2 style={{margin:0}}>申し送りノート</h2>
+<button onClick={()=>{setEditHandoverId(null);setHandoverForm({note_date:localDate(),shift_type:"日勤",author_name:"",category:"一般",priority:"通常",content:"",target_staff:""});setHandoverModal(true);}} style={{padding:"8px 16px",background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:"bold"}}>+ 申し送り追加</button>
+</div>
+<div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+{["all","日勤","早番","遅番","夜勤"].map(f=><button key={f} onClick={()=>setHandoverFilter(f)} style={{padding:"6px 14px",borderRadius:20,border:"none",cursor:"pointer",background:handoverFilter===f?"#3b82f6":"#333",color:"#fff",fontSize:13}}>{f==="all"?"すべて":f}</button>)}
+</div>
+{handovers.filter(r=>handoverFilter==="all"||r.shift_type===handoverFilter).length===0?<p style={{color:"#888",textAlign:"center",padding:40}}>申し送りはありません</p>:
+handovers.filter(r=>handoverFilter==="all"||r.shift_type===handoverFilter).map(r=><div key={r.id} style={{background:"#1a1a2e",borderRadius:12,padding:16,marginBottom:12,borderLeft:r.priority==="緊急"?"4px solid #ef4444":r.priority==="重要"?"4px solid #f59e0b":"4px solid #3b82f6"}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+<div style={{display:"flex",gap:8,alignItems:"center"}}>
+<span style={{background:"#3b82f6",color:"#fff",padding:"2px 10px",borderRadius:12,fontSize:12}}>{r.shift_type}</span>
+<span style={{background:r.category==="医療"?"#ef4444":r.category==="生活支援"?"#10b981":"#6366f1",color:"#fff",padding:"2px 10px",borderRadius:12,fontSize:12}}>{r.category}</span>
+{r.priority!=="通常"&&<span style={{background:r.priority==="緊急"?"#ef4444":"#f59e0b",color:"#fff",padding:"2px 10px",borderRadius:12,fontSize:12}}>{r.priority}</span>}
+<span style={{color:"#aaa",fontSize:13}}>{r.note_date}</span>
+</div>
+<div style={{display:"flex",gap:4}}>
+<button onClick={()=>{setEditHandoverId(r.id);setHandoverForm({note_date:r.note_date||"",shift_type:r.shift_type||"日勤",author_name:r.author_name||"",category:r.category||"一般",priority:r.priority||"通常",content:r.content||"",target_staff:r.target_staff||""});setHandoverModal(true);}} style={{background:"#f59e0b",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>編集</button>
+<button onClick={()=>deleteHandover(r.id)} style={{background:"#ef4444",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>削除</button>
+</div>
+</div>
+<div style={{whiteSpace:"pre-wrap",marginBottom:8}}>{r.content}</div>
+<div style={{display:"flex",justifyContent:"space-between",fontSize:12,color:"#888"}}>
+<span>記入者: {r.author_name}</span>
+{r.target_staff&&<span>対象: {r.target_staff}</span>}
+</div>
+</div>)}
+</div>)}
+{tab==="visits"&&(<div>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+<h2 style={{margin:0}}>面会記録</h2>
+<button onClick={()=>{setEditVisitId(null);setVisitForm({visit_date:localDate(),visit_time:"",resident_name:"",visitor_name:"",visitor_relation:"",purpose:"",duration_minutes:"",notes:"",staff_name:""});setVisitModal(true);}} style={{padding:"8px 16px",background:"#8b5cf6",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontWeight:"bold"}}>+ 面会記録追加</button>
+</div>
+<div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+{["all","家族","友人","支援者","行政"].map(f=><button key={f} onClick={()=>setVisitFilter(f)} style={{padding:"6px 14px",borderRadius:20,border:"none",cursor:"pointer",background:visitFilter===f?"#8b5cf6":"#333",color:"#fff",fontSize:13}}>{f==="all"?"すべて":f}</button>)}
+</div>
+{visits.filter(r=>visitFilter==="all"||r.visitor_relation===visitFilter).length===0?<p style={{color:"#888",textAlign:"center",padding:40}}>面会記録はありません</p>:
+visits.filter(r=>visitFilter==="all"||r.visitor_relation===visitFilter).map(r=><div key={r.id} style={{background:"#1a1a2e",borderRadius:12,padding:16,marginBottom:12,borderLeft:"4px solid #8b5cf6"}}>
+<div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+<div style={{display:"flex",gap:8,alignItems:"center"}}>
+<span style={{color:"#c4b5fd",fontWeight:"bold",fontSize:15}}>{r.resident_name}</span>
+<span style={{color:"#aaa",fontSize:13}}>{r.visit_date}{r.visit_time?" "+r.visit_time:""}</span>
+{r.duration_minutes&&<span style={{color:"#aaa",fontSize:12}}>({r.duration_minutes}分)</span>}
+</div>
+<div style={{display:"flex",gap:4}}>
+<button onClick={()=>{setEditVisitId(r.id);setVisitForm({visit_date:r.visit_date||"",visit_time:r.visit_time||"",resident_name:r.resident_name||"",visitor_name:r.visitor_name||"",visitor_relation:r.visitor_relation||"",purpose:r.purpose||"",duration_minutes:r.duration_minutes||"",notes:r.notes||"",staff_name:r.staff_name||""});setVisitModal(true);}} style={{background:"#f59e0b",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>編集</button>
+<button onClick={()=>deleteVisit(r.id)} style={{background:"#ef4444",color:"#fff",border:"none",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12}}>削除</button>
+</div>
+</div>
+<div style={{marginBottom:4}}>来訪者: <strong>{r.visitor_name}</strong>{r.visitor_relation&&<span style={{color:"#a78bfa"}}> ({r.visitor_relation})</span>}</div>
+{r.purpose&&<div style={{color:"#aaa",fontSize:13}}>目的: {r.purpose}</div>}
+{r.notes&&<div style={{color:"#d1d5db",fontSize:13,marginTop:4}}>{r.notes}</div>}
+{r.staff_name&&<div style={{color:"#888",fontSize:12,marginTop:4}}>対応スタッフ: {r.staff_name}</div>}
+</div>)}
+</div>)}
+
+{incidentModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setIncidentModal(false)}>
+<div style={{background:"#1e1e2e",borderRadius:16,padding:24,maxWidth:600,width:"100%",maxHeight:"85vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+<h3 style={{marginTop:0}}>{editIncidentId?"報告編集":"新規ヒヤリハット・事故報告"}</h3>
+<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+<div><label style={{fontSize:12,color:"#aaa"}}>日付</label><input type="date" value={incidentForm.report_date} onChange={e=>setIncidentForm({...incidentForm,report_date:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>時刻</label><input type="time" value={incidentForm.report_time} onChange={e=>setIncidentForm({...incidentForm,report_time:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>報告者名 *</label><input value={incidentForm.reporter_name} onChange={e=>setIncidentForm({...incidentForm,reporter_name:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>対象利用者</label><input value={incidentForm.resident_name} onChange={e=>setIncidentForm({...incidentForm,resident_name:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>種別</label><select value={incidentForm.incident_type} onChange={e=>setIncidentForm({...incidentForm,incident_type:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}><option>ヒヤリハット</option><option>事故</option><option>苦情</option></select></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>重大度</label><select value={incidentForm.severity} onChange={e=>setIncidentForm({...incidentForm,severity:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}><option>軽微</option><option>中程度</option><option>重大</option></select></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>場所</label><input value={incidentForm.location} onChange={e=>setIncidentForm({...incidentForm,location:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}} placeholder="居室・浴室・廊下など"/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>内容 *</label><textarea value={incidentForm.description} onChange={e=>setIncidentForm({...incidentForm,description:e.target.value})} rows={3} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff",resize:"vertical"}}/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>原因</label><textarea value={incidentForm.cause} onChange={e=>setIncidentForm({...incidentForm,cause:e.target.value})} rows={2} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff",resize:"vertical"}}/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>対応内容</label><textarea value={incidentForm.action_taken} onChange={e=>setIncidentForm({...incidentForm,action_taken:e.target.value})} rows={2} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff",resize:"vertical"}}/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>再発防止策</label><textarea value={incidentForm.prevention} onChange={e=>setIncidentForm({...incidentForm,prevention:e.target.value})} rows={2} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff",resize:"vertical"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>ステータス</label><select value={incidentForm.status} onChange={e=>setIncidentForm({...incidentForm,status:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}><option>未対応</option><option>対応中</option><option>対応済</option></select></div>
+</div>
+<div style={{display:"flex",gap:12,marginTop:16,justifyContent:"flex-end"}}>
+<button onClick={()=>setIncidentModal(false)} style={{padding:"8px 20px",borderRadius:8,border:"1px solid #555",background:"transparent",color:"#fff",cursor:"pointer"}}>キャンセル</button>
+<button onClick={saveIncident} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#ef4444",color:"#fff",cursor:"pointer",fontWeight:"bold"}}>{editIncidentId?"更新":"登録"}</button>
+</div></div></div>}
+{handoverModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setHandoverModal(false)}>
+<div style={{background:"#1e1e2e",borderRadius:16,padding:24,maxWidth:500,width:"100%",maxHeight:"85vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+<h3 style={{marginTop:0}}>{editHandoverId?"申し送り編集":"新規申し送り"}</h3>
+<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+<div><label style={{fontSize:12,color:"#aaa"}}>日付</label><input type="date" value={handoverForm.note_date} onChange={e=>setHandoverForm({...handoverForm,note_date:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>勤務帯</label><select value={handoverForm.shift_type} onChange={e=>setHandoverForm({...handoverForm,shift_type:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}><option>日勤</option><option>早番</option><option>遅番</option><option>夜勤</option></select></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>記入者 *</label><input value={handoverForm.author_name} onChange={e=>setHandoverForm({...handoverForm,author_name:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>カテゴリ</label><select value={handoverForm.category} onChange={e=>setHandoverForm({...handoverForm,category:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}><option>一般</option><option>医療</option><option>生活支援</option><option>行動</option><option>連絡事項</option></select></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>優先度</label><select value={handoverForm.priority} onChange={e=>setHandoverForm({...handoverForm,priority:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}><option>通常</option><option>重要</option><option>緊急</option></select></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>対象スタッフ</label><input value={handoverForm.target_staff} onChange={e=>setHandoverForm({...handoverForm,target_staff:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}} placeholder="全員 or 名前"/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>内容 *</label><textarea value={handoverForm.content} onChange={e=>setHandoverForm({...handoverForm,content:e.target.value})} rows={4} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff",resize:"vertical"}}/></div>
+</div>
+<div style={{display:"flex",gap:12,marginTop:16,justifyContent:"flex-end"}}>
+<button onClick={()=>setHandoverModal(false)} style={{padding:"8px 20px",borderRadius:8,border:"1px solid #555",background:"transparent",color:"#fff",cursor:"pointer"}}>キャンセル</button>
+<button onClick={saveHandover} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#3b82f6",color:"#fff",cursor:"pointer",fontWeight:"bold"}}>{editHandoverId?"更新":"登録"}</button>
+</div></div></div>}
+{visitModal&&<div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(0,0,0,0.7)",zIndex:9999,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setVisitModal(false)}>
+<div style={{background:"#1e1e2e",borderRadius:16,padding:24,maxWidth:500,width:"100%",maxHeight:"85vh",overflow:"auto"}} onClick={e=>e.stopPropagation()}>
+<h3 style={{marginTop:0}}>{editVisitId?"面会記録編集":"新規面会記録"}</h3>
+<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+<div><label style={{fontSize:12,color:"#aaa"}}>日付</label><input type="date" value={visitForm.visit_date} onChange={e=>setVisitForm({...visitForm,visit_date:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>時刻</label><input type="time" value={visitForm.visit_time} onChange={e=>setVisitForm({...visitForm,visit_time:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>利用者名 *</label><input value={visitForm.resident_name} onChange={e=>setVisitForm({...visitForm,resident_name:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>来訪者名 *</label><input value={visitForm.visitor_name} onChange={e=>setVisitForm({...visitForm,visitor_name:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>関係</label><select value={visitForm.visitor_relation} onChange={e=>setVisitForm({...visitForm,visitor_relation:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}><option value="">選択</option><option>家族</option><option>友人</option><option>支援者</option><option>行政</option><option>その他</option></select></div>
+<div><label style={{fontSize:12,color:"#aaa"}}>滞在時間(分)</label><input type="number" value={visitForm.duration_minutes} onChange={e=>setVisitForm({...visitForm,duration_minutes:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>目的</label><input value={visitForm.purpose} onChange={e=>setVisitForm({...visitForm,purpose:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>備考</label><textarea value={visitForm.notes} onChange={e=>setVisitForm({...visitForm,notes:e.target.value})} rows={3} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff",resize:"vertical"}}/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>対応スタッフ</label><input value={visitForm.staff_name} onChange={e=>setVisitForm({...visitForm,staff_name:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+</div>
+<div style={{display:"flex",gap:12,marginTop:16,justifyContent:"flex-end"}}>
+<button onClick={()=>setVisitModal(false)} style={{padding:"8px 20px",borderRadius:8,border:"1px solid #555",background:"transparent",color:"#fff",cursor:"pointer"}}>キャンセル</button>
+<button onClick={saveVisit} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",cursor:"pointer",fontWeight:"bold"}}>{editVisitId?"更新":"登録"}</button>
+</div></div></div>}&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>最新ニュース</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>国保連・厚労省からの最新情報</div>
