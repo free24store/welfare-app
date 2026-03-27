@@ -7826,7 +7826,9 @@ export default function App() {
           {tab==="hints"&&(isAdmin||isSabikan)&&<HintsTab/>}
 
           {/* ── ニュース ── */}
-          {tab==="news"&&(isAdmin||isSabikan)
+          {tab==="news"&&(isAdmin||isSabikan)&&(
+            <div className="fade-in"></div>
+          )}
 
 {tab==="incidents"&&(<div>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
