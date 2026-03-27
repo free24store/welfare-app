@@ -6376,6 +6376,9 @@ export default function App() {
       {id:"journal",label:"業務日誌確認",icon:"calendar"},
       {id:"transport",label:"送迎記録",icon:"car"},
       {id:"my_expenses",label:"立替申請",icon:"claim"},
+      {id:"incidents",label:"ヒヤリハット・事故報告",icon:"warning"},
+      {id:"handovers",label:"申し送りノート",icon:"note"},
+      {id:"visits",label:"面会記録",icon:"people"},
     ]},
     {g:"連絡",items:[
       {id:"msgs",label:"利用者メッセージ",icon:"message",badge:unread},
@@ -6403,6 +6406,9 @@ export default function App() {
     {g:"情報管理",items:[
       {id:"docs",label:"必須保存書類管理",icon:"file"},
       {id:"files",label:"ファイル・会議報告書",icon:"file"},
+      {id:"incidents",label:"ヒヤリハット・事故報告",icon:"warning"},
+      {id:"handovers",label:"申し送りノート",icon:"note"},
+      {id:"visits",label:"面会記録",icon:"people"},
       {id:"hints",label:"加算ヒント",icon:"hint"},
       {id:"sabikan_links",label:"業務リンク集",icon:"news"},
     ]},
