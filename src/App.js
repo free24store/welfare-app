@@ -5659,7 +5659,7 @@ export default function App() {
     const user = data.user;
     const role = user.user_metadata?.role;
     setAuthUser(user);
-    if(role === "master"){ setIsMaster(true); setAuth("app"); setTab("dashboard"); }
+    if(role === "master"){ setIsMaster(true); setAuth("master"); }
     else if(role === "admin"){ setIsAdmin(true); setMe(null); setAuth("app"); setTab("dashboard"); }
     else if(role === "sabikan"){
       setIsSabikan(true);
@@ -5771,7 +5771,7 @@ export default function App() {
   );
 
   if(auth==="master") {
-    return <MasterScreen onBack={()=>{setAuth("select");setIsMaster(false);setMasterPin("");}} />;
+    return <MasterScreen onBack={async()=>{await supabase.auth.signOut();setAuth("select");setIsMaster(false);setMasterPin("");setAuthUser(null);}} />;
   }
 
   if(auth==="user_login") {
