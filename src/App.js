@@ -3480,6 +3480,13 @@ function MasterScreen({onBack}) {
   const [masterPinNew, setMasterPinNew] = useState("");
   const [pinMsg, setPinMsg] = useState("");
   const [copiedId, setCopiedId] = useState(null);
+  const [notes, setNotes] = useState([]);
+  const [noteModal, setNoteModal] = useState(null);
+  const [noteForm, setNoteForm] = useState({home_id:"",category:"メモ",title:"",content:"",priority:"中",status:"未対応",due_date:""});
+  const [editNoteId, setEditNoteId] = useState(null);
+  const [noteFilter, setNoteFilter] = useState("all");
+  const [alerts, setAlerts] = useState([]);
+  const [monthlyTrend, setMonthlyTrend] = useState([]);
 
   const COLORS = ["#3b82f6","#8b5cf6","#10b981","#f59e0b","#ef4444","#0891b2","#be185d","#65a30d","#9333ea","#ea580c"];
   const HOME_TYPES = ["グループホーム","サテライト型住居","ショートステイ","日中活動支援"];
@@ -3519,10 +3526,57 @@ function MasterScreen({onBack}) {
       srec_month: (sr.data||[]).filter(x=>x.home_id===hid&&x.date?.startsWith(thisMonth)).length,
     }));
     setAllStats(stats);
+    generateAlerts(stats, hs||[]);
+    generateMonthlyTrend(att.data, sr.data);
+    loadNotes();
     setLoading(false);
   };
 
-  useEffect(()=>{ loadMasterData(); },[]);
+    const loadNotes = async() => {
+    const {data} = await supabase.from("master_notes").select("*").order("created_at",{ascending:false});
+    setNotes(data||[]);
+  };
+  const generateAlerts = (statsData, homesData) => {
+    const al = [];
+    statsData.forEach(s => {
+      const home = homesData.find(h=>h.home_id===s.home_id);
+      if(!home) return;
+      const name = home.name;
+      if(s.users > 0 && s.staff > 0 && s.users / s.staff > 6) {
+        al.push({type:"danger",icon:"\u26A0\uFE0F",msg:name+": \u4EBA\u54E1\u914D\u7F6E\u57FA\u6E96\u4E0D\u8DB3\uFF08\u5229\u7528\u8005"+s.users+"\u540D/\u30B9\u30BF\u30C3\u30D5"+s.staff+"\u540D\uFF09",home_id:s.home_id});
+      }
+      if(home.capacity > 0) {
+        const rate = Math.round(s.users/home.capacity*100);
+        if(rate < 50) al.push({type:"warning",icon:"\uD83D\uDCC9",msg:name+": \u5145\u586B\u7387\u304C\u4F4E\u3044\uFF08"+rate+"%\uFF09",home_id:s.home_id});
+        if(rate >= 95) al.push({type:"info",icon:"\uD83D\uDCC8",msg:name+": \u307B\u307C\u6E80\u5BA4\uFF08"+rate+"%\uFF09",home_id:s.home_id});
+      }
+      if(s.users > 0 && s.srec_month === 0) {
+        al.push({type:"danger",icon:"\uD83D\uDCDD",msg:name+": \u4ECA\u6708\u306E\u652F\u63F4\u8A18\u9332\u304C\u672A\u4F5C\u6210",home_id:s.home_id});
+      } else if(s.users > 0 && s.srec_month < s.users) {
+        al.push({type:"warning",icon:"\uD83D\uDCDD",msg:name+": \u652F\u63F4\u8A18\u9332\u304C\u4E0D\u8DB3\uFF08"+s.srec_month+"/"+s.users+"\u540D\u5206\uFF09",home_id:s.home_id});
+      }
+      if(s.exp_pending > 3) {
+        al.push({type:"warning",icon:"\uD83D\uDCB0",msg:name+": \u7ACB\u66FF\u672A\u7CBE\u7B97"+s.exp_pending+"\u4EF6",home_id:s.home_id});
+      }
+      if(s.users > 0 && s.staff === 0) {
+        al.push({type:"danger",icon:"\uD83D\uDEA8",msg:name+": \u30B9\u30BF\u30C3\u30D5\u672A\u767B\u9332",home_id:s.home_id});
+      }
+    });
+    setAlerts(al);
+  };
+  const generateMonthlyTrend = (attData, srecData) => {
+    const months = [];
+    for(let i=5;i>=0;i--){
+      const d=new Date();d.setMonth(d.getMonth()-i);
+      months.push(d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"));
+    }
+    setMonthlyTrend(months.map(m=>({
+      month:m, label:m.slice(5)+"\u6708",
+      attendance:(attData||[]).filter(a=>a.date&&a.date.startsWith(m)).length,
+      support:(srecData||[]).filter(s=>s.date&&s.date.startsWith(m)).length,
+    })));
+  };
+useEffect(()=>{ loadMasterData(); },[]);
 
   // ─── 選択ホームのデータ読み込み ─────────────────
   const loadHomeData = async(home_id) => {
@@ -3600,7 +3654,33 @@ function MasterScreen({onBack}) {
     setMasterPinNew("");
   };
 
-  const CSS_M=`
+    const NOTE_CATEGORIES = ["\u30E1\u30E2","\u6539\u5584\u63D0\u6848","\u30EA\u30B9\u30AF","\u30D5\u30A9\u30ED\u30FC\u30A2\u30C3\u30D7","\u76E3\u67FB\u6307\u6458","\u7814\u4FEE"];
+  const NOTE_PRIORITIES = ["\u9AD8","\u4E2D","\u4F4E"];
+  const NOTE_STATUSES = ["\u672A\u5BFE\u5FDC","\u5BFE\u5FDC\u4E2D","\u5B8C\u4E86","\u4FDD\u7559"];
+  const saveNote = async() => {
+    if(!noteForm.title){alert("\u30BF\u30A4\u30C8\u30EB\u3092\u5165\u529B\u3057\u3066\u304F\u3060\u3055\u3044");return;}
+    if(noteModal==="add"){
+      const {error}=await supabase.from("master_notes").insert({...noteForm,due_date:noteForm.due_date||null});
+      if(error){alert("\u4FDD\u5B58\u30A8\u30E9\u30FC: "+error.message);return;}
+    } else {
+      const {error}=await supabase.from("master_notes").update({...noteForm,due_date:noteForm.due_date||null,updated_at:new Date().toISOString()}).eq("id",editNoteId);
+      if(error){alert("\u66F4\u65B0\u30A8\u30E9\u30FC: "+error.message);return;}
+    }
+    setNoteModal(null);
+    setNoteForm({home_id:"",category:"\u30E1\u30E2",title:"",content:"",priority:"\u4E2D",status:"\u672A\u5BFE\u5FDC",due_date:""});
+    loadNotes();
+  };
+  const deleteNote = async(id) => {
+    if(!window.confirm("\u3053\u306E\u30CE\u30FC\u30C8\u3092\u524A\u9664\u3057\u307E\u3059\u304B\uFF1F"))return;
+    await supabase.from("master_notes").delete().eq("id",id);
+    loadNotes();
+  };
+  const toggleNoteStatus = async(note) => {
+    const next = note.status==="\u672A\u5BFE\u5FDC"?"\u5BFE\u5FDC\u4E2D":note.status==="\u5BFE\u5FDC\u4E2D"?"\u5B8C\u4E86":"\u672A\u5BFE\u5FDC";
+    await supabase.from("master_notes").update({status:next,updated_at:new Date().toISOString()}).eq("id",note.id);
+    loadNotes();
+  };
+const CSS_M=`
     @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;600;700;800&display=swap');
     *{box-sizing:border-box;margin:0;padding:0;}
     body{font-family:'Noto Sans JP',sans-serif;}
@@ -3615,6 +3695,7 @@ function MasterScreen({onBack}) {
 
   const TABS=[
     {id:"dashboard",label:"📊 ダッシュボード"},
+    {id:"notes",label:"📋 ノート"},
     {id:"corps",label:"🏢 法人・ホーム"},
     {id:"viewer",label:"🔍 データ閲覧"},
     {id:"settings",label:"⚙️ 設定"},
@@ -3715,6 +3796,46 @@ function MasterScreen({onBack}) {
             </div>
 
             {/* 比較グラフ（入居者数・スタッフ数） */}
+                        {/* アラート */}
+            {alerts.length>0&&(
+              <div className="mc" style={{marginBottom:14,borderLeft:"3px solid #ef4444"}}>
+                <div style={{fontWeight:700,fontSize:13,color:"#ef4444",marginBottom:10,display:"flex",alignItems:"center",gap:6}}>
+                  <span>🚨</span><span>アラート・要対応（{alerts.length}件）</span>
+                </div>
+                <div style={{display:"grid",gap:6}}>
+                  {alerts.map((a,i)=>(
+                    <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:a.type==="danger"?"#450a0a20":a.type==="warning"?"#451a0320":"#0f172a",borderRadius:8,border:"1px solid "+(a.type==="danger"?"#dc262630":"#f59e0b30")}}>
+                      <span style={{fontSize:16}}>{a.icon}</span>
+                      <span style={{fontSize:12,color:a.type==="danger"?"#fca5a5":a.type==="warning"?"#fcd34d":"#94a3b8",flex:1}}>{a.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            {alerts.length===0&&(
+              <div className="mc" style={{marginBottom:14,borderLeft:"3px solid #10b981",padding:"12px 14px"}}>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:18}}>✅</span>
+                  <span style={{fontSize:13,fontWeight:700,color:"#10b981"}}>全ホーム正常 — アラートはありません</span>
+                </div>
+              </div>
+            )}
+            {/* 月次トレンド */}
+            {monthlyTrend.length>0&&(
+              <div className="mc" style={{marginBottom:14}}>
+                <div style={{fontWeight:700,fontSize:13,color:"#94a3b8",marginBottom:10}}>📈 6ヶ月トレンド（全ホーム合計）</div>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div>
+                    <div style={{fontSize:11,color:"#64748b",marginBottom:6}}>⏰ 打刻数推移</div>
+                    <BarChart data={monthlyTrend.map(m=>({label:m.label,value:m.attendance}))} height={80} color="#10b981"/>
+                  </div>
+                  <div>
+                    <div style={{fontSize:11,color:"#64748b",marginBottom:6}}>📝 支援記録数推移</div>
+                    <BarChart data={monthlyTrend.map(m=>({label:m.label,value:m.support}))} height={80} color="#f59e0b"/>
+                  </div>
+                </div>
+              </div>
+            )}
             {allStats.length>1&&(
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                 {[
@@ -3739,7 +3860,60 @@ function MasterScreen({onBack}) {
           </div>
         )}
 
-        {/* ══════════════════════════════════
+        {/* コンサルノート */}
+          {masterTab==="notes"&&(
+            <div>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                <div style={{fontSize:15,fontWeight:800,color:"white"}}>📋 コンサルティングノート</div>
+                <button className="mb" style={{background:"#3b82f6",color:"white"}} onClick={()=>{setNoteForm({home_id:"",category:"メモ",title:"",content:"",priority:"中",status:"未対応",due_date:""});setNoteModal("add");}}>＋ 新規ノート</button>
+              </div>
+              <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:12}}>
+                {["all","未対応","対応中","完了","保留"].map(f=>(
+                  <button key={f} className="mb" style={{background:noteFilter===f?"#3b82f6":"#1e293b",color:noteFilter===f?"white":"#94a3b8",border:"1px solid "+(noteFilter===f?"#3b82f6":"#334155")}} onClick={()=>setNoteFilter(f)}>
+                    {f==="all"?"すべて":f}
+                    <span style={{marginLeft:4,fontSize:10,opacity:.7}}>({f==="all"?notes.length:notes.filter(n=>n.status===f).length})</span>
+                  </button>
+                ))}
+              </div>
+              <div style={{display:"grid",gap:8}}>
+                {notes.filter(n=>noteFilter==="all"||n.status===noteFilter).map(n=>{
+                  const home=homes.find(h=>h.home_id===n.home_id);
+                  const priorityColor=n.priority==="高"?"#ef4444":n.priority==="中"?"#f59e0b":"#64748b";
+                  const statusColor=n.status==="未対応"?"#ef4444":n.status==="対応中"?"#3b82f6":n.status==="完了"?"#10b981":"#64748b";
+                  const isOverdue=n.due_date&&n.status!=="完了"&&n.due_date<localDate();
+                  return(
+                    <div key={n.id} className="mc" style={{borderLeft:"3px solid "+priorityColor,opacity:n.status==="完了"?.6:1}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                        <div style={{flex:1}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap",marginBottom:4}}>
+                            <span style={{fontSize:10,padding:"2px 6px",borderRadius:5,background:statusColor+"20",color:statusColor,border:"1px solid "+statusColor+"40",cursor:"pointer"}} onClick={()=>toggleNoteStatus(n)}>{n.status}</span>
+                            <span style={{fontSize:10,padding:"2px 6px",borderRadius:5,background:"#1e293b",color:"#94a3b8"}}>{n.category}</span>
+                            <span style={{fontSize:10,padding:"2px 6px",borderRadius:5,background:priorityColor+"20",color:priorityColor}}>優先:{n.priority}</span>
+                            {home&&<span style={{fontSize:10,color:"#64748b"}}>🏠 {home.name}</span>}
+                            {isOverdue&&<span style={{fontSize:10,color:"#ef4444",fontWeight:700}}>⚠️ 期限超過</span>}
+                          </div>
+                          <div style={{fontWeight:700,fontSize:13,color:"white",marginBottom:2}}>{n.title}</div>
+                          {n.content&&<div style={{fontSize:12,color:"#94a3b8",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{n.content.length>150?n.content.slice(0,150)+"...":n.content}</div>}
+                        </div>
+                        <div style={{display:"flex",gap:4,flexShrink:0}}>
+                          <button className="mb" style={{background:"#334155",color:"#94a3b8",fontSize:11}} onClick={()=>{setNoteForm({home_id:n.home_id||"",category:n.category||"メモ",title:n.title,content:n.content||"",priority:n.priority||"中",status:n.status||"未対応",due_date:n.due_date||""});setEditNoteId(n.id);setNoteModal("edit");}}>✏️</button>
+                          <button className="mb" style={{background:"#450a0a",color:"#fca5a5",fontSize:11}} onClick={()=>deleteNote(n.id)}>🗑</button>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",fontSize:10,color:"#475569",marginTop:4}}>
+                        <span>{n.due_date?"期限: "+n.due_date:""}</span>
+                        <span>{n.created_at?.slice(0,10)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+                {notes.filter(n=>noteFilter==="all"||n.status===noteFilter).length===0&&(
+                  <div style={{color:"#475569",textAlign:"center",padding:40,fontSize:13}}>ノートがありません</div>
+                )}
+              </div>
+            </div>
+          )}
+          {/* ══════════════════════════════════
             🏢 法人・ホーム管理
         ══════════════════════════════════ */}
         {masterTab==="corps"&&(
@@ -3991,6 +4165,62 @@ function MasterScreen({onBack}) {
           </div>
         </div>
       )}
+      {/* ノートモーダル */}
+      {noteModal&&(
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.75)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center",padding:16}} onClick={()=>setNoteModal(null)}>
+          <div style={{background:"#1e293b",border:"1px solid #334155",borderRadius:16,padding:22,width:"100%",maxWidth:500,maxHeight:"85vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+            <div style={{fontWeight:800,fontSize:14,color:"white",marginBottom:14}}>{noteModal==="add"?"📋 新規ノート":"📋 ノート編集"}</div>
+            <div style={{display:"grid",gap:10,marginBottom:14}}>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>タイトル *</label>
+                <input className="mi" value={noteForm.title} onChange={e=>setNoteForm(f=>({...f,title:e.target.value}))}/>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>対象ホーム</label>
+                  <select className="mi" value={noteForm.home_id} onChange={e=>setNoteForm(f=>({...f,home_id:e.target.value}))}>
+                    <option value="">全体</option>
+                    {homes.map(h=><option key={h.id} value={h.home_id}>{h.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>カテゴリ</label>
+                  <select className="mi" value={noteForm.category} onChange={e=>setNoteForm(f=>({...f,category:e.target.value}))}>
+                    {NOTE_CATEGORIES.map(ct=><option key={ct}>{ct}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>優先度</label>
+                  <select className="mi" value={noteForm.priority} onChange={e=>setNoteForm(f=>({...f,priority:e.target.value}))}>
+                    {NOTE_PRIORITIES.map(p=><option key={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>ステータス</label>
+                  <select className="mi" value={noteForm.status} onChange={e=>setNoteForm(f=>({...f,status:e.target.value}))}>
+                    {NOTE_STATUSES.map(s=><option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>期限</label>
+                  <input className="mi" type="date" value={noteForm.due_date} onChange={e=>setNoteForm(f=>({...f,due_date:e.target.value}))}/>
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:3}}>内容</label>
+                <textarea className="mi" rows={5} value={noteForm.content} onChange={e=>setNoteForm(f=>({...f,content:e.target.value}))} style={{resize:"vertical"}}/>
+              </div>
+            </div>
+            <div style={{display:"flex",gap:8}}>
+              <button className="mb" style={{background:"#3b82f6",color:"white",flex:1,padding:"9px"}} onClick={saveNote}>保存</button>
+              <button className="mb" style={{background:"#334155",color:"#94a3b8",padding:"9px 16px"}} onClick={()=>setNoteModal(null)}>キャンセル</button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
