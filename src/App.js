@@ -6018,6 +6018,21 @@ export default function App() {
   const [tmplEditIdx, setTmplEditIdx] = useState(null);
   const [tmplEditText, setTmplEditText] = useState("");
   const [winW, setWinW] = useState(375);
+  const [incidents, setIncidents] = useState([]);
+  const [incidentModal, setIncidentModal] = useState(false);
+  const [incidentForm, setIncidentForm] = useState({});
+  const [editIncidentId, setEditIncidentId] = useState(null);
+  const [incidentFilter, setIncidentFilter] = useState("all");
+  const [handovers, setHandovers] = useState([]);
+  const [handoverModal, setHandoverModal] = useState(false);
+  const [handoverForm, setHandoverForm] = useState({});
+  const [editHandoverId, setEditHandoverId] = useState(null);
+  const [handoverFilter, setHandoverFilter] = useState("all");
+  const [visits, setVisits] = useState([]);
+  const [visitModal, setVisitModal] = useState(false);
+  const [visitForm, setVisitForm] = useState({});
+  const [editVisitId, setEditVisitId] = useState(null);
+  const [visitFilter, setVisitFilter] = useState("all");
   useEffect(()=>{
     setWinW(window.innerWidth);
     const onResize=()=>setWinW(window.innerWidth);
