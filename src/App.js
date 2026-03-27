@@ -7840,11 +7840,6 @@ export default function App() {
           {/* ── 加算ヒント ── */}
           {tab==="hints"&&(isAdmin||isSabikan)&&<HintsTab/>}
 
-          {/* ── ニュース ── */}
-          {tab==="news"&&(isAdmin||isSabikan)&&(
-            <div className="fade-in"></div>
-          )}
-
 {tab==="incidents"&&(<div>
 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
 <h2 style={{margin:0}}>ヒヤリハット・事故報告</h2>
@@ -7988,7 +7983,7 @@ visits.filter(r=>visitFilter==="all"||r.visitor_relation===visitFilter).map(r=><
 <div style={{display:"flex",gap:12,marginTop:16,justifyContent:"flex-end"}}>
 <button onClick={()=>setVisitModal(false)} style={{padding:"8px 20px",borderRadius:8,border:"1px solid #555",background:"transparent",color:"#fff",cursor:"pointer"}}>キャンセル</button>
 <button onClick={saveVisit} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",cursor:"pointer",fontWeight:"bold"}}>{editVisitId?"更新":"登録"}</button>
-</div></div></div>}&&(
+</div></div></div>)}{tab==="news"&&(isAdmin||isSabikan)&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>最新ニュース</div>
               <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>国保連・厚労省からの最新情報</div>
