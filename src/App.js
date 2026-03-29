@@ -7979,10 +7979,10 @@ visits.filter(r=>visitFilter==="all"||r.visitor_relation===visitFilter).map(r=><
 <div><label style={{fontSize:12,color:"#aaa"}}>滞在時間(分)</label><input type="number" value={visitForm.duration_minutes} onChange={e=>setVisitForm({...visitForm,duration_minutes:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
 <div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>目的</label><input value={visitForm.purpose} onChange={e=>setVisitForm({...visitForm,purpose:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
 <div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>備考</label><textarea value={visitForm.notes} onChange={e=>setVisitForm({...visitForm,notes:e.target.value})} rows={3} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff",resize:"vertical"}}/></div>
-<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>対応スタッフ</label><input value={visitForm.staff_name} onChange={e=>setVisitForm({...visitForm,staff_name:e.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
+<div style={{gridColumn:"1/-1"}}><label style={{fontSize:12,color:"#aaa"}}>対応スタッフ</label><input value={visitForm.staff_name} onChange={e=>setVisitForm({...visitForm,staff_name:.target.value})} style={{width:"100%",padding:8,borderRadius:8,border:"1px solid #444",background:"#2a2a3e",color:"#fff"}}/></div>
 </div>
-<div style={{display:"flex",gap:12,marginTop:16,justifyContent:"flex-end"}}><button onClick={()=>setVisitModal(false)} style={{padding:"8px 20px",borderRadius:8,border:"1px solid #555",background:"transparent",color:"#fff",cursor:"pointer"}}>キャンセル</button><tab==="visits"
-button onClick={saveVisit} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",cursor:"pointer",fontWeight:"bold"}}>{editVisitId?"更新":"登録"}</button>
+<div style={{display:"flex",gap:12,marginTop:16,justifyContent:"flex-end"}}><button onClick={()=>setVisitModal(false)} style={{padding:"8px 20px",borderRadius:8,borde:"1px solid 55",background:"transparent",color:"#fff",cursor:"pointer"}}>キャンセル</button>
+<button onClick={saveVisit} style={{padding:"8px 20px",borderRadius:8,border:"none",background:"#8b5cf6",color:"#fff",cursor:"pointer",fontWeight:"bold"}}>{editVisitId?"更新":"登録"}</button>
 </div></div></div>}</div>)}{tab==="news"&&(isAdmin||isSabikan)&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>最新ニュース</div>
