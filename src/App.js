@@ -6156,20 +6156,22 @@ export default function App() {
       setIsSabikan(true);
       const {data:sbData} = await supabase.from("staff_members").select("*").eq("home_id",HOME_ID).eq("role","サービス管理責任者").order("id");
       setSabikanList(sbData||[]);
-      const myStaff = sbData?.find(s=>s.auth_id === user.id);
+      let myStaff = sbData?.find(s=>s.auth_id === user.id);
+      if(!myStaff){ myStaff = {id:null, staff_name: user.email?.split('@')[0]||'スタッフ', auth_id: user.id, email: user.email, home_id: HOME_ID, role:'sabikan'}; }
       if(myStaff){ setMe(myStaff); setSelSabikan(myStaff); }
       setAuth("app"); setTab("sabikan_dash");
     } else {
       setIsAdmin(false);
       const {data:stData} = await supabase.from("staff_members").select("*").eq("home_id",HOME_ID).order("id");
       setStaffList(stData||[]);
-              let myStaff = stData?.find(s=>s.auth_id === user.id);
-                      if(!myStaff) myStaff = stData?.find(s=>s.email === user.email);
-                              if(!myStaff && stData?.length > 0) myStaff = stData[0];
-                                      if(myStaff){
-                                                if(!myStaff.auth_id){ supabase.from("staff_members").update({auth_id:user.id}).eq("id",myStaff.id); }
-                                                          setMe(myStaff);
-                                                                  }
+      let myStaff = stData?.find(s=>s.auth_id === user.id);
+      if(!myStaff) myStaff = stData?.find(s=>s.email === user.email);
+      if(!myStaff && stData?.length > 0) myStaff = stData[0];
+      if(!myStaff){
+        myStaff = {id:null, staff_name: user.email?.split('@')[0]||'スタッフ', auth_id: user.id, email: user.email, home_id: HOME_ID};
+      }
+      if(myStaff.id && !myStaff.auth_id){ supabase.from("staff_members").update({auth_id:user.id}).eq("id",myStaff.id); }
+      setMe(myStaff);
       setAuth("app"); setTab("attendance");
     }
   };
