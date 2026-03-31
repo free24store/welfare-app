@@ -424,7 +424,7 @@ function MySalaryTab({me, salaries, attendance}) {
           <input className="input" type="month" value={selMonth} onChange={e=>setSelMonth(e.target.value)} style={{width:150,fontSize:13}}/>
         </div>
       </div>
-      <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>{me?.name} さんの給与情報</div>
+      <div style={{fontSize:13,color:"#94a3b8",marginBottom:16}}>{me?.staff_name} さんの給与情報</div>
       {nextSalary && (
         <div style={{background:"linear-gradient(135deg,#1e3a8a,#7c3aed)",borderRadius:16,padding:"20px",color:"white",marginBottom:16}}>
           <div style={{fontSize:12,opacity:.8,marginBottom:4}}>💳 次の給料日</div>
@@ -3210,7 +3210,7 @@ function MyExpenseTab({me, expenses, loadAll}) {
   return(
     <div className="fade-in">
       <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>立替払い申請</div>
-      <div style={{fontSize:13,color:"#94a3b8",marginBottom:14}}>{me?.name} さんの立替申請</div>
+      <div style={{fontSize:13,color:"#94a3b8",marginBottom:14}}>{me?.staff_name} さんの立替申請</div>
 
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
         <div className="stat-card" style={{borderTop:"3px solid #d97706",textAlign:"center"}}>
@@ -4208,7 +4208,7 @@ const CSS_M=`
               return(
                 <div>
                   <div style={{fontWeight:800,fontSize:14,color:"white",marginBottom:12}}>
-                    🏠 {home?.name}
+                    🏠 {home?.staff_name}
                     {home?.type&&<span style={{fontSize:11,color:"#64748b",marginLeft:8}}>{home.type}</span>}
                   </div>
                   {/* KPI */}
@@ -6446,7 +6446,7 @@ export default function App() {
             </button>
           )}
           <div style={{width:30,height:30,borderRadius:8,background:isAdmin?"linear-gradient(135deg,#7c3aed,#4c1d95)":"linear-gradient(135deg,#2563eb,#0ea5e9)",display:"flex",alignItems:"center",justifyContent:"center",fontSize:15,flexShrink:0}}>🏠</div>
-          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.name}`}</div></div>
+          <div><div style={{fontWeight:700,fontSize:13,color:"#0f172a",whiteSpace:"nowrap"}}>{currentCorp?.name&&currentHome?.name ? currentCorp.name+" "+currentHome.name : currentHome?.name || "グループホーム管理システム"}</div><div style={{fontSize:10,color:"#94a3b8"}}>{isAdmin?"👑 管理者":isSabikan?"📋 サービス管理責任者":`👤 ${me?.staff_name}`}</div></div>
         </div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}>
           {unread>0&&<span style={{background:"#ef4444",color:"white",borderRadius:99,fontSize:11,fontWeight:700,padding:"2px 8px"}}>📩 {unread}</span>}
@@ -7394,7 +7394,7 @@ export default function App() {
             return(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>勤怠打刻</div>
-              <div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>{me?.name} さん — {today}</div>
+              <div style={{fontSize:13,color:"#94a3b8",marginBottom:8}}>{me?.staff_name} さん — {today}</div>
               <div style={{fontSize:22,fontWeight:800,color:"#0f172a",marginBottom:16,fontFamily:"monospace"}}>{_nowStr}</div>
               {_activeRec&&(
                 <div className="card" style={{marginBottom:16,background:"#f0fdf4",border:"1px solid #bbf7d0"}}>
@@ -7816,7 +7816,7 @@ export default function App() {
           {tab==="staff_password"&&!isAdmin&&(
             <div className="fade-in">
               <div style={{fontSize:18,fontWeight:700,marginBottom:4}}>パスワード変更</div>
-              <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>{me?.name} さんのPINコード変更</div>
+              <div style={{fontSize:13,color:"#94a3b8",marginBottom:20}}>{me?.staff_name} さんのPINコード変更</div>
               <SelfPinForm me={me} loadAll={loadAll}/>
             </div>
           )}
