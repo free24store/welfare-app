@@ -549,7 +549,7 @@ function ShiftReqTab({me, shifts, loadAll, today}) {
     const isCorr = type === "打刻訂正";
     await supabase.from("shift_requests").insert({home_id:HOME_ID,
       staff_id: me?.id,
-      staff_name: me?.name,
+      staff_name: me?.staff_name,
       type,
       date_from: dateFrom,
       date_to: isCorr ? dateFrom : (dateTo || dateFrom),
@@ -1726,7 +1726,7 @@ function TodoTab({staffList, today, me, isAdmin}) {
                     const rec = getCheck(selDate, todo.id);
                     const done = rec?.done||false;
                     return(
-                      <div key={todo.id} onClick={()=>toggleCheck(todo.id, me?.name||"管理者")}
+                      <div key={todo.id} onClick={()=>toggleCheck(todo.id, me?.staff_name||"管理者")}
                         style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",borderRadius:10,background:done?"#f0fdf4":"white",border:`1px solid ${done?"#bbf7d0":"#e2e8f0"}`,cursor:"pointer",transition:"all .15s"}}>
                         <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${done?"#059669":"#cbd5e1"}`,background:done?"#059669":"white",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                           {done&&<span style={{color:"white",fontSize:12,fontWeight:700}}>✓</span>}
@@ -3181,7 +3181,7 @@ function MyExpenseTab({me, expenses, loadAll}) {
     const {data:inserted, error} = await supabase.from("expense_claims").insert({
       home_id: HOME_ID,
       staff_id: me?.id,
-      staff_name: me?.name,
+      staff_name: me?.staff_name,
       date: form.date,
       category: cat,
       description: form.description,
@@ -6798,7 +6798,7 @@ export default function App() {
           {tab==="srecs"&&(
             <div className="fade-in">
               <PH title="支援記録" sub="日々の支援内容"
-                onAdd={()=>openModal("支援記録",{user_id:"",date:today,staff_name:me?.name||"管理者",health:"良好",content:"",activity:"",behavior:"",note:""})}
+                onAdd={()=>openModal("支援記録",{user_id:"",date:today,staff_name:me?.staff_name||"管理者",health:"良好",content:"",activity:"",behavior:"",note:""})}
                 addLabel="記録追加"
               />
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
@@ -6972,7 +6972,7 @@ export default function App() {
           {/* ── 業務日誌 ── */}
           {tab==="journal"&&(
             <div className="fade-in">
-              <PH title="業務日誌" sub="引継ぎ・全利用者一覧" onAdd={()=>{ setTab("srecs"); setTimeout(()=>openModal("支援記録",{user_id:"",date:fDate||today,staff_name:me?.name||"管理者",health:"良好",content:"",activity:"",behavior:"",note:""}),50); }} addLabel="支援記録を書く"/>
+              <PH title="業務日誌" sub="引継ぎ・全利用者一覧" onAdd={()=>{ setTab("srecs"); setTimeout(()=>openModal("支援記録",{user_id:"",date:fDate||today,staff_name:me?.staff_name||"管理者",health:"良好",content:"",activity:"",behavior:"",note:""}),50); }} addLabel="支援記録を書く"/>
               <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"center",marginBottom:12}}>
                 <input className="input" type="date" style={{flex:1,minWidth:130}} value={fDate} onChange={e=>setFDate(e.target.value)}/>
                 {isAdmin&&<button className="btn btn-secondary btn-sm" onClick={()=>csv(srecs.filter(r=>r.date===fDate),fDate+"_業務日誌")}><Icon name="download" size={13}/>CSV</button>}
@@ -7031,7 +7031,7 @@ export default function App() {
                           {overdue&&<span className="tag" style={{background:"#fee2e2",color:"#ef4444"}}>⚠️ 期限超過</span>}
                         </div>
                         <div style={{display:"flex",gap:6}}>
-                          <button className="btn btn-secondary btn-sm" onClick={()=>openModal("モニタリング",{plan_id:p.id,user_id:p.user_id,user_name:p.user_name,date:today,evaluator:me?.name||"管理者",goal_achievement:"",issues:"",next_plan:"",status:"未完"})}>+モニタリング</button>
+                          <button className="btn btn-secondary btn-sm" onClick={()=>openModal("モニタリング",{plan_id:p.id,user_id:p.user_id,user_name:p.user_name,date:today,evaluator:me?.staff_name||"管理者",goal_achievement:"",issues:"",next_plan:"",status:"未完"})}>+モニタリング</button>
                           <button className="btn btn-secondary btn-sm" onClick={()=>openEdit("支援計画",p)}><Icon name="edit" size={12}/></button>
                           <button className="btn btn-red btn-sm" onClick={()=>del("support_plans",p.id)}><Icon name="trash" size={12}/></button>
                         </div>
@@ -7699,7 +7699,7 @@ export default function App() {
           {tab==="files"&&(isAdmin||isSabikan)&&(
             <div className="fade-in">
               <PH title="ファイル・会議報告書" sub={`${files.length}件`}
-                onAdd={()=>openModal("ファイル",{category:"職員会議",title:"",date:today,author:me?.name||"管理者",content:"",file_type:"議事録",url:"",file_name:"",file_data:""})}
+                onAdd={()=>openModal("ファイル",{category:"職員会議",title:"",date:today,author:me?.staff_name||"管理者",content:"",file_type:"議事録",url:"",file_name:"",file_data:""})}
                 addLabel="新規作成"
                 extra={<button className="btn btn-secondary btn-sm" onClick={()=>csv(files,"ファイル一覧")}><Icon name="download" size={13}/>CSV</button>}
               />
