@@ -5627,7 +5627,7 @@ export default function App() {
   const loginAdmin = async () => {
     setPinErr("");
     const {data} = await supabase.from("app_settings").select("value").eq("key","admin_pin").single();
-    if(data?.value===adminPin){setIsAdmin(true);setMe(null);setAuth("app");setTab("dashboard");}
+    if((data?.value||"111111")===adminPin){setIsAdmin(true);setMe(null);setAuth("app");setTab("dashboard");}
     else setPinErr("管理者PINが違います");
   };
   const loginSabikan = async () => {
