@@ -5831,7 +5831,6 @@ export default function App() {
 <button className="btn btn-secondary" style={{flex:1}} onClick={()=>{setAuth("select");setLoginEmail("");setLoginPassword("");setLoginError("")}}>戻る</button>
 </div>
 </div></div>)
-}
   if(auth==="user_portal") {
     return <UserPortalScreen user={me} onBack={()=>{setAuth("select");setMe(null);}} />;
   }
