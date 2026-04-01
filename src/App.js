@@ -5461,6 +5461,10 @@ export default function App() {
   const [sabikanList, setSabikanList] = useState([]);
   const [selSabikan, setSelSabikan] = useState(null);
   const [pinErr, setPinErr] = useState("");
+  
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError] = useState("");
   const [tab, setTab] = useState("dashboard");
   const [loading, setLoading] = useState(true);
 
@@ -5605,12 +5609,21 @@ export default function App() {
     try{ setSabikanList(JSON.parse(data?.value||"[]")); }catch(e){ setSabikanList([]); }
     setAuth("sabikan_pin");
   };
-  const loginStaff = () => {
-    setPinErr("");
-    if(!me){setPinErr("スタッフを選択してください");return;}
-    if(String(me.pin)!==String(staffPin)){setPinErr("PINコードが違います");return;}
-    setIsAdmin(false);setAuth("app");setTab("attendance");
-  };
+  const loginStaff = async () => {
+    setLoginError("");
+    if(!loginEmail || !loginPassword){ setLoginError("メールアドレスとパスワードを入力してください"); return; }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+    if(error){ setLoginError("メールアドレスまたはパスワードが違います"); return; }
+    const user = data.user;
+    const { data: stData } = await supabase.from("staff_members").select("*").eq("home_id", HOME_ID).order("id");
+    setStaffList(stData || []);
+    let myStaff = stData?.find(s => s.email === user.email);
+    if(!myStaff && stData?.length > 0) myStaff = stData[0];
+    if(!myStaff) myStaff = { id: null, staff_name: user.email?.split("@")[0] || "スタッフ", email: user.email, home_id: HOME_ID };
+    setMe(myStaff);
+    setAuth("app"); setTab("attendance");
+    setLoginEmail(""); setLoginPassword("");
+  }
   const loginAdmin = async () => {
     setPinErr("");
     const {data} = await supabase.from("app_settings").select("value").eq("key","admin_pin").single();
@@ -5618,12 +5631,34 @@ export default function App() {
     else setPinErr("管理者PINが違います");
   };
   const loginSabikan = async () => {
-    setPinErr("");
-    const {data} = await supabase.from("app_settings").select("value").eq("key","sabikan_pin").single();
-    const pin = data?.value || "5678";
-    if(pin===sabikanPin){setIsSabikan(true);setIsAdmin(false);setMe(selSabikan);setAuth("app");setTab("sabikan_dash");}
-    else setPinErr("PINコードが正しくありません");
-  };
+    setLoginError("");
+    if(!loginEmail || !loginPassword){ setLoginError("メールアドレスとパスワードを入力してください"); return; }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+    if(error){ setLoginError("メールアドレスまたはパスワードが違います"); return; }
+    const user = data.user;
+    const { data: sbData } = await supabase.from("staff_members").select("*").eq("home_id", HOME_ID).eq("role", "sabikan").order("id");
+    setSabikanList(sbData || []);
+    let myStaff = sbData?.find(s => s.email === user.email);
+    if(!myStaff) myStaff = { id: null, staff_name: user.email?.split("@")[0] || "スタッフ", email: user.email, home_id: HOME_ID, role: "sabikan" };
+    setMe(myStaff); setSelSabikan(myStaff);
+    setIsSabikan(true);
+    setAuth("app"); setTab("sabikan_dash");
+    setLoginEmail(""); setLoginPassword("");
+  }
+  const loginUser = async () => {
+    setLoginError("");
+    if(!loginEmail || !loginPassword){ setLoginError("メールアドレスとパスワードを入力してください"); return; }
+    const { data, error } = await supabase.auth.signInWithPassword({ email: loginEmail, password: loginPassword });
+    if(error){ setLoginError("メールアドレスまたはパスワードが違います"); return; }
+    const user = data.user;
+    const { data: uData } = await supabase.from("users").select("*").eq("home_id", HOME_ID).order("id");
+    let myUser = uData?.find(u => u.email === user.email);
+    if(!myUser) myUser = { id: null, name: user.email?.split("@")[0] || "利用者", email: user.email, home_id: HOME_ID };
+    setMe(myUser);
+    setAuth("user_portal");
+    setLoginEmail(""); setLoginPassword("");
+  }
+  
   const logout = () => {setAuth("select");setIsAdmin(false);setIsSabikan(false);setMe(null);setAdminPin("");setStaffPin("");setSabikanPin("");setSelSabikan(null);};
 
   const openModal = (name,init={}) => {setForm(init);setModal(name);setEditId(null);};
@@ -5711,21 +5746,18 @@ export default function App() {
   );
 
   if(auth==="staff_pin") return (
-    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#1e3a8a,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <style>{CSS}</style>
-      <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
-        <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>スタッフログイン</div>
-        <select className="input" style={{marginBottom:10,textAlign:"center"}} value={me?.id||""} onChange={e=>{const s=staffList.find(st=>st.id===parseInt(e.target.value));setMe(s||null);}}>
-          <option value="">スタッフを選択...</option>
-          {staffList.map(s=><option key={s.id} value={s.id}>{s.name}（{s.role}）</option>)}
-        </select>
-        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={staffPin} onChange={e=>setStaffPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginStaff()}/>
-        {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
-        <button className="btn btn-primary" style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8}} onClick={loginStaff}><Icon name="check" size={15}/>ログイン</button>
-        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setStaffPin("");setPinErr("");setMe(null);}}>← 戻る</button>
-      </div>
-    </div>
-  );
+<div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#1e3a8a,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+<style>{`.input{width:100%;padding:12px;border:1px solid #ddd;borderRadius:12px;fontSize:15px;boxSizing:border-box;outline:none}.input:focus{borderColor:#3b82f6;boxShadow:0 0 0 3px rgba(59,130,246,.15)}.btn{width:100%;padding:14px;border:none;borderRadius:12px;fontSize:16px;fontWeight:600;cursor:pointer}.btn-primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:white}.btn-secondary{background:#f1f5f9;color:#475569}`}</style>
+<div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
+<div style={{fontWeight:700,fontSize:18,marginBottom:16}}>スタッフログイン</div>
+<input className="input" type="email" placeholder="メールアドレス" style={{marginBottom:10}} value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} />
+<input className="input" type="password" placeholder="パスワード" style={{marginBottom:8}} value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} />
+{loginError&&<div style={{color:"#dc2626",fontSize:13,marginBottom:8}}>{loginError}</div>}
+<div style={{display:"flex",gap:8,marginTop:8}}>
+<button className="btn btn-primary" style={{flex:1}} onClick={loginStaff}>ログイン</button>
+<button className="btn btn-secondary" style={{flex:1}} onClick={()=>{setAuth("select");setLoginEmail("");setLoginPassword("");setLoginError("")}}>戻る</button>
+</div>
+</div></div>);
 
   if(auth==="admin_pin") return (
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#4c1d95,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -5742,21 +5774,18 @@ export default function App() {
   );
 
   if(auth==="sabikan_pin") return (
-    <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#0369a1,#0c4a6e)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <style>{CSS}</style>
-      <div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
-        <div style={{fontWeight:700,fontSize:18,marginBottom:16}}>サービス管理責任者ログイン</div>
-        <select className="input" style={{marginBottom:10,textAlign:"center"}} onChange={e=>{const s=sabikanList.find(sb=>String(sb.id)===e.target.value);setSelSabikan(s||null);}}>
-          <option value="">担当者を選択...</option>
-          {sabikanList.map(s=><option key={s.id} value={s.id}>{s.name}</option>)}
-        </select>
-        <input className="input" type="password" maxLength={6} placeholder="PINコード" style={{textAlign:"center",fontSize:22,letterSpacing:10,marginBottom:8}} value={sabikanPin} onChange={e=>setSabikanPin(e.target.value)} onKeyDown={e=>e.key==="Enter"&&loginSabikan()}/>
-        {pinErr&&<div style={{color:"#ef4444",fontSize:13,marginBottom:8}}>{pinErr}</div>}
-        <button style={{width:"100%",justifyContent:"center",padding:"12px",marginBottom:8,background:"linear-gradient(135deg,#0369a1,#0284c7)",color:"white",border:"none",borderRadius:8,cursor:"pointer",fontSize:15,fontWeight:600,display:"flex",alignItems:"center",gap:8}} onClick={loginSabikan}><Icon name="check" size={15}/>ログイン</button>
-        <button className="btn btn-secondary" style={{width:"100%",justifyContent:"center"}} onClick={()=>{setAuth("select");setSabikanPin("");setPinErr("");setSelSabikan(null);}}>← 戻る</button>
-      </div>
-    </div>
-  );
+<div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#1e3a8a,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+<style>{`.input{width:100%;padding:12px;border:1px solid #ddd;borderRadius:12px;fontSize:15px;boxSizing:border-box;outline:none}.input:focus{borderColor:#3b82f6;boxShadow:0 0 0 3px rgba(59,130,246,.15)}.btn{width:100%;padding:14px;border:none;borderRadius:12px;fontSize:16px;fontWeight:600;cursor:pointer}.btn-primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:white}.btn-secondary{background:#f1f5f9;color:#475569}`}</style>
+<div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
+<div style={{fontWeight:700,fontSize:18,marginBottom:16}}>サービス管理責任者ログイン</div>
+<input className="input" type="email" placeholder="メールアドレス" style={{marginBottom:10}} value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} />
+<input className="input" type="password" placeholder="パスワード" style={{marginBottom:8}} value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} />
+{loginError&&<div style={{color:"#dc2626",fontSize:13,marginBottom:8}}>{loginError}</div>}
+<div style={{display:"flex",gap:8,marginTop:8}}>
+<button className="btn btn-primary" style={{flex:1}} onClick={loginSabikan}>ログイン</button>
+<button className="btn btn-secondary" style={{flex:1}} onClick={()=>{setAuth("select");setLoginEmail("");setLoginPassword("");setLoginError("")}}>戻る</button>
+</div>
+</div></div>);
 
   if(auth==="master_pin") return (
     <div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#0f172a,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
@@ -5789,9 +5818,20 @@ export default function App() {
     return <MasterScreen onBack={()=>{setAuth("select");setIsMaster(false);setMasterPin("");}} />;
   }
 
-  if(auth==="user_login") {
-    return <UserLoginScreen onBack={()=>setAuth("select")} onLogin={(u)=>{setAuth("user_portal");setMe(u);}} />;
-  }
+  if(auth==="user_login") return (
+<div style={{fontFamily:"'Noto Sans JP',sans-serif",minHeight:"100vh",background:"linear-gradient(135deg,#1e3a8a,#1e293b)",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+<style>{`.input{width:100%;padding:12px;border:1px solid #ddd;borderRadius:12px;fontSize:15px;boxSizing:border-box;outline:none}.input:focus{borderColor:#3b82f6;boxShadow:0 0 0 3px rgba(59,130,246,.15)}.btn{width:100%;padding:14px;border:none;borderRadius:12px;fontSize:16px;fontWeight:600;cursor:pointer}.btn-primary{background:linear-gradient(135deg,#3b82f6,#2563eb);color:white}.btn-secondary{background:#f1f5f9;color:#475569}`}</style>
+<div style={{background:"white",borderRadius:24,padding:40,width:"100%",maxWidth:400,textAlign:"center",boxShadow:"0 30px 80px rgba(0,0,0,.3)"}}>
+<div style={{fontWeight:700,fontSize:18,marginBottom:16}}>利用者ログイン</div>
+<input className="input" type="email" placeholder="メールアドレス" style={{marginBottom:10}} value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} />
+<input className="input" type="password" placeholder="パスワード" style={{marginBottom:8}} value={loginPassword} onChange={e=>setLoginPassword(e.target.value)} />
+{loginError&&<div style={{color:"#dc2626",fontSize:13,marginBottom:8}}>{loginError}</div>}
+<div style={{display:"flex",gap:8,marginTop:8}}>
+<button className="btn btn-primary" style={{flex:1}} onClick={loginUser}>ログイン</button>
+<button className="btn btn-secondary" style={{flex:1}} onClick={()=>{setAuth("select");setLoginEmail("");setLoginPassword("");setLoginError("")}}>戻る</button>
+</div>
+</div></div>)
+}
   if(auth==="user_portal") {
     return <UserPortalScreen user={me} onBack={()=>{setAuth("select");setMe(null);}} />;
   }
